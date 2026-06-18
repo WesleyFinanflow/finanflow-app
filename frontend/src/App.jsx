@@ -187,8 +187,8 @@ export default function App() {
       <main className="auth-page">
         <section className="auth-card">
           <span className="eyebrow">FinanFlow</span>
-          <h1>{mode === "login" ? "Entrar na sua conta" : "Criar sua conta"}</h1>
-          <p>Entre para acessar seu espaço financeiro individual. O modo casal vem na próxima etapa.</p>
+          <h1>{mode === "login" ? "Entrar" : "Criar conta"}</h1>
+          <p>{mode === "login" ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p>
 
           <form className="form" onSubmit={handleAuth}>
             {mode === "register" && (
