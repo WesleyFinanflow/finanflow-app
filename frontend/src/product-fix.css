@@ -1,0 +1,281 @@
+/* Product polish overrides: mobile-first containment, safer cards and smaller toast. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.finanflow-app,
+.main-content,
+.hero,
+.quick-start,
+.stats-grid,
+.grid-two,
+.panel,
+.stat-card,
+.account-row,
+.transaction-row,
+.invite-grid,
+.settings-stack {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.sidebar-nav,
+.sidebar nav {
+  min-width: 0;
+}
+
+.sidebar-nav button,
+.sidebar nav button,
+.mode-button,
+.ghost-button,
+.danger-button {
+  min-width: 0;
+}
+
+.floating-message {
+  left: auto;
+  right: 24px;
+  bottom: 24px;
+  transform: none;
+  width: min(420px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 12px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.35;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.36);
+  z-index: 50;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  height: auto;
+  overflow: hidden;
+}
+
+.stat-card strong {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.stat-card p,
+.stat-card span {
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+.buy-grid,
+.field-grid,
+.account-edit-grid {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.buy-grid input,
+.buy-grid select,
+.field-grid input,
+.field-grid select,
+.account-edit-grid input,
+.account-edit-grid select {
+  min-width: 0;
+  background: rgba(2, 8, 14, 0.72);
+  color: var(--text);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.invite-actions button,
+.security-actions button,
+.row-actions button,
+.action-row button {
+  min-width: 0;
+  white-space: normal;
+}
+
+@media (max-width: 1100px) {
+  .finanflow-app {
+    display: block;
+  }
+
+  .sidebar {
+    position: relative;
+    top: auto;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    padding: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sidebar-nav,
+  .sidebar nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .sidebar-nav button,
+  .sidebar nav button {
+    justify-content: center;
+    text-align: center;
+    white-space: normal;
+    min-height: 42px;
+  }
+
+  .sidebar-footer {
+    margin-top: 0;
+  }
+
+  .mode-button {
+    justify-content: center;
+  }
+
+  .main-content {
+    width: 100%;
+    padding: 20px 16px 52px;
+  }
+
+  .hero,
+  .quick-start,
+  .grid-two,
+  .invite-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .balance-focus {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    padding: 14px 12px;
+    gap: 14px;
+  }
+
+  .brand {
+    padding-bottom: 12px;
+  }
+
+  .sidebar-nav,
+  .sidebar nav {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .main-content {
+    padding: 16px 12px 42px;
+  }
+
+  .hero,
+  .panel,
+  .quick-start {
+    border-radius: 18px;
+    padding: 18px;
+  }
+
+  .hero {
+    min-height: auto;
+    gap: 16px;
+  }
+
+  .hero h1 {
+    font-size: clamp(30px, 10vw, 38px);
+  }
+
+  .hero p,
+  .quick-start p {
+    font-size: 14px;
+  }
+
+  .stats-grid,
+  .grid-two,
+  .field-grid,
+  .buy-grid,
+  .type-grid,
+  .quick-actions,
+  .invite-actions,
+  .security-actions,
+  .action-row,
+  .row-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .quick-actions,
+  .invite-actions,
+  .security-actions,
+  .action-row,
+  .row-actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .quick-actions button,
+  .invite-actions button,
+  .security-actions button,
+  .action-row button,
+  .row-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .account-row,
+  .transaction-row,
+  .mode-inline {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .account-edit-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .account-row em,
+  .transaction-row em {
+    text-align: left;
+    width: 100%;
+  }
+
+  .floating-message {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-width: none;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 420px) {
+  .sidebar-nav,
+  .sidebar nav {
+    grid-template-columns: 1fr;
+  }
+
+  .brand strong {
+    font-size: 16px;
+  }
+
+  .brand span {
+    font-size: 11px;
+  }
+}
