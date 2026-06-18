@@ -111,6 +111,12 @@ export default function App() {
       .catch((error) => setMessage(error.message));
   }, [pendingInvite?.code]);
 
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = window.setTimeout(() => setMessage(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   async function handleAuth(event) {
     event.preventDefault();
     setLoading(true);
@@ -199,7 +205,6 @@ export default function App() {
     }
     if (!coupleReady) {
       setActiveMenu("Casal");
-      setMessage("O modo casal fica inativo até a outra pessoa aceitar o convite.");
       return;
     }
     setActiveMode("couple");
@@ -291,7 +296,7 @@ export default function App() {
 
         <div className="sidebar-footer">
           <button className="mode-button" onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
-            {activeCoupleSpace ? "Ir para individual" : "Ir para casal"}
+            {activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"}
           </button>
         </div>
       </aside>
