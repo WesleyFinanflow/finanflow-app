@@ -85,3 +85,34 @@
     flex-wrap: wrap;
   }
 }
+
+.balance-card {
+  min-width: 240px;
+  max-width: 320px;
+  padding: 18px 20px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 18px;
+  background: rgba(2, 11, 17, .66);
+}
+
+.balance-card span {
+  display: block;
+  margin-bottom: 10px;
+  color: #a8bad3;
+  font-weight: 800;
+}
+
+.balance-card strong {
+  display: block;
+  color: #f8fafc;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.1;
+}
+
+@media(max-width:900px) {
+  .balance-card {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}
