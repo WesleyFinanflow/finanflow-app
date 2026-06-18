@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 
 function getApiUrl() {
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) return envUrl;
   const host = window.location.hostname;
+
   if (host.endsWith("app.github.dev") && host.includes("-5173")) {
     return `${window.location.protocol}//${host.replace("-5173", "-3000")}`;
   }
+
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+
   return "http://localhost:3000";
 }
 
