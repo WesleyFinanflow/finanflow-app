@@ -363,17 +363,17 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
         </div>
         <div className="transaction-list">
           {transactions.length ? transactions.map((item) => (
-            <div className={`transaction-item type-${item.type}`} key={item._id}>
-              <div>
+            <article className={`transaction-row ${item.type}`} key={item._id}>
+              <div className="transaction-main">
                 <strong>{item.description}</strong>
                 <span>{item.category} · {item.status}</span>
               </div>
-              <strong>{money(item.amount)}</strong>
+              <em>{money(item.amount)}</em>
               <div className="row-actions">
                 <button type="button" className="ghost-button" onClick={() => editTransaction(item)}>Editar</button>
                 <button type="button" className="danger-button inline-danger" onClick={() => deleteTransaction(item._id)}>Excluir</button>
               </div>
-            </div>
+            </article>
           )) : <Empty title="Nenhum lançamento neste mês" text="Cadastre receitas, despesas, dívidas ou metas para começar." />}
         </div>
       </section>
@@ -394,25 +394,29 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
       </div>
       <div className="account-list">
         {accounts.map((item) => (
-          <div className="account-edit-grid" key={item._id}>
-            <input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} />
-            <select value={item.ownerName || firstName} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>
-              <option>{firstName}</option>
-              <option>Individual</option>
-            </select>
-            <input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} />
-            <strong>{money(item.balance)}</strong>
+          <article className="account-row account-row-editable" key={item._id}>
+            <div className="account-edit-grid">
+              <label>Conta<input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} /></label>
+              <label>Dono<select value={item.ownerName || firstName} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>
+                <option>{firstName}</option>
+                <option>Individual</option>
+              </select></label>
+              <label>Saldo atual<input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} /></label>
+            </div>
+            <em>{money(item.balance)}</em>
             <div className="row-actions">
               <button type="button" onClick={() => updateAccount(item)}>Salvar</button>
               <button type="button" className="danger-button inline-danger" onClick={() => deleteAccount(item._id)}>Excluir</button>
             </div>
-          </div>
+          </article>
         ))}
-        <form className="account-edit-grid" onSubmit={addAccount}>
-          <input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" />
-          <select><option>{firstName}</option></select>
-          <input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" />
-          <strong>{money(accountForm.balance)}</strong>
+        <form className="account-row account-row-editable" onSubmit={addAccount}>
+          <div className="account-edit-grid">
+            <label>Conta<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" /></label>
+            <label>Dono<select><option>{firstName}</option></select></label>
+            <label>Saldo atual<input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" /></label>
+          </div>
+          <em>{money(accountForm.balance)}</em>
           <div className="row-actions"><button>Adicionar</button></div>
         </form>
       </div>
@@ -527,8 +531,8 @@ function Casal({ coupleSpace, coupleInvite, createCouple, goToCouple, firstName 
       {coupleSpace && (
         <div className="invite-grid">
           <div className="qr-card">
-            <div className="fake-qr">FF</div>
-            <span>Código: {code}</span>
+            <div className="fake-qr"><i /></div>
+            <small>Código: {code}</small>
           </div>
           <div className="invite-content">
             <p>Compartilhe este convite para a outra pessoa entrar no mesmo espaço financeiro do casal. Seus dados individuais continuam separados.</p>
