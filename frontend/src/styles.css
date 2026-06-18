@@ -28,6 +28,26 @@ body {
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 13px;
+  background: rgba(2, 8, 14, 0.72);
+  color: var(--text);
+  padding: 0 13px;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--cyan);
+}
+
 .finanflow-app {
   min-height: 100vh;
   display: grid;
@@ -113,6 +133,7 @@ button { cursor: pointer; }
   width: min(100%, 1360px);
   margin: 0 auto;
   padding: 26px 30px 70px;
+  min-width: 0;
 }
 
 .hero {
@@ -205,13 +226,16 @@ button { cursor: pointer; }
 .stat-card {
   padding: 20px;
   min-height: 148px;
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .stat-card span { display: block; color: var(--muted); font-size: 13px; font-weight: 700; }
-.stat-card strong { display: block; margin: 10px 0 6px; font-size: 28px; letter-spacing: -0.06em; }
+.stat-card strong { display: block; margin: 4px 0 2px; font-size: clamp(24px, 2.2vw, 30px); letter-spacing: -0.04em; line-height: 1.05; overflow-wrap: anywhere; }
+.stat-card p { margin: 0; color: #cbd5e1; font-size: 13px; line-height: 1.38; overflow-wrap: anywhere; }
 .stat-card small { color: #cbd5e1; line-height: 1.35; }
 .stat-card svg { flex-shrink: 0; }
 .stat-card.cyan svg, .stat-card.cyan strong { color: var(--cyan); }
@@ -270,6 +294,7 @@ button { cursor: pointer; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 13px;
+  min-width: 0;
 }
 
 .field-grid.compact { grid-template-columns: 1.2fr 1fr 0.7fr; }
@@ -558,8 +583,9 @@ button {
 
 .buy-grid {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 0.7fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.7fr);
   gap: 13px;
+  min-width: 0;
 }
 
 .action-row,
