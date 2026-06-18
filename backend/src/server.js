@@ -123,6 +123,17 @@ async function createInviteForSpace(spaceId, userId) {
   return Invite.create({ spaceId, code, createdBy: userId, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
 }
 
+async function normalizeAccountIdForSpace(accountId, spaceId) {
+  if (!accountId) return null;
+  const account = await Account.findOne({ _id: accountId, spaceId });
+  if (!account) {
+    const error = new Error("Conta inválida para este espaço.");
+    error.status = 400;
+    throw error;
+  }
+  return account._id;
+}
+
 async function createIndividualSpaceForUser(user) {
   const space = await Space.create({ name: `Individual de ${user.name}`, type: "individual", ownerId: user._id });
   await Member.create({ spaceId: space._id, userId: user._id, role: "owner" });
@@ -311,40 +322,50 @@ app.get("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
 });
 
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
-  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  const transaction = await Transaction.create({
-    spaceId: req.params.spaceId,
-    accountId: req.body.accountId || undefined,
-    type: req.body.type,
-    description: req.body.description,
-    amount: Number(req.body.amount || 0),
-    date: req.body.date,
-    status: req.body.status || "pendente",
-    category: req.body.category || "Outro",
-    createdBy: req.user._id,
-    responsibleName: req.body.responsibleName || req.user.name,
-  });
-  res.status(201).json({ transaction });
-});
-
-app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
-  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  const transaction = await Transaction.findOneAndUpdate(
-    { _id: req.params.transactionId, spaceId: req.params.spaceId },
-    {
-      accountId: req.body.accountId || null,
+  try {
+    if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+    const accountId = await normalizeAccountIdForSpace(req.body.accountId, req.params.spaceId);
+    const transaction = await Transaction.create({
+      spaceId: req.params.spaceId,
+      accountId,
       type: req.body.type,
       description: req.body.description,
       amount: Number(req.body.amount || 0),
       date: req.body.date,
       status: req.body.status || "pendente",
       category: req.body.category || "Outro",
+      createdBy: req.user._id,
       responsibleName: req.body.responsibleName || req.user.name,
-    },
-    { new: true, runValidators: true }
-  );
-  if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
-  res.json({ transaction });
+    });
+    res.status(201).json({ transaction });
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || "Erro ao criar lançamento." });
+  }
+});
+
+app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
+  try {
+    if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+    const accountId = await normalizeAccountIdForSpace(req.body.accountId, req.params.spaceId);
+    const transaction = await Transaction.findOneAndUpdate(
+      { _id: req.params.transactionId, spaceId: req.params.spaceId },
+      {
+        accountId,
+        type: req.body.type,
+        description: req.body.description,
+        amount: Number(req.body.amount || 0),
+        date: req.body.date,
+        status: req.body.status || "pendente",
+        category: req.body.category || "Outro",
+        responsibleName: req.body.responsibleName || req.user.name,
+      },
+      { new: true, runValidators: true }
+    );
+    if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
+    res.json({ transaction });
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.message || "Erro ao atualizar lançamento." });
+  }
 });
 
 app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {

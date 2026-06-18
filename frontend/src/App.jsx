@@ -28,6 +28,10 @@ function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function moneyOrWaiting(value, hasData) {
+  return hasData ? money(value) : "Aguardando dados";
+}
+
 async function api(path, options = {}) {
   const token = localStorage.getItem("finanflow_token");
   const response = await fetch(`${API_URL}${path}`, {
@@ -72,12 +76,16 @@ export default function App() {
 
   const summary = useMemo(() => {
     const balance = accounts.reduce((total, item) => total + Number(item.balance || 0), 0);
-    const income = transactions.filter((item) => item.type === "receita").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const expenses = transactions.filter((item) => item.type === "despesa").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const debt = transactions.filter((item) => item.type === "divida").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const goals = transactions.filter((item) => item.type === "meta").reduce((total, item) => total + Number(item.amount || 0), 0);
+    const paid = transactions.filter((item) => item.status === "pago");
+    const pending = transactions.filter((item) => item.status === "pendente");
+    const income = pending.filter((item) => item.type === "receita").reduce((total, item) => total + Number(item.amount || 0), 0);
+    const received = paid.filter((item) => item.type === "receita").reduce((total, item) => total + Number(item.amount || 0), 0);
+    const expenses = pending.filter((item) => item.type === "despesa").reduce((total, item) => total + Number(item.amount || 0), 0);
+    const paidExpenses = paid.filter((item) => item.type === "despesa").reduce((total, item) => total + Number(item.amount || 0), 0);
+    const debt = pending.filter((item) => item.type === "divida").reduce((total, item) => total + Number(item.amount || 0), 0);
+    const goals = pending.filter((item) => item.type === "meta").reduce((total, item) => total + Number(item.amount || 0), 0);
     const commitments = expenses + debt + goals;
-    return { balance, income, expenses, debt, goals, commitments, free: balance + income - commitments - reserve };
+    return { balance, income, received, expenses, paidExpenses, debt, goals, commitments, free: balance + income - commitments - reserve };
   }, [accounts, transactions, reserve]);
 
   const hasData = summary.balance || summary.income || summary.commitments || transactions.length > 0;
@@ -306,7 +314,7 @@ export default function App() {
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} buyForm={buyForm} setBuyForm={setBuyForm} />}
+        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} firstName={firstName} />}
         {message && <div className="floating-message">{message}</div>}
@@ -356,8 +364,8 @@ function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve,
 
       <section className="stats-grid">
         <StatCard title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas cadastradas no espaço atual" tone="cyan" />
-        <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas registradas" tone="green" />
-        <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas" tone="yellow" />
+        <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
+        <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
         <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Reserva protegida: ${money(reserve)}`} tone="blue" />
       </section>
 
@@ -483,10 +491,10 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
   );
 }
 
-function Planejamento({ summary, buyForm, setBuyForm }) {
+function Planejamento({ summary, hasData, buyForm, setBuyForm }) {
   return (
     <section className="grid-two">
-      <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={summary.balance || summary.income || summary.commitments} free={summary.free} />
+      <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
       <section className="panel">
         <div className="panel-head">
           <div>
@@ -495,11 +503,13 @@ function Planejamento({ summary, buyForm, setBuyForm }) {
           </div>
         </div>
         <div className="summary-list">
-          <DataRow label="Receitas do mês" value={summary.income ? money(summary.income) : "Aguardando dados"} />
-          <DataRow label="Despesas do mês" value={summary.expenses ? money(summary.expenses) : "Aguardando dados"} />
-          <DataRow label="Dívidas do mês" value={summary.debt ? money(summary.debt) : "Aguardando dados"} />
-          <DataRow label="Metas / reserva" value={summary.goals ? money(summary.goals) : "Aguardando dados"} />
-          <DataRow className="highlight-row" label="Saldo livre seguro" value={summary.free ? money(summary.free) : "Aguardando dados"} />
+          <DataRow label="Receitas pendentes" value={moneyOrWaiting(summary.income, hasData)} />
+          <DataRow label="Receitas já pagas" value={moneyOrWaiting(summary.received, hasData)} />
+          <DataRow label="Despesas pendentes" value={moneyOrWaiting(summary.expenses, hasData)} />
+          <DataRow label="Despesas já pagas" value={moneyOrWaiting(summary.paidExpenses, hasData)} />
+          <DataRow label="Dívidas pendentes" value={moneyOrWaiting(summary.debt, hasData)} />
+          <DataRow label="Metas / reserva pendentes" value={moneyOrWaiting(summary.goals, hasData)} />
+          <DataRow className="highlight-row" label="Saldo livre seguro" value={moneyOrWaiting(summary.free, hasData)} />
         </div>
       </section>
     </section>
@@ -677,7 +687,10 @@ function Empty({ title, text }) {
 }
 
 function Decision({ buyForm, setBuyForm, ready, free }) {
-  const canBuy = Number(buyForm.total || 0) > 0 && free >= Number(buyForm.total || 0);
+  const total = Number(buyForm.total || 0);
+  const installments = Math.max(1, Number(buyForm.installments || 1));
+  const monthlyImpact = total / installments;
+  const canBuy = total > 0 && free >= monthlyImpact;
   return (
     <section className="panel">
       <div className="panel-head">
@@ -692,7 +705,7 @@ function Decision({ buyForm, setBuyForm, ready, free }) {
         <label>Parcelas<input type="number" value={buyForm.installments} onChange={(e) => setBuyForm({ ...buyForm, installments: e.target.value })} /></label>
       </div>
       <div className={canBuy ? "decision-box ok" : "decision-box bad"}>
-        {ready ? (canBuy ? "Compra parece possível." : "Compra não recomendada agora.") : "Aguardando dados. Cadastre saldo, receita e despesas antes de simular uma compra."}
+        {ready ? (total > 0 ? (canBuy ? `Compra parece possível. Parcela estimada: ${money(monthlyImpact)}.` : `Compra não recomendada agora. Parcela estimada: ${money(monthlyImpact)}.`) : "Informe uma compra para simular.") : "Aguardando dados. Cadastre saldo, receita e despesas antes de simular uma compra."}
       </div>
     </section>
   );
