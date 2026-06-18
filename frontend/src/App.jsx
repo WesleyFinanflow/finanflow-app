@@ -4,7 +4,7 @@ function getApiUrl() {
   const host = window.location.hostname;
 
   if (host.endsWith("app.github.dev") && host.includes("-5173")) {
-    return `${window.location.protocol}//${host.replace("-5173", "-3000")}`;
+    return "";
   }
 
   const envUrl = import.meta.env.VITE_API_URL;
