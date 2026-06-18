@@ -1,4 +1,4 @@
-/* Product polish overrides: mobile-first containment, safer cards and smaller toast. */
+/* Product polish overrides: premium dashboard, tighter spacing, mobile containment. */
 html,
 body,
 #root {
@@ -10,6 +10,22 @@ body,
 body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  background:
+    radial-gradient(circle at 0 0, rgba(34, 211, 238, 0.10), transparent 28%),
+    radial-gradient(circle at 100% 0, rgba(52, 211, 153, 0.06), transparent 26%),
+    linear-gradient(135deg, #02070d 0%, #06111a 55%, #02070d 100%);
+}
+
+button {
+  transition: transform .15s ease, border-color .15s ease, background .15s ease, color .15s ease, opacity .15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
 }
 
 .finanflow-app,
@@ -28,9 +44,44 @@ body {
   min-width: 0;
 }
 
+.finanflow-app {
+  grid-template-columns: 232px minmax(0, 1fr) !important;
+}
+
+.sidebar {
+  width: 232px !important;
+  min-width: 232px !important;
+  padding: 20px 14px !important;
+  gap: 18px !important;
+  background: linear-gradient(180deg, rgba(3, 18, 28, 0.98), rgba(1, 8, 13, 0.98)) !important;
+}
+
+.brand {
+  gap: 10px !important;
+  padding: 6px 4px 16px !important;
+}
+
+.brand-icon {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 13px !important;
+  font-size: 16px !important;
+}
+
+.brand strong {
+  font-size: 16px !important;
+  letter-spacing: -0.03em !important;
+}
+
+.brand span {
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
 .sidebar-nav,
 .sidebar nav {
   min-width: 0;
+  gap: 7px !important;
 }
 
 .sidebar-nav button,
@@ -41,32 +92,196 @@ body {
   min-width: 0;
 }
 
-.floating-message {
-  left: auto;
-  right: 24px;
-  bottom: 24px;
-  transform: none;
-  width: min(420px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  padding: 12px 14px;
-  border-radius: 16px;
-  font-size: 14px;
-  line-height: 1.35;
-  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.36);
-  z-index: 50;
+.sidebar-nav button,
+.sidebar nav button {
+  min-height: 39px !important;
+  border-radius: 12px !important;
+  padding: 0 12px !important;
+  font-size: 13px !important;
+  font-weight: 760 !important;
+}
+
+.mode-button {
+  min-height: 42px !important;
+  border-radius: 13px !important;
+  font-size: 13px !important;
+  font-weight: 820 !important;
+}
+
+.main-content {
+  width: min(100%, 1280px) !important;
+  padding: 24px 28px 56px !important;
+}
+
+.hero {
+  min-height: 144px !important;
+  border-radius: 24px !important;
+  padding: 24px 26px !important;
+  gap: 22px !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
+    linear-gradient(120deg, rgba(6, 18, 27, 0.98), rgba(6, 32, 39, 0.74)) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255,255,255,0.035) !important;
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+.eyebrow,
+.panel-head span {
+  font-size: 10.5px !important;
+  letter-spacing: .15em !important;
+  font-weight: 850 !important;
+}
+
+.hero h1 {
+  font-size: clamp(30px, 3.25vw, 42px) !important;
+  letter-spacing: -0.065em !important;
+  line-height: 1.02 !important;
+  margin: 8px 0 8px !important;
+}
+
+.hero p {
+  max-width: 720px !important;
+  font-size: 14.5px !important;
+  line-height: 1.55 !important;
+  color: rgba(226, 232, 240, 0.84) !important;
+}
+
+.balance-focus {
+  min-width: 238px !important;
+  width: 290px !important;
+  padding: 16px 18px !important;
+  border-radius: 18px !important;
+  background: rgba(2, 8, 14, 0.54) !important;
+}
+
+.balance-focus span {
+  font-size: 12px !important;
+  margin-bottom: 8px !important;
+}
+
+.balance-focus strong {
+  font-size: clamp(28px, 2.6vw, 38px) !important;
+  letter-spacing: -0.055em !important;
+  line-height: 1 !important;
+}
+
+.panel,
+.quick-start,
+.stat-card {
+  border-radius: 20px !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(34,211,238,0.045), transparent 34%),
+    linear-gradient(145deg, rgba(6,17,26,0.91), rgba(2,8,14,0.98)) !important;
+  box-shadow: 0 16px 42px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.022) !important;
+}
+
+.panel,
+.quick-start {
+  padding: 20px !important;
+  margin-top: 16px !important;
+}
+
+.panel-head {
+  margin-bottom: 15px !important;
+}
+
+.panel-head h2,
+.quick-start h2 {
+  font-size: clamp(20px, 2vw, 24px) !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.04em !important;
+}
+
+.quick-start {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, .85fr) !important;
+  gap: 18px !important;
+  align-items: center !important;
+  border-color: rgba(52, 211, 153, 0.20) !important;
+}
+
+.quick-start p {
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+  max-width: 760px !important;
+}
+
+.quick-actions {
+  gap: 9px !important;
+}
+
+.quick-actions button,
+.invite-actions button,
+.security-actions button,
+.action-row button,
+.row-actions button,
+.type-grid button,
+.mode-inline button,
+.primary-btn,
+.mini-form button,
+button {
+  min-height: 38px !important;
+  border-radius: 12px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+  font-weight: 820 !important;
+}
+
+.quick-actions button,
+.invite-actions button,
+.type-grid button,
+.ghost-button {
+  background: rgba(34, 211, 238, 0.055) !important;
+  border: 1px solid rgba(34, 211, 238, 0.20) !important;
+  color: rgba(248, 250, 252, 0.92) !important;
+}
+
+.quick-actions button:hover,
+.invite-actions button:hover,
+.type-grid button:hover,
+.ghost-button:hover {
+  background: rgba(34, 211, 238, 0.11) !important;
+  color: var(--cyan) !important;
+}
+
+.type-grid button.selected,
+.type-grid button.active {
+  background: rgba(34, 211, 238, 0.13) !important;
+  border-color: rgba(34, 211, 238, 0.38) !important;
+  color: var(--cyan) !important;
+}
+
+.stats-grid {
+  gap: 14px !important;
+  margin-top: 16px !important;
 }
 
 .stat-card {
+  padding: 17px !important;
+  min-height: 124px !important;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
   height: auto;
   overflow: hidden;
+  gap: 6px !important;
+}
+
+.stat-card span {
+  font-size: 12px !important;
+  font-weight: 760 !important;
+  color: rgba(203, 213, 225, 0.76) !important;
 }
 
 .stat-card strong {
   max-width: 100%;
+  margin: 4px 0 2px !important;
+  font-size: clamp(23px, 2vw, 29px) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.045em !important;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -77,13 +292,20 @@ body {
   overflow-wrap: break-word;
 }
 
-.buy-grid,
-.field-grid,
-.account-edit-grid {
-  max-width: 100%;
-  min-width: 0;
+.stat-card p {
+  font-size: 12.5px !important;
+  line-height: 1.35 !important;
+  color: rgba(203, 213, 225, 0.82) !important;
 }
 
+.grid-two {
+  gap: 16px !important;
+  margin-top: 16px !important;
+}
+
+input,
+select,
+textarea,
 .buy-grid input,
 .buy-grid select,
 .field-grid input,
@@ -91,9 +313,78 @@ body {
 .account-edit-grid input,
 .account-edit-grid select {
   min-width: 0;
-  background: rgba(2, 8, 14, 0.72);
-  color: var(--text);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  min-height: 40px !important;
+  border-radius: 11px !important;
+  background: rgba(2, 8, 14, 0.72) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  padding: 0 12px !important;
+  font-size: 13px !important;
+}
+
+label,
+.field-grid label {
+  font-size: 11.5px !important;
+  gap: 6px !important;
+}
+
+.buy-grid,
+.field-grid,
+.account-edit-grid {
+  max-width: 100%;
+  min-width: 0;
+  gap: 11px !important;
+}
+
+.account-row,
+.transaction-row,
+.data-row,
+.mode-inline,
+.upcoming-list article,
+.planning-lines div {
+  border-radius: 14px !important;
+  padding: 12px !important;
+  gap: 10px !important;
+}
+
+.account-row em,
+.transaction-row em,
+.data-row strong {
+  font-size: 14px !important;
+}
+
+.transaction-main strong,
+.account-row strong {
+  font-size: 14px !important;
+}
+
+.transaction-main span,
+.account-row span,
+.data-row span,
+.mode-inline span {
+  font-size: 12px !important;
+}
+
+.decision-box {
+  margin-top: 13px !important;
+  padding: 13px 14px !important;
+  border-radius: 15px !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+}
+
+.empty-state {
+  min-height: 104px !important;
+  border-radius: 16px !important;
+  padding: 18px !important;
+}
+
+.empty-state strong {
+  font-size: 16px !important;
+}
+
+.empty-state p {
+  font-size: 13px !important;
 }
 
 .invite-actions button,
@@ -104,25 +395,40 @@ body {
   white-space: normal;
 }
 
+.floating-message {
+  left: auto;
+  right: 22px;
+  bottom: 22px;
+  transform: none;
+  width: min(380px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 11px 13px !important;
+  border-radius: 14px !important;
+  font-size: 13px !important;
+  line-height: 1.35;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.36);
+  z-index: 50;
+}
+
 @media (max-width: 1100px) {
   .finanflow-app {
     display: block;
   }
 
   .sidebar {
-    position: relative;
+    position: relative !important;
     top: auto;
-    width: 100%;
-    min-width: 0;
-    height: auto;
-    padding: 16px;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    padding: 14px !important;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .sidebar-nav,
   .sidebar nav {
-    display: grid;
+    display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
@@ -132,7 +438,7 @@ body {
     justify-content: center;
     text-align: center;
     white-space: normal;
-    min-height: 42px;
+    min-height: 40px !important;
   }
 
   .sidebar-footer {
@@ -144,66 +450,66 @@ body {
   }
 
   .main-content {
-    width: 100%;
-    padding: 20px 16px 52px;
+    width: 100% !important;
+    padding: 20px 16px 52px !important;
   }
 
   .hero,
   .quick-start,
   .grid-two,
   .invite-grid {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
   }
 
   .balance-focus {
-    width: 100%;
-    min-width: 0;
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
   .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
 @media (max-width: 720px) {
   .sidebar {
-    padding: 14px 12px;
-    gap: 14px;
+    padding: 13px 12px !important;
+    gap: 13px !important;
   }
 
   .brand {
-    padding-bottom: 12px;
+    padding-bottom: 11px !important;
   }
 
   .sidebar-nav,
   .sidebar nav {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr !important;
   }
 
   .main-content {
-    padding: 16px 12px 42px;
+    padding: 15px 12px 42px !important;
   }
 
   .hero,
   .panel,
   .quick-start {
-    border-radius: 18px;
-    padding: 18px;
+    border-radius: 17px !important;
+    padding: 16px !important;
   }
 
   .hero {
-    min-height: auto;
-    gap: 16px;
+    min-height: auto !important;
+    gap: 15px !important;
   }
 
   .hero h1 {
-    font-size: clamp(30px, 10vw, 38px);
+    font-size: clamp(28px, 9vw, 36px) !important;
   }
 
   .hero p,
   .quick-start p {
-    font-size: 14px;
+    font-size: 13.5px !important;
   }
 
   .stats-grid,
@@ -224,7 +530,7 @@ body {
   .security-actions,
   .action-row,
   .row-actions {
-    display: grid;
+    display: grid !important;
     width: 100%;
   }
 
@@ -240,8 +546,8 @@ body {
   .account-row,
   .transaction-row,
   .mode-inline {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
     align-items: stretch;
   }
 
@@ -261,21 +567,29 @@ body {
     bottom: 12px;
     width: auto;
     max-width: none;
-    font-size: 13px;
+    font-size: 12.5px !important;
   }
 }
 
 @media (max-width: 420px) {
   .sidebar-nav,
   .sidebar nav {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .brand strong {
-    font-size: 16px;
+    font-size: 15px !important;
   }
 
   .brand span {
-    font-size: 11px;
+    font-size: 10.5px !important;
+  }
+
+  .hero h1 {
+    font-size: 30px !important;
+  }
+
+  .stat-card strong {
+    font-size: 24px !important;
   }
 }
