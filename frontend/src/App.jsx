@@ -76,16 +76,24 @@ export default function App() {
 
   const summary = useMemo(() => {
     const balance = accounts.reduce((total, item) => total + Number(item.balance || 0), 0);
-    const paid = transactions.filter((item) => item.status === "pago");
-    const pending = transactions.filter((item) => item.status === "pendente");
-    const income = pending.filter((item) => item.type === "receita").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const received = paid.filter((item) => item.type === "receita").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const expenses = pending.filter((item) => item.type === "despesa").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const paidExpenses = paid.filter((item) => item.type === "despesa").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const debt = pending.filter((item) => item.type === "divida").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const goals = pending.filter((item) => item.type === "meta").reduce((total, item) => total + Number(item.amount || 0), 0);
-    const commitments = expenses + debt + goals;
-    return { balance, income, received, expenses, paidExpenses, debt, goals, commitments, free: balance + income - commitments - reserve };
+    const totals = transactions.reduce(
+      (result, item) => {
+        const amount = Number(item.amount || 0);
+        if (item.status === "pago") {
+          if (item.type === "receita") result.received += amount;
+          if (item.type === "despesa") result.paidExpenses += amount;
+          return result;
+        }
+        if (item.type === "receita") result.income += amount;
+        if (item.type === "despesa") result.expenses += amount;
+        if (item.type === "divida") result.debt += amount;
+        if (item.type === "meta") result.goals += amount;
+        return result;
+      },
+      { income: 0, received: 0, expenses: 0, paidExpenses: 0, debt: 0, goals: 0 }
+    );
+    const commitments = totals.expenses + totals.debt + totals.goals;
+    return { balance, ...totals, commitments, free: balance + totals.income - commitments - reserve };
   }, [accounts, transactions, reserve]);
 
   const hasData = summary.balance || summary.income || summary.commitments || transactions.length > 0;
