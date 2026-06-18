@@ -901,9 +901,29 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .account-row-editable {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .account-row-editable .account-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-row-editable .row-actions {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+    padding-bottom: 0;
+  }
+
+  .account-row-editable button {
+    width: 100%;
+  }
+
   .account-row-editable em,
   .data-row strong {
     width: 100%;
     text-align: left;
+    padding-bottom: 0;
   }
 }
