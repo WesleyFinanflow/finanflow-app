@@ -373,6 +373,49 @@ textarea:focus {
   gap: 10px;
 }
 
+.account-row-editable {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) auto;
+  align-items: end;
+  gap: 18px;
+}
+
+.account-row-editable .account-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-row-editable em {
+  min-width: 132px;
+  padding-bottom: 13px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.account-row-editable .row-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(92px, auto));
+  justify-content: end;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.account-row-editable form .row-actions,
+form.account-row-editable .row-actions {
+  grid-template-columns: minmax(116px, auto);
+}
+
+.account-row-editable button {
+  width: auto;
+  min-width: 92px;
+  height: 42px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .transaction-row.receita svg { color: var(--green); }
 .transaction-row.despesa svg { color: var(--red); }
 .transaction-row.divida svg { color: var(--yellow); }
