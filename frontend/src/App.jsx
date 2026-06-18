@@ -15,7 +15,14 @@ function getApiUrl() {
 
 const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
-const menu = ["Início", "Lançamentos", "Contas", "Planejamento", "Configurações"];
+const menu = ["Início", "Lançamentos", "Contas", "Planejamento", "Casal", "Configurações"];
+
+function getInviteFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  if (!code || window.location.pathname !== "/convite-casal") return null;
+  return { code, from: params.get("from") || "" };
+}
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -48,17 +55,20 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [accountForm, setAccountForm] = useState({ name: "", balance: "" });
+  const [accountForm, setAccountForm] = useState({ name: "", balance: "", ownerName: "" });
   const [txForm, setTxForm] = useState({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
   const [editingTransactionId, setEditingTransactionId] = useState("");
   const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
   const [reserve, setReserve] = useState(300);
   const [coupleInvite, setCoupleInvite] = useState(null);
+  const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
+  const [inviteInfo, setInviteInfo] = useState(null);
 
   const firstName = user?.name?.split(" ")?.[0] || "Wesley";
   const individualSpace = spaces.find((space) => space.type === "individual");
   const coupleSpace = spaces.find((space) => space.type === "couple");
-  const activeCoupleSpace = activeMode === "couple" && coupleSpace ? coupleSpace : null;
+  const coupleReady = Boolean(coupleSpace && Number(coupleSpace.memberCount || 0) > 1);
+  const activeCoupleSpace = activeMode === "couple" && coupleReady ? coupleSpace : null;
 
   const summary = useMemo(() => {
     const balance = accounts.reduce((total, item) => total + Number(item.balance || 0), 0);
@@ -85,13 +95,21 @@ export default function App() {
     setSpaces(loaded);
     const individual = loaded.find((space) => space.type === "individual");
     const couple = loaded.find((space) => space.type === "couple");
-    const selected = mode === "couple" && couple ? couple._id : individual?._id || loaded[0]?._id || "";
-    setActiveMode(mode === "couple" && couple ? "couple" : "individual");
+    const readyCouple = couple && Number(couple.memberCount || 0) > 1;
+    const selected = mode === "couple" && readyCouple ? couple._id : individual?._id || loaded[0]?._id || "";
+    setActiveMode(mode === "couple" && readyCouple ? "couple" : "individual");
     setActiveSpaceId(selected);
     if (selected) await loadSpaceData(selected);
   }
 
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
+
+  useEffect(() => {
+    if (!pendingInvite?.code) return;
+    api(`/api/invites/${pendingInvite.code}`)
+      .then((data) => setInviteInfo(data.invite))
+      .catch((error) => setMessage(error.message));
+  }, [pendingInvite?.code]);
 
   async function handleAuth(event) {
     event.preventDefault();
@@ -114,8 +132,8 @@ export default function App() {
   async function addAccount(event) {
     event.preventDefault();
     if (!accountForm.name.trim()) return setMessage("Informe o nome da conta.");
-    await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name, balance: Number(accountForm.balance || 0), ownerName: firstName }) });
-    setAccountForm({ name: "", balance: "" });
+    await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name, balance: Number(accountForm.balance || 0), ownerName: accountForm.ownerName || (activeCoupleSpace ? "Casal" : firstName) }) });
+    setAccountForm({ name: "", balance: "", ownerName: "" });
     await loadSpaceData(activeSpaceId);
   }
 
@@ -168,15 +186,20 @@ export default function App() {
 
   async function createCouple() {
     const data = await api("/api/spaces/couple", { method: "POST", body: JSON.stringify({ partnerName: "Parceira" }) });
-    setCoupleInvite(data.invite);
+    setCoupleInvite(data.invite || null);
     await loadSpaces("individual");
     setActiveMenu("Casal");
-    setMessage("Convite do casal criado. Entre no modo casal quando quiser usar o espaço compartilhado.");
+    setMessage(data.invite ? "Convite do casal criado. O modo casal será liberado quando a outra pessoa aceitar." : "O espaço do casal já está ativo.");
   }
 
   async function goToCouple() {
     if (!coupleSpace) {
       setActiveMenu("Casal");
+      return;
+    }
+    if (!coupleReady) {
+      setActiveMenu("Casal");
+      setMessage("O modo casal fica inativo até a outra pessoa aceitar o convite.");
       return;
     }
     setActiveMode("couple");
@@ -210,8 +233,41 @@ export default function App() {
     setUser(null);
   }
 
+  async function deleteUserAccount() {
+    const confirmed = window.confirm("Tem certeza que deseja apagar sua conta? Esta ação remove seus dados individuais e tira você dos espaços compartilhados.");
+    if (!confirmed) return;
+    try {
+      await api("/api/me", { method: "DELETE" });
+      logout();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function acceptInvite() {
+    if (!pendingInvite?.code) return;
+    setLoading(true);
+    setMessage("");
+    try {
+      await api(`/api/invites/${pendingInvite.code}/accept`, { method: "POST" });
+      setPendingInvite(null);
+      setInviteInfo(null);
+      window.history.replaceState({}, "", "/");
+      await loadSpaces("couple");
+      setMessage("Convite aceito. O modo casal está ativo.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!user) {
-    return <main className="auth-page"><section className="auth-card"><span className="eyebrow">FinanFlow</span><h1>{authMode === "login" ? "Entrar" : "Criar conta"}</h1><p>{authMode === "login" ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p><form className="form" onSubmit={handleAuth}>{authMode === "register" && <label>Nome<input value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} placeholder="Seu nome" /></label>}<label>E-mail<input value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} placeholder="seuemail@exemplo.com" type="email" /></label><label>Senha<input value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" type="password" /></label><button disabled={loading}>{loading ? "Aguarde..." : authMode === "login" ? "Entrar" : "Criar conta"}</button></form><button className="ghost-button" onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}>{authMode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}</button>{message && <div className="status-box">{message}</div>}</section></main>;
+    return <main className="auth-page"><section className="auth-card">{pendingInvite && <div className="invite-warning">Você recebeu um convite para o FinanFlow Casal. Entre ou crie sua conta para aceitar.</div>}<span className="eyebrow">FinanFlow</span><h1>{authMode === "login" ? "Entrar" : "Criar conta"}</h1><p>{authMode === "login" ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p><form className="form" onSubmit={handleAuth}>{authMode === "register" && <label>Nome<input value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} placeholder="Seu nome" /></label>}<label>E-mail<input value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} placeholder="seuemail@exemplo.com" type="email" /></label><label>Senha<input value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" type="password" /></label><button disabled={loading}>{loading ? "Aguarde..." : authMode === "login" ? "Entrar" : "Criar conta"}</button></form><button className="ghost-button" onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}>{authMode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}</button>{message && <div className="status-box">{message}</div>}</section></main>;
+  }
+
+  if (pendingInvite) {
+    return <InviteAccept invite={inviteInfo} loading={loading} message={message} acceptInvite={acceptInvite} />;
   }
 
   return (
@@ -244,10 +300,10 @@ export default function App() {
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} />}
-        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} />}
+        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} buyForm={buyForm} setBuyForm={setBuyForm} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} firstName={firstName} coupleSpace={coupleSpace} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} setMessage={setMessage} />}
-        {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} firstName={firstName} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} />}
+        {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} firstName={firstName} />}
         {message && <div className="floating-message">{message}</div>}
       </section>
     </main>
@@ -381,8 +437,9 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   );
 }
 
-function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName }) {
+function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName, activeMode }) {
   const updateLocalAccount = (accountId, field, value) => setAccounts(accounts.map((item) => item._id === accountId ? { ...item, [field]: value } : item));
+  const ownerOptions = activeMode === "couple" ? [firstName, "Casal"] : [firstName, "Individual"];
 
   return (
     <section className="panel">
@@ -397,10 +454,7 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
           <article className="account-row account-row-editable" key={item._id}>
             <div className="account-edit-grid">
               <label>Conta<input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} /></label>
-              <label>Dono<select value={item.ownerName || firstName} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>
-                <option>{firstName}</option>
-                <option>Individual</option>
-              </select></label>
+              <label>Dono<select value={item.ownerName || ownerOptions[0]} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
               <label>Saldo atual<input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} /></label>
             </div>
             <em>{money(item.balance)}</em>
@@ -413,7 +467,7 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
         <form className="account-row account-row-editable" onSubmit={addAccount}>
           <div className="account-edit-grid">
             <label>Conta<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" /></label>
-            <label>Dono<select><option>{firstName}</option></select></label>
+            <label>Dono<select value={accountForm.ownerName || ownerOptions[0]} onChange={(e) => setAccountForm({ ...accountForm, ownerName: e.target.value })}>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Saldo atual<input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" /></label>
           </div>
           <em>{money(accountForm.balance)}</em>
@@ -447,7 +501,7 @@ function Planejamento({ summary, buyForm, setBuyForm }) {
   );
 }
 
-function Config({ reserve, setReserve, firstName, coupleSpace, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, setMessage }) {
+function Config({ reserve, setReserve, firstName, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount }) {
   return (
     <section className="settings-stack">
       <section className="panel">
@@ -477,15 +531,15 @@ function Config({ reserve, setReserve, firstName, coupleSpace, setActiveMenu, go
         <div className="panel-head">
           <div>
             <span className="eyebrow">Modo casal</span>
-            <h2>{coupleSpace ? "Espaço do casal criado" : "Modo casal ainda não criado"}</h2>
+            <h2>{coupleReady ? "Espaço do casal ativo" : coupleSpace ? "Convite do casal pendente" : "Modo casal ainda não criado"}</h2>
           </div>
         </div>
         <div className="mode-inline">
           <div>
             <strong>{coupleSpace ? coupleSpace.name : "Crie um convite para iniciar o modo casal"}</strong>
-            <span>Os dados individuais e compartilhados continuam separados por espaço.</span>
+            <span>{coupleReady ? "Os dados individuais e compartilhados continuam separados por espaço." : "O modo casal só libera lançamentos compartilhados depois que a outra pessoa aceitar."}</span>
           </div>
-          <button onClick={coupleSpace ? goToCouple : () => setActiveMenu("Casal")}>{coupleSpace ? "Entrar no casal" : "Criar convite"}</button>
+          <button onClick={coupleReady ? goToCouple : () => setActiveMenu("Casal")}>{coupleReady ? "Entrar no casal" : coupleSpace ? "Ver convite" : "Criar convite"}</button>
           {activeMode === "couple" && <button className="ghost-button" onClick={goToIndividual}>Ir para individual</button>}
         </div>
       </section>
@@ -500,23 +554,24 @@ function Config({ reserve, setReserve, firstName, coupleSpace, setActiveMenu, go
         <div className="security-actions">
           <button className="ghost-button" onClick={logout}>Sair da conta</button>
           <button className="danger-button" onClick={resetSpaceData}>Zerar dados financeiros</button>
-          <button className="danger-button" onClick={() => setMessage("A exclusão de conta será ativada depois que a rota segura existir no backend.")}>Apagar conta</button>
+          <button className="danger-button" onClick={deleteUserAccount}>Apagar conta</button>
         </div>
       </section>
     </section>
   );
 }
 
-function Casal({ coupleSpace, coupleInvite, createCouple, goToCouple, firstName }) {
-  const code = coupleInvite?.code || "FF-AGUARDANDO";
-  const link = `${window.location.origin}/convite-casal?code=${code}&from=${firstName}`;
+function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCouple, firstName }) {
+  const code = coupleInvite?.code || "";
+  const link = code ? `${window.location.origin}/convite-casal?code=${code}&from=${encodeURIComponent(firstName)}` : "";
+  const whatsappText = encodeURIComponent(`Entre no nosso FinanFlow Casal: ${link}`);
 
   return (
     <section className="panel invite-panel">
       <div className="panel-head">
         <div>
           <span className="eyebrow">Modo casal</span>
-          <h2>{coupleSpace ? "Convite do casal" : "Modo casal ainda não criado"}</h2>
+          <h2>{coupleReady ? "Espaço do casal ativo" : coupleSpace ? "Convite do casal pendente" : "Modo casal ainda não criado"}</h2>
         </div>
       </div>
 
@@ -528,7 +583,23 @@ function Casal({ coupleSpace, coupleInvite, createCouple, goToCouple, firstName 
         </div>
       )}
 
-      {coupleSpace && (
+      {coupleSpace && !coupleInvite && !coupleReady && (
+        <div className="invite-placeholder">
+          <h3>Convite pendente</h3>
+          <p>Gere um novo link para a outra pessoa aceitar. O modo casal permanece inativo até o aceite.</p>
+          <button onClick={createCouple}>Gerar link de convite</button>
+        </div>
+      )}
+
+      {coupleReady && !coupleInvite && (
+        <div className="invite-placeholder">
+          <h3>Modo casal ativo</h3>
+          <p>O espaço compartilhado já está liberado para as duas pessoas.</p>
+          <button onClick={goToCouple}>Entrar no modo casal</button>
+        </div>
+      )}
+
+      {coupleSpace && coupleInvite && (
         <div className="invite-grid">
           <div className="qr-card">
             <div className="fake-qr"><i /></div>
@@ -539,15 +610,41 @@ function Casal({ coupleSpace, coupleInvite, createCouple, goToCouple, firstName 
             <div className="invite-link-box">{link}</div>
             <div className="invite-actions">
               <button type="button" onClick={() => navigator.clipboard?.writeText(link)}>Copiar link</button>
-              <button type="button" className="ghost-button">Enviar WhatsApp</button>
-              <button type="button" className="ghost-button">Imprimir QR</button>
-              <button type="button" onClick={goToCouple}>Entrar no modo casal</button>
+              <button type="button" className="ghost-button" onClick={() => window.open(`https://wa.me/?text=${whatsappText}`, "_blank", "noopener,noreferrer")}>Enviar WhatsApp</button>
+              <button type="button" className="ghost-button" onClick={() => window.print()}>Imprimir QR</button>
+              <button type="button" onClick={goToCouple}>{coupleReady ? "Entrar no modo casal" : "Aguardando aceite"}</button>
             </div>
-            <div className="invite-warning">Seus dados individuais continuam separados do espaço do casal.</div>
+            <div className="invite-warning">Seus dados individuais continuam separados. O modo casal só fica ativo depois que a outra pessoa aceitar este convite.</div>
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+function InviteAccept({ invite, loading, message, acceptInvite }) {
+  const unavailable = invite?.used || invite?.expired || Number(invite?.memberCount || 0) >= 2;
+  return (
+    <main className="finanflow-app invite-shell">
+      <section className="main-content">
+        <section className="panel invite-accept-card">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Convite recebido</span>
+              <h2>Entrar no FinanFlow Casal</h2>
+            </div>
+          </div>
+          <p>{invite ? `${invite.ownerName} convidou você para o espaço ${invite.spaceName}.` : "Carregando dados do convite..."}</p>
+          {invite && unavailable && <div className="invite-warning">Este convite não está disponível. Ele pode ter expirado, já ter sido usado ou o casal já estar completo.</div>}
+          {message && <div className="status-box">{message}</div>}
+          <div className="invite-actions">
+            <button type="button" disabled={!invite || unavailable || loading} onClick={acceptInvite}>{loading ? "Aceitando..." : "Aceitar convite"}</button>
+            <button type="button" className="ghost-button" onClick={() => { window.history.replaceState({}, "", "/"); window.location.reload(); }}>Voltar ao FinanFlow</button>
+          </div>
+          <div className="invite-warning">Ao aceitar, será criado um espaço financeiro compartilhado. Seus dados individuais continuam separados.</div>
+        </section>
+      </section>
+    </main>
   );
 }
 

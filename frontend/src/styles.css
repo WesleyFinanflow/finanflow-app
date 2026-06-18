@@ -754,6 +754,15 @@ button {
   overflow: hidden;
 }
 
+.invite-shell {
+  grid-template-columns: 1fr;
+}
+
+.invite-accept-card {
+  width: min(760px, 100%);
+  margin: 60px auto 0;
+}
+
 .invite-placeholder {
   min-height: 250px;
   display: grid;

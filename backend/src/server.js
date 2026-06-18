@@ -111,6 +111,18 @@ async function userCanAccessSpace(userId, spaceId) {
   return Boolean(await Member.findOne({ userId, spaceId }));
 }
 
+async function serializeSpaceForUser(member) {
+  const space = member.spaceId.toObject();
+  const memberCount = await Member.countDocuments({ spaceId: space._id });
+  return { ...space, role: member.role, memberCount };
+}
+
+async function createInviteForSpace(spaceId, userId) {
+  await Invite.updateMany({ spaceId, usedAt: { $exists: false } }, { $set: { usedAt: new Date() } });
+  const code = `FF-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+  return Invite.create({ spaceId, code, createdBy: userId, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
+}
+
 async function createIndividualSpaceForUser(user) {
   const space = await Space.create({ name: `Individual de ${user.name}`, type: "individual", ownerId: user._id });
   await Member.create({ spaceId: space._id, userId: user._id, role: "owner" });
@@ -154,22 +166,83 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.get("/api/me", auth, async (req, res) => res.json({ user: req.user }));
 
+app.delete("/api/me", auth, async (req, res) => {
+  try {
+    const memberships = await Member.find({ userId: req.user._id }).populate("spaceId");
+    for (const membership of memberships) {
+      if (!membership.spaceId) continue;
+      const space = membership.spaceId;
+      const memberCount = await Member.countDocuments({ spaceId: space._id });
+      if (space.type === "individual" || memberCount <= 1) {
+        await Transaction.deleteMany({ spaceId: space._id });
+        await Account.deleteMany({ spaceId: space._id });
+        await Invite.deleteMany({ spaceId: space._id });
+        await Member.deleteMany({ spaceId: space._id });
+        await Space.deleteOne({ _id: space._id });
+        continue;
+      }
+
+      await Member.deleteOne({ _id: membership._id });
+      if (String(space.ownerId) === String(req.user._id)) {
+        const nextOwner = await Member.findOne({ spaceId: space._id });
+        if (nextOwner) await Space.updateOne({ _id: space._id }, { ownerId: nextOwner.userId });
+      }
+    }
+    await User.deleteOne({ _id: req.user._id });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: "Erro ao apagar conta.", error: error.message });
+  }
+});
+
 app.get("/api/spaces", auth, async (req, res) => {
   const memberships = await Member.find({ userId: req.user._id }).populate("spaceId");
-  res.json({ spaces: memberships.map((item) => ({ ...item.spaceId.toObject(), role: item.role })) });
+  res.json({ spaces: await Promise.all(memberships.filter((item) => item.spaceId).map(serializeSpaceForUser)) });
 });
 
 app.post("/api/spaces/couple", auth, async (req, res) => {
   try {
     const partnerName = String(req.body.partnerName || "Parceira").trim();
+    const existingOwnedCouple = await Space.findOne({ ownerId: req.user._id, type: "couple" }).sort({ createdAt: 1 });
+    if (existingOwnedCouple) {
+      const memberCount = await Member.countDocuments({ spaceId: existingOwnedCouple._id });
+      const invite = memberCount > 1 ? null : await createInviteForSpace(existingOwnedCouple._id, req.user._id);
+      return res.json({ space: { ...existingOwnedCouple.toObject(), memberCount }, invite });
+    }
+
+    const memberships = await Member.find({ userId: req.user._id }).populate("spaceId");
+    if (memberships.some((item) => item.spaceId?.type === "couple")) {
+      return res.status(409).json({ message: "Você já participa de um espaço de casal." });
+    }
+
     const space = await Space.create({ name: `${req.user.name} & ${partnerName}`, type: "couple", ownerId: req.user._id });
     await Member.create({ spaceId: space._id, userId: req.user._id, role: "owner" });
     await Account.create({ spaceId: space._id, name: "Conta conjunta", ownerName: "Casal", balance: 0 });
-    const code = `FF-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
-    const invite = await Invite.create({ spaceId: space._id, code, createdBy: req.user._id, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
-    res.status(201).json({ space, invite });
+    const invite = await createInviteForSpace(space._id, req.user._id);
+    res.status(201).json({ space: { ...space.toObject(), memberCount: 1 }, invite });
   } catch (error) {
     res.status(500).json({ message: "Erro ao criar espaço casal.", error: error.message });
+  }
+});
+
+app.get("/api/invites/:code", async (req, res) => {
+  try {
+    const invite = await Invite.findOne({ code: req.params.code }).populate("spaceId").populate("createdBy", "name");
+    if (!invite) return res.status(404).json({ message: "Convite não encontrado." });
+    const memberCount = await Member.countDocuments({ spaceId: invite.spaceId._id });
+    res.json({
+      invite: {
+        code: invite.code,
+        used: Boolean(invite.usedAt),
+        expired: invite.expiresAt < new Date(),
+        expiresAt: invite.expiresAt,
+        spaceName: invite.spaceId.name,
+        ownerName: invite.createdBy?.name || "FinanFlow",
+        memberCount,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Erro ao consultar convite.", error: error.message });
   }
 });
 
@@ -179,6 +252,16 @@ app.post("/api/invites/:code/accept", auth, async (req, res) => {
     if (!invite) return res.status(404).json({ message: "Convite não encontrado." });
     if (invite.usedAt) return res.status(410).json({ message: "Convite já utilizado." });
     if (invite.expiresAt < new Date()) return res.status(410).json({ message: "Convite expirado." });
+    if (String(invite.createdBy) === String(req.user._id)) return res.status(400).json({ message: "Este convite deve ser aceito pela outra pessoa." });
+    const currentMember = await Member.findOne({ spaceId: invite.spaceId._id, userId: req.user._id });
+    if (!currentMember) {
+      const memberships = await Member.find({ userId: req.user._id }).populate("spaceId");
+      if (memberships.some((item) => item.spaceId?.type === "couple" && String(item.spaceId._id) !== String(invite.spaceId._id))) {
+        return res.status(409).json({ message: "Você já participa de outro espaço de casal." });
+      }
+      const memberCount = await Member.countDocuments({ spaceId: invite.spaceId._id });
+      if (memberCount >= 2) return res.status(409).json({ message: "Este espaço de casal já tem duas pessoas." });
+    }
     await Member.updateOne({ spaceId: invite.spaceId._id, userId: req.user._id }, { role: "member" }, { upsert: true });
     invite.usedAt = new Date();
     await invite.save();
@@ -273,10 +356,15 @@ app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req,
 
 app.delete("/api/spaces/:spaceId/reset", auth, async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const space = await Space.findById(req.params.spaceId);
   await Transaction.deleteMany({ spaceId: req.params.spaceId });
   await Account.deleteMany({ spaceId: req.params.spaceId });
-  await Account.create({ spaceId: req.params.spaceId, name: "Conta principal", ownerName: req.user.name, balance: 0 });
-  await Account.create({ spaceId: req.params.spaceId, name: "Dinheiro", ownerName: req.user.name, balance: 0 });
+  if (space?.type === "couple") {
+    await Account.create({ spaceId: req.params.spaceId, name: "Conta conjunta", ownerName: "Casal", balance: 0 });
+  } else {
+    await Account.create({ spaceId: req.params.spaceId, name: "Conta principal", ownerName: req.user.name, balance: 0 });
+    await Account.create({ spaceId: req.params.spaceId, name: "Dinheiro", ownerName: req.user.name, balance: 0 });
+  }
   res.json({ ok: true });
 });
 
