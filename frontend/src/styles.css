@@ -46,3 +46,42 @@
   width: min(1280px, calc(100% - 56px)) !important;
   margin: 0 auto !important;
 }
+
+.editable-row {
+  grid-template-columns: 1.5fr 1fr 1fr auto auto !important;
+}
+
+.action-item {
+  grid-template-columns: 1fr auto auto !important;
+}
+
+.row-actions,
+.action-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.row-actions button,
+.action-row button {
+  white-space: nowrap;
+}
+
+.inline-danger {
+  margin-top: 0 !important;
+  width: auto !important;
+}
+
+@media(max-width:1150px) {
+  .editable-row,
+  .action-item {
+    grid-template-columns: 1fr !important;
+  }
+
+  .row-actions,
+  .action-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}

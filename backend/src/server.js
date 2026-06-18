@@ -199,6 +199,29 @@ app.post("/api/spaces/:spaceId/accounts", auth, async (req, res) => {
   res.status(201).json({ account });
 });
 
+app.put("/api/spaces/:spaceId/accounts/:accountId", auth, async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const account = await Account.findOneAndUpdate(
+    { _id: req.params.accountId, spaceId: req.params.spaceId },
+    {
+      name: req.body.name,
+      ownerName: req.body.ownerName || req.user.name,
+      balance: Number(req.body.balance || 0),
+    },
+    { new: true, runValidators: true }
+  );
+  if (!account) return res.status(404).json({ message: "Conta não encontrada." });
+  res.json({ account });
+});
+
+app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const account = await Account.findOneAndDelete({ _id: req.params.accountId, spaceId: req.params.spaceId });
+  if (!account) return res.status(404).json({ message: "Conta não encontrada." });
+  await Transaction.updateMany({ spaceId: req.params.spaceId, accountId: req.params.accountId }, { $set: { accountId: null } });
+  res.json({ ok: true });
+});
+
 app.get("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   res.json({ transactions: await Transaction.find({ spaceId: req.params.spaceId }).sort({ date: -1, createdAt: -1 }) });
@@ -219,6 +242,42 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
     responsibleName: req.body.responsibleName || req.user.name,
   });
   res.status(201).json({ transaction });
+});
+
+app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const transaction = await Transaction.findOneAndUpdate(
+    { _id: req.params.transactionId, spaceId: req.params.spaceId },
+    {
+      accountId: req.body.accountId || null,
+      type: req.body.type,
+      description: req.body.description,
+      amount: Number(req.body.amount || 0),
+      date: req.body.date,
+      status: req.body.status || "pendente",
+      category: req.body.category || "Outro",
+      responsibleName: req.body.responsibleName || req.user.name,
+    },
+    { new: true, runValidators: true }
+  );
+  if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
+  res.json({ transaction });
+});
+
+app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const transaction = await Transaction.findOneAndDelete({ _id: req.params.transactionId, spaceId: req.params.spaceId });
+  if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
+  res.json({ ok: true });
+});
+
+app.delete("/api/spaces/:spaceId/reset", auth, async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  await Transaction.deleteMany({ spaceId: req.params.spaceId });
+  await Account.deleteMany({ spaceId: req.params.spaceId });
+  await Account.create({ spaceId: req.params.spaceId, name: "Conta principal", ownerName: req.user.name, balance: 0 });
+  await Account.create({ spaceId: req.params.spaceId, name: "Dinheiro", ownerName: req.user.name, balance: 0 });
+  res.json({ ok: true });
 });
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
