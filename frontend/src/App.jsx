@@ -215,25 +215,39 @@ export default function App() {
   }
 
   return (
-    <main className="finanflow-real">
-      <aside className="real-sidebar">
-        <div className="brand-row">
-          <div className="brand-icon">♙</div>
-          <div><strong>FinanFlow</strong><span>{activeCoupleSpace ? "Modo casal ativo" : "Modo individual"}</span></div>
+    <main className="finanflow-app">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon">F</div>
+          <div>
+            <strong>FinanFlow</strong>
+            <span>{activeCoupleSpace ? "Modo casal ativo" : "Modo individual"}</span>
+          </div>
         </div>
-        <nav>{menu.map((item) => <button key={item} className={activeMenu === item ? "active" : ""} onClick={() => setActiveMenu(item)}>{item}</button>)}</nav>
-        <button className="couple-button" onClick={activeCoupleSpace ? goToIndividual : goToCouple}>{activeCoupleSpace ? "Ir para individual" : "Ir para casal"}</button>
-        <button className="danger-button" onClick={resetSpaceData}>Zerar dados</button>
+
+        <nav className="sidebar-nav">
+          {menu.map((item) => (
+            <button key={item} className={activeMenu === item ? "active" : ""} onClick={() => setActiveMenu(item)}>
+              {item}
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <button className="mode-button" onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
+            {activeCoupleSpace ? "Ir para individual" : "Ir para casal"}
+          </button>
+        </div>
       </aside>
-      <section className="real-content">
+
+      <section className="main-content">
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} buyForm={buyForm} setBuyForm={setBuyForm} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} firstName={firstName} coupleSpace={coupleSpace} setActiveMenu={setActiveMenu} goToCouple={goToCouple} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} firstName={firstName} coupleSpace={coupleSpace} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} setMessage={setMessage} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} firstName={firstName} />}
-        <button className="logout-fixed" onClick={logout}>Sair</button>
         {message && <div className="floating-message">{message}</div>}
       </section>
     </main>
@@ -242,14 +256,338 @@ export default function App() {
 
 function Hero({ firstName, coupleSpace, summary, hasData }) {
   const isCouple = Boolean(coupleSpace);
-  return <section className="hero-real"><div><span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span><h1>{isCouple ? coupleSpace.name : firstName}</h1><p>{isCouple ? "Você está no espaço do casal. Cadastre os dados compartilhados para calcular o saldo livre." : "Você está no modo individual. Cadastre seus dados; o modo casal só começa depois do convite."}</p></div><div className="balance-card"><span>Saldo livre seguro</span><strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong></div></section>;
+  return (
+    <section className="hero">
+      <div className="hero-copy">
+        <span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span>
+        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}`}</h1>
+        <p>
+          {isCouple
+            ? "Você está no espaço do casal. Cadastre os dados compartilhados para calcular o saldo livre."
+            : "Você está no modo individual. Cadastre seus dados; o modo casal só começa depois do convite."}
+        </p>
+      </div>
+      <div className="balance-focus">
+        <span>Saldo livre seguro</span>
+        <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
+      </div>
+    </section>
+  );
 }
-function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve, transactions }) { const pending = transactions.filter((item) => item.status === "pendente" && item.type !== "receita"); return <><section className="start-real"><span className="eyebrow">Comece por aqui</span><h2>Cadastre seus primeiros dados</h2><p>O FinanFlow começa individual. Cadastre seus saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite.</p><div className="quick-actions"><button onClick={() => setActiveMenu("Contas")}>Adicionar saldo</button><button onClick={() => setActiveMenu("Lançamentos")}>Adicionar receita</button><button onClick={() => setActiveMenu("Lançamentos")}>Adicionar despesa</button></div></section><section className="kpi-grid"><Kpi title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas + movimentações pagas" tone="cyan" /><Kpi title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Ainda pendentes no mês" tone="green" /><Kpi title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Contas, dívidas e metas pendentes" tone="yellow" /><Kpi title="Saldo livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Reserva protegida: ${money(reserve)}`} tone="blue" /></section><section className="two-columns"><Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} /><section className="real-panel"><span className="eyebrow">Próximos vencimentos</span><h2>O que ainda precisa pagar</h2>{pending.length ? pending.map((item) => <div className="row" key={item._id}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : <Empty title="Aguardando os primeiros dados" text="Depois que você cadastrar despesas pendentes, elas aparecerão aqui." />}</section></section></>; }
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction }) { const resetForm = () => { setEditingTransactionId(""); setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" }); }; return <section className="two-columns top-align"><form className="real-panel" onSubmit={addTransaction}><span className="eyebrow">{editingTransactionId ? "Editar lançamento" : "Novo lançamento"}</span><h2>{editingTransactionId ? "Salvar movimentação" : "Adicionar movimentação"}</h2><div className="type-tabs">{["receita", "despesa", "divida", "meta"].map((type) => <button type="button" key={type} className={txForm.type === type ? "selected" : ""} onClick={() => setTxForm({ ...txForm, type })}>{type === "meta" ? "Meta / reserva" : type}</button>)}</div><div className="form-grid"><label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" /></label><label>Valor<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" /></label><label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} /></label><label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}><option>Moradia</option><option>Alimentação</option><option>Transporte</option><option>Renda</option><option>Dívida</option><option>Reserva</option></select></label><label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">Pago</option></select></label><label>Conta<select value={txForm.accountId || ""} onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}><option value="">Sem conta</option>{accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}</select></label></div><div className="action-row"><button>{editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>{editingTransactionId && <button type="button" className="ghost-button" onClick={resetForm}>Cancelar edição</button>}</div></form><section className="real-panel"><span className="eyebrow">Extrato do mês</span><h2>Lançamentos</h2>{transactions.length ? transactions.map((item) => <div className="row action-item" key={item._id}><span>{item.description}</span><strong>{money(item.amount)}</strong><div className="row-actions"><button type="button" className="ghost-button" onClick={() => editTransaction(item)}>Editar</button><button type="button" className="danger-button inline-danger" onClick={() => deleteTransaction(item._id)}>Excluir</button></div></div>) : <Empty title="Nenhum lançamento neste mês" text="Cadastre receitas, despesas, dívidas ou metas para começar." />}</section></section>; }
-function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName }) { const updateLocalAccount = (accountId, field, value) => setAccounts(accounts.map((item) => item._id === accountId ? { ...item, [field]: value } : item)); return <section className="real-panel"><span className="eyebrow">Contas</span><h2>Saldos manuais</h2>{accounts.map((item) => <div className="account-row editable-row" key={item._id}><input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} /><select value={item.ownerName || firstName} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}><option>{firstName}</option><option>Individual</option></select><input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} /><strong>{money(item.balance)}</strong><div className="row-actions"><button type="button" onClick={() => updateAccount(item)}>Salvar</button><button type="button" className="danger-button inline-danger" onClick={() => deleteAccount(item._id)}>Excluir</button></div></div>)}<form className="account-row editable-row" onSubmit={addAccount}><input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" /><select><option>{firstName}</option></select><input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" /><strong>{money(accountForm.balance)}</strong><div className="row-actions"><button>Adicionar</button></div></form></section>; }
-function Planejamento({ summary, buyForm, setBuyForm }) { return <section className="two-columns"><Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={summary.balance || summary.income || summary.commitments} free={summary.free} /><section className="real-panel"><span className="eyebrow">Resumo do mês</span><h2>Para entender o que pode fazer</h2><div className="summary-list"><div><span>Receitas do mês</span><strong>{summary.income ? money(summary.income) : "Aguardando dados"}</strong></div><div><span>Despesas do mês</span><strong>{summary.expenses ? money(summary.expenses) : "Aguardando dados"}</strong></div><div><span>Dívidas do mês</span><strong>{summary.debt ? money(summary.debt) : "Aguardando dados"}</strong></div><div><span>Metas / reserva</span><strong>{summary.goals ? money(summary.goals) : "Aguardando dados"}</strong></div><div className="highlight-row"><span>Saldo livre seguro</span><strong>{summary.free ? money(summary.free) : "Aguardando dados"}</strong></div></div></section></section>; }
-function Config({ reserve, setReserve, firstName, coupleSpace, setActiveMenu, goToCouple }) { return <><section className="real-panel"><span className="eyebrow">Configuração</span><h2>Dados individuais</h2><div className="form-grid"><label>Seu nome<input value={firstName} readOnly /></label><label>Reserva mínima protegida<input type="number" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label></div><button>Salvar configurações</button></section><section className="real-panel"><span className="eyebrow">Modo casal</span><h2>{coupleSpace ? "Espaço do casal criado" : "Modo casal ainda não criado"}</h2><div className="couple-strip"><span>{coupleSpace ? coupleSpace.name : "Crie um convite para iniciar o modo casal"}</span><button onClick={coupleSpace ? goToCouple : () => setActiveMenu("Casal")}>Ir para casal</button></div></section></>; }
-function Casal({ coupleSpace, coupleInvite, createCouple, goToCouple, firstName }) { const code = coupleInvite?.code || "FF-AGUARDANDO"; const link = `${window.location.origin}/convite-casal?code=${code}&from=${firstName}`; return <section className="real-panel couple-card"><span className="eyebrow">Modo casal</span><h2>{coupleSpace ? "Espaço do casal criado" : "Modo casal ainda não criado"}</h2>{!coupleSpace && <><p>Crie um convite para iniciar o modo casal</p><button onClick={createCouple}>Criar convite do casal</button></>}{coupleSpace && <div className="invite-area"><div className="fake-qr">▦</div><div><p>Compartilhe este convite para a outra pessoa entrar no mesmo espaço financeiro do casal. Seus dados individuais continuam separados.</p><div className="invite-link">{link}</div><div className="quick-actions"><button>Copiar link</button><button>Enviar WhatsApp</button><button>Imprimir QR</button><button onClick={goToCouple}>Entrar no modo casal</button></div><div className="warning">Aviso: seus dados individuais continuam separados.</div></div></div>}</section>; }
-function Kpi({ title, value, text, tone }) { return <article className={`kpi ${tone}`}><span>{title}</span><strong>{value}</strong><p>{text}</p></article>; }
-function Empty({ title, text }) { return <div className="empty"><strong>{title}</strong><p>{text}</p></div>; }
-function Decision({ buyForm, setBuyForm, ready, free }) { const canBuy = Number(buyForm.total || 0) > 0 && free >= Number(buyForm.total || 0); return <section className="real-panel"><span className="eyebrow">Decisão financeira</span><h2>Posso comprar?</h2><div className="buy-grid"><label>Compra<input value={buyForm.item} onChange={(e) => setBuyForm({ ...buyForm, item: e.target.value })} placeholder="Ex: geladeira" /></label><label>Valor total<input type="number" value={buyForm.total} onChange={(e) => setBuyForm({ ...buyForm, total: e.target.value })} placeholder="0,00" /></label><label>Parcelas<input type="number" value={buyForm.installments} onChange={(e) => setBuyForm({ ...buyForm, installments: e.target.value })} /></label></div><div className={canBuy ? "decision ok" : "decision bad"}>{ready ? (canBuy ? "Compra parece possível." : "Compra não recomendada agora.") : "Aguardando dados. Cadastre saldo, receita e despesas antes de simular uma compra."}</div></section>; }
+
+function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve, transactions }) {
+  const pending = transactions.filter((item) => item.status === "pendente" && item.type !== "receita");
+
+  return (
+    <>
+      <section className="quick-start panel">
+        <div>
+          <span className="eyebrow">Comece por aqui</span>
+          <h2>Cadastre seus primeiros dados</h2>
+          <p>O FinanFlow começa individual. Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite.</p>
+        </div>
+        <div className="quick-actions">
+          <button onClick={() => setActiveMenu("Contas")}>Adicionar saldo</button>
+          <button onClick={() => setActiveMenu("Lançamentos")}>Adicionar receita</button>
+          <button onClick={() => setActiveMenu("Lançamentos")}>Adicionar despesa</button>
+        </div>
+      </section>
+
+      <section className="stats-grid">
+        <StatCard title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas cadastradas no espaço atual" tone="cyan" />
+        <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas registradas" tone="green" />
+        <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas" tone="yellow" />
+        <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Reserva protegida: ${money(reserve)}`} tone="blue" />
+      </section>
+
+      <section className="grid-two">
+        <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Próximos vencimentos</span>
+              <h2>O que ainda precisa pagar</h2>
+            </div>
+          </div>
+          <div className="upcoming-list">
+            {pending.length ? pending.map((item) => <DataRow key={item._id} label={item.description} value={money(item.amount)} />) : <Empty title="Aguardando os primeiros dados" text="Depois que você cadastrar despesas pendentes, elas aparecerão aqui." />}
+          </div>
+        </section>
+      </section>
+    </>
+  );
+}
+
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction }) {
+  const resetForm = () => {
+    setEditingTransactionId("");
+    setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+  };
+
+  return (
+    <section className="grid-two top-align">
+      <form className="panel" onSubmit={addTransaction}>
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">{editingTransactionId ? "Editar lançamento" : "Novo lançamento"}</span>
+            <h2>{editingTransactionId ? "Salvar movimentação" : "Adicionar movimentação"}</h2>
+          </div>
+        </div>
+        <div className="type-grid">
+          {["receita", "despesa", "divida", "meta"].map((type) => (
+            <button type="button" key={type} className={txForm.type === type ? "selected" : ""} onClick={() => setTxForm({ ...txForm, type })}>
+              {type === "meta" ? "Meta" : type}
+            </button>
+          ))}
+        </div>
+        <div className="field-grid">
+          <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" /></label>
+          <label>Valor<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" /></label>
+          <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} /></label>
+          <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}><option>Moradia</option><option>Alimentação</option><option>Transporte</option><option>Renda</option><option>Dívida</option><option>Reserva</option></select></label>
+          <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">Pago</option></select></label>
+          <label>Conta<select value={txForm.accountId || ""} onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}><option value="">Sem conta</option>{accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}</select></label>
+        </div>
+        <div className="action-row">
+          <button>{editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
+          {editingTransactionId && <button type="button" className="ghost-button" onClick={resetForm}>Cancelar edição</button>}
+        </div>
+      </form>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Extrato do mês</span>
+            <h2>Lançamentos</h2>
+          </div>
+        </div>
+        <div className="transaction-list">
+          {transactions.length ? transactions.map((item) => (
+            <div className={`transaction-item type-${item.type}`} key={item._id}>
+              <div>
+                <strong>{item.description}</strong>
+                <span>{item.category} · {item.status}</span>
+              </div>
+              <strong>{money(item.amount)}</strong>
+              <div className="row-actions">
+                <button type="button" className="ghost-button" onClick={() => editTransaction(item)}>Editar</button>
+                <button type="button" className="danger-button inline-danger" onClick={() => deleteTransaction(item._id)}>Excluir</button>
+              </div>
+            </div>
+          )) : <Empty title="Nenhum lançamento neste mês" text="Cadastre receitas, despesas, dívidas ou metas para começar." />}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName }) {
+  const updateLocalAccount = (accountId, field, value) => setAccounts(accounts.map((item) => item._id === accountId ? { ...item, [field]: value } : item));
+
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <span className="eyebrow">Contas</span>
+          <h2>Saldos manuais</h2>
+        </div>
+      </div>
+      <div className="account-list">
+        {accounts.map((item) => (
+          <div className="account-edit-grid" key={item._id}>
+            <input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} />
+            <select value={item.ownerName || firstName} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>
+              <option>{firstName}</option>
+              <option>Individual</option>
+            </select>
+            <input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} />
+            <strong>{money(item.balance)}</strong>
+            <div className="row-actions">
+              <button type="button" onClick={() => updateAccount(item)}>Salvar</button>
+              <button type="button" className="danger-button inline-danger" onClick={() => deleteAccount(item._id)}>Excluir</button>
+            </div>
+          </div>
+        ))}
+        <form className="account-edit-grid" onSubmit={addAccount}>
+          <input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" />
+          <select><option>{firstName}</option></select>
+          <input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" />
+          <strong>{money(accountForm.balance)}</strong>
+          <div className="row-actions"><button>Adicionar</button></div>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function Planejamento({ summary, buyForm, setBuyForm }) {
+  return (
+    <section className="grid-two">
+      <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={summary.balance || summary.income || summary.commitments} free={summary.free} />
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Resumo do mês</span>
+            <h2>Para entender o que pode fazer</h2>
+          </div>
+        </div>
+        <div className="summary-list">
+          <DataRow label="Receitas do mês" value={summary.income ? money(summary.income) : "Aguardando dados"} />
+          <DataRow label="Despesas do mês" value={summary.expenses ? money(summary.expenses) : "Aguardando dados"} />
+          <DataRow label="Dívidas do mês" value={summary.debt ? money(summary.debt) : "Aguardando dados"} />
+          <DataRow label="Metas / reserva" value={summary.goals ? money(summary.goals) : "Aguardando dados"} />
+          <DataRow className="highlight-row" label="Saldo livre seguro" value={summary.free ? money(summary.free) : "Aguardando dados"} />
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function Config({ reserve, setReserve, firstName, coupleSpace, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, setMessage }) {
+  return (
+    <section className="settings-stack">
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Configurações</span>
+            <h2>Dados individuais</h2>
+          </div>
+        </div>
+        <div className="field-grid">
+          <label>Seu nome<input value={firstName} readOnly /></label>
+          <label>Espaço ativo<input value={activeMode === "couple" ? "Casal" : "Individual"} readOnly /></label>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Proteção</span>
+            <h2>Reserva mínima protegida</h2>
+          </div>
+        </div>
+        <label>Valor reservado<input type="number" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Modo casal</span>
+            <h2>{coupleSpace ? "Espaço do casal criado" : "Modo casal ainda não criado"}</h2>
+          </div>
+        </div>
+        <div className="mode-inline">
+          <div>
+            <strong>{coupleSpace ? coupleSpace.name : "Crie um convite para iniciar o modo casal"}</strong>
+            <span>Os dados individuais e compartilhados continuam separados por espaço.</span>
+          </div>
+          <button onClick={coupleSpace ? goToCouple : () => setActiveMenu("Casal")}>{coupleSpace ? "Entrar no casal" : "Criar convite"}</button>
+          {activeMode === "couple" && <button className="ghost-button" onClick={goToIndividual}>Ir para individual</button>}
+        </div>
+      </section>
+
+      <section className="panel danger-zone">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Segurança e conta</span>
+            <h2>Ações da conta</h2>
+          </div>
+        </div>
+        <div className="security-actions">
+          <button className="ghost-button" onClick={logout}>Sair da conta</button>
+          <button className="danger-button" onClick={resetSpaceData}>Zerar dados financeiros</button>
+          <button className="danger-button" onClick={() => setMessage("A exclusão de conta será ativada depois que a rota segura existir no backend.")}>Apagar conta</button>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function Casal({ coupleSpace, coupleInvite, createCouple, goToCouple, firstName }) {
+  const code = coupleInvite?.code || "FF-AGUARDANDO";
+  const link = `${window.location.origin}/convite-casal?code=${code}&from=${firstName}`;
+
+  return (
+    <section className="panel invite-panel">
+      <div className="panel-head">
+        <div>
+          <span className="eyebrow">Modo casal</span>
+          <h2>{coupleSpace ? "Convite do casal" : "Modo casal ainda não criado"}</h2>
+        </div>
+      </div>
+
+      {!coupleSpace && (
+        <div className="invite-placeholder">
+          <h3>Crie um convite para iniciar o modo casal</h3>
+          <p>O espaço compartilhado só será usado depois que você criar ou aceitar um convite e entrar no modo casal.</p>
+          <button onClick={createCouple}>Criar convite do casal</button>
+        </div>
+      )}
+
+      {coupleSpace && (
+        <div className="invite-grid">
+          <div className="qr-card">
+            <div className="fake-qr">FF</div>
+            <span>Código: {code}</span>
+          </div>
+          <div className="invite-content">
+            <p>Compartilhe este convite para a outra pessoa entrar no mesmo espaço financeiro do casal. Seus dados individuais continuam separados.</p>
+            <div className="invite-link-box">{link}</div>
+            <div className="invite-actions">
+              <button type="button" onClick={() => navigator.clipboard?.writeText(link)}>Copiar link</button>
+              <button type="button" className="ghost-button">Enviar WhatsApp</button>
+              <button type="button" className="ghost-button">Imprimir QR</button>
+              <button type="button" onClick={goToCouple}>Entrar no modo casal</button>
+            </div>
+            <div className="invite-warning">Seus dados individuais continuam separados do espaço do casal.</div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StatCard({ title, value, text, tone }) {
+  return (
+    <article className={`stat-card ${tone}`}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{text}</p>
+    </article>
+  );
+}
+
+function DataRow({ label, value, className = "" }) {
+  return (
+    <div className={`data-row ${className}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Empty({ title, text }) {
+  return <div className="empty-state"><strong>{title}</strong><p>{text}</p></div>;
+}
+
+function Decision({ buyForm, setBuyForm, ready, free }) {
+  const canBuy = Number(buyForm.total || 0) > 0 && free >= Number(buyForm.total || 0);
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <div>
+          <span className="eyebrow">Decisão financeira</span>
+          <h2>Posso comprar?</h2>
+        </div>
+      </div>
+      <div className="buy-grid">
+        <label>Compra<input value={buyForm.item} onChange={(e) => setBuyForm({ ...buyForm, item: e.target.value })} placeholder="Ex: geladeira" /></label>
+        <label>Valor total<input type="number" value={buyForm.total} onChange={(e) => setBuyForm({ ...buyForm, total: e.target.value })} placeholder="0,00" /></label>
+        <label>Parcelas<input type="number" value={buyForm.installments} onChange={(e) => setBuyForm({ ...buyForm, installments: e.target.value })} /></label>
+      </div>
+      <div className={canBuy ? "decision-box ok" : "decision-box bad"}>
+        {ready ? (canBuy ? "Compra parece possível." : "Compra não recomendada agora.") : "Aguardando dados. Cadastre saldo, receita e despesas antes de simular uma compra."}
+      </div>
+    </section>
+  );
+}

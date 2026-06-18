@@ -1,86 +1,31 @@
-/* Stable layout for the real FinanFlow shell */
-.finanflow-real {
-  min-height: 100vh !important;
-  display: grid !important;
-  grid-template-columns: 320px minmax(0, 1fr) !important;
+/* Compatibility guard for the FinanFlow app shell. */
+.finanflow-app {
+  grid-template-columns: 245px minmax(0, 1fr);
 }
 
-.real-sidebar {
-  width: 320px !important;
-  min-width: 320px !important;
-  height: 100vh !important;
-  position: sticky !important;
-  top: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 24px !important;
-  padding: 28px 20px !important;
-  background: linear-gradient(180deg, rgba(3, 20, 28, .98), rgba(2, 10, 15, .98)) !important;
-  border-right: 1px solid rgba(34, 211, 238, .16) !important;
-  overflow: hidden !important;
+.sidebar {
+  width: 245px;
+  min-width: 245px;
 }
 
-.real-sidebar nav {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 12px !important;
-  width: 100% !important;
+.sidebar-nav,
+.sidebar nav {
+  display: flex;
+  flex-direction: column;
 }
 
-.real-sidebar nav button {
-  width: 100% !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  flex: 0 0 auto !important;
-  background: transparent !important;
-  color: #9ca3af !important;
-  text-align: left !important;
-  white-space: nowrap !important;
-  border: 1px solid transparent !important;
-  border-radius: 16px !important;
-  font-size: 18px !important;
-  padding: 15px 18px !important;
+.sidebar-nav button,
+.sidebar nav button {
+  width: 100%;
 }
 
-.real-sidebar nav button.active,
-.real-sidebar nav button:hover {
-  background: rgba(34, 211, 238, .13) !important;
-  border-color: rgba(34, 211, 238, .35) !important;
-  color: #22d3ee !important;
-}
-
-.couple-button,
-.danger-button {
-  width: 100% !important;
-  display: block !important;
-}
-
-.couple-button {
-  margin-top: auto !important;
-}
-
-.real-content {
-  width: min(1280px, calc(100% - 56px)) !important;
-  margin: 0 auto !important;
-  padding: 34px 0 90px !important;
-  position: relative !important;
-  min-width: 0 !important;
-}
-
-@media(max-width:900px) {
-  .finanflow-real {
-    grid-template-columns: 1fr !important;
+@media (max-width: 900px) {
+  .finanflow-app {
+    grid-template-columns: 1fr;
   }
 
-  .real-sidebar {
-    position: relative !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-  }
-
-  .real-content {
-    width: min(100% - 24px, 1280px) !important;
+  .sidebar {
+    width: 100%;
+    min-width: 0;
   }
 }
