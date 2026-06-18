@@ -118,7 +118,7 @@ h1 {
 }
 
 h2 {
-  margin: 0 0 18px;
+  margin: 0 0 14px;
 }
 
 p {
@@ -192,6 +192,7 @@ p {
 
 .dashboard-shell {
   padding-top: 34px;
+  padding-bottom: 96px;
 }
 
 .dashboard-header {
@@ -232,11 +233,22 @@ p {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 16px;
+  align-items: start;
 }
 
 .panel {
   display: grid;
   gap: 14px;
+  align-content: start;
+}
+
+.panel form,
+form.panel {
+  align-content: start;
+}
+
+.panel button {
+  margin-top: 8px;
 }
 
 .data-row {
@@ -255,8 +267,13 @@ p {
 }
 
 .floating-message {
-  position: sticky;
-  bottom: 16px;
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  margin: 0;
+  z-index: 20;
 }
 
 @media (max-width: 900px) {
