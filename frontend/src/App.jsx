@@ -1,6 +1,19 @@
 import { useState } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+function getApiUrl() {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+
+  const currentHost = window.location.hostname;
+  if (currentHost.endsWith("app.github.dev") && currentHost.includes("-5173")) {
+    const backendHost = currentHost.replace("-5173", "-3000");
+    return `${window.location.protocol}//${backendHost}`;
+  }
+
+  return "http://localhost:3000";
+}
+
+const API_URL = getApiUrl();
 
 export default function App() {
   const [status, setStatus] = useState("Ainda não testado");
