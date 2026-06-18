@@ -95,6 +95,14 @@ label {
   width: min(520px, 100%);
 }
 
+.auth-card h1 {
+  font-size: clamp(38px, 6vw, 54px);
+}
+
+.auth-card p {
+  margin-bottom: 6px;
+}
+
 .eyebrow {
   color: #22d3ee;
   text-transform: uppercase;
