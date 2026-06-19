@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ArrowLeftRight, ChartNoAxesCombined, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 
 function getApiUrl() {
@@ -17,7 +18,14 @@ function getApiUrl() {
 
 const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
-const menu = ["Início", "Lançamentos", "Contas", "Planejamento", "Casal", "Configurações"];
+const menu = [
+  { label: "Início", shortLabel: "Início", icon: House },
+  { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
+  { label: "Contas", shortLabel: "Contas", icon: WalletCards },
+  { label: "Planejamento", shortLabel: "Planejar", icon: ChartNoAxesCombined },
+  { label: "Casal", shortLabel: "Casal", icon: HeartHandshake },
+  { label: "Configurações", shortLabel: "Ajustes", icon: Settings },
+];
 
 function getInviteFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -420,7 +428,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <main className="auth-page"><section className="auth-card">{pendingInvite && <div className="invite-warning">Você recebeu um convite para o FinanFlow Casal. Entre ou crie sua conta para aceitar.</div>}<span className="eyebrow">FinanFlow</span><h1>{authMode === "login" ? "Entrar" : "Criar conta"}</h1><p>{authMode === "login" ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p><form className="form" onSubmit={handleAuth}>{authMode === "register" && <label>Nome<input value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} placeholder="Seu nome" /></label>}<label>E-mail<input value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} placeholder="seuemail@exemplo.com" type="email" /></label><label>Senha<input value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" type="password" /></label><button disabled={loading}>{loading ? "Aguarde..." : authMode === "login" ? "Entrar" : "Criar conta"}</button></form><button className="ghost-button" onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}>{authMode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}</button>{message && <div className="status-box" role="status" aria-live="polite">{message}</div>}</section></main>;
+    return <AuthScreen pendingInvite={pendingInvite} authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} loading={loading} message={message} setMessage={setMessage} />;
   }
 
   if (pendingInvite) {
@@ -439,9 +447,11 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          {menu.map((item) => (
-            <button key={item} className={activeMenu === item ? "active" : ""} onClick={() => setActiveMenu(item)}>
-              {item}
+          {menu.map(({ label, shortLabel, icon: Icon }) => (
+            <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label}>
+              <Icon size={18} strokeWidth={2} aria-hidden="true" />
+              <span className="nav-label-full">{label}</span>
+              <span className="nav-label-short">{shortLabel}</span>
             </button>
           ))}
         </nav>
@@ -462,6 +472,49 @@ export default function App() {
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
+      </section>
+    </main>
+  );
+}
+
+function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthForm, handleAuth, loading, message, setMessage }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isLogin = authMode === "login";
+
+  function changeMode() {
+    setShowPassword(false);
+    setMessage("");
+    setAuthMode(isLogin ? "register" : "login");
+  }
+
+  function forgotPassword() {
+    setMessage("A recuperação automática ainda não está ativa. Entre em contato com o suporte do FinanFlow informando o e-mail cadastrado.");
+  }
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        {pendingInvite && <div className="invite-warning">Você recebeu um convite para o FinanFlow Casal. Entre ou crie sua conta para aceitar.</div>}
+        <span className="eyebrow">FinanFlow</span>
+        <h1>{isLogin ? "Entrar" : "Criar conta"}</h1>
+        <p>{isLogin ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p>
+        <form className="form" onSubmit={handleAuth}>
+          {!isLogin && <label>Nome<input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Seu nome" autoComplete="name" /></label>}
+          <label>E-mail<input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="seuemail@exemplo.com" type="email" autoComplete="email" /></label>
+          <div className="password-field">
+            <label htmlFor="auth-password">Senha</label>
+            <span className="password-input">
+              <input id="auth-password" aria-label="Senha" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Mínimo 6 caracteres" type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} />
+              <button className="password-toggle" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} title={showPassword ? "Ocultar senha" : "Mostrar senha"}>
+                {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
+              </button>
+            </span>
+          </div>
+          {isLogin && <button className="auth-forgot" type="button" onClick={forgotPassword}>Esqueci minha senha</button>}
+          <button className="auth-submit" disabled={loading}>{loading ? "Aguarde..." : isLogin ? "Entrar" : "Criar conta"}</button>
+        </form>
+        <button className="ghost-button auth-switch" onClick={changeMode}>{isLogin ? "Ainda não tenho conta" : "Já tenho conta"}</button>
+        {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
       </section>
     </main>
   );
