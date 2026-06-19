@@ -148,16 +148,24 @@ button:active {
   background: rgba(16, 185, 129, 0.08) !important;
 }
 
-.auth-forgot {
+.auth-card .form .auth-forgot {
   width: fit-content !important;
   min-height: 30px !important;
   margin: -5px 0 2px auto;
   padding: 0 !important;
   border: 0 !important;
   background: transparent !important;
-  color: var(--green) !important;
+  color: #059669 !important;
   font-size: 12px !important;
   font-weight: 750 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.auth-card .form .auth-forgot:hover {
+  background: transparent !important;
+  color: #047857 !important;
+  text-decoration: underline;
 }
 
 .auth-submit {
