@@ -4,6 +4,7 @@ import App from "./App.jsx";
 import "./styles.css";
 import "./layout-fix.css";
 import "./product-fix.css";
+import "./green-wallet-theme.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
