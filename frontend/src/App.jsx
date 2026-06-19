@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { calculatePurchase, calculateSummary } from "./finance.js";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -10,7 +11,8 @@ function getApiUrl() {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) return envUrl;
 
-  return "http://localhost:3000";
+  if (host === "localhost" || host === "127.0.0.1") return "http://localhost:3000";
+  return null;
 }
 
 const API_URL = getApiUrl();
@@ -33,18 +35,33 @@ function moneyOrWaiting(value, hasData) {
 }
 
 async function api(path, options = {}) {
+  if (!API_URL) throw new Error("API não configurada. Defina VITE_API_URL no ambiente do frontend.");
   const token = localStorage.getItem("finanflow_token");
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || "Erro na comunicação com a API.");
-  return data;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 401 && token) window.dispatchEvent(new Event("finanflow:unauthorized"));
+      throw new Error(data.message || "A API não conseguiu concluir esta operação.");
+    }
+    return data;
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("A API demorou para responder. Tente novamente.");
+    if (error instanceof TypeError) throw new Error("Não foi possível conectar à API. Verifique sua internet e tente novamente.");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export default function App() {
@@ -74,27 +91,7 @@ export default function App() {
   const coupleReady = Boolean(coupleSpace && Number(coupleSpace.memberCount || 0) > 1);
   const activeCoupleSpace = activeMode === "couple" && coupleReady ? coupleSpace : null;
 
-  const summary = useMemo(() => {
-    const balance = accounts.reduce((total, item) => total + Number(item.balance || 0), 0);
-    const totals = transactions.reduce(
-      (result, item) => {
-        const amount = Number(item.amount || 0);
-        if (item.status === "pago") {
-          if (item.type === "receita") result.received += amount;
-          if (item.type === "despesa") result.paidExpenses += amount;
-          return result;
-        }
-        if (item.type === "receita") result.income += amount;
-        if (item.type === "despesa") result.expenses += amount;
-        if (item.type === "divida") result.debt += amount;
-        if (item.type === "meta") result.goals += amount;
-        return result;
-      },
-      { income: 0, received: 0, expenses: 0, paidExpenses: 0, debt: 0, goals: 0 }
-    );
-    const commitments = totals.expenses + totals.debt + totals.goals;
-    return { balance, ...totals, commitments, free: balance + totals.income - commitments - reserve };
-  }, [accounts, transactions, reserve]);
+  const summary = useMemo(() => calculateSummary(accounts, transactions, reserve), [accounts, transactions, reserve]);
 
   const hasData = summary.balance || summary.income || summary.commitments || transactions.length > 0;
 
@@ -112,13 +109,26 @@ export default function App() {
     const individual = loaded.find((space) => space.type === "individual");
     const couple = loaded.find((space) => space.type === "couple");
     const readyCouple = couple && Number(couple.memberCount || 0) > 1;
-    const selected = mode === "couple" && readyCouple ? couple._id : individual?._id || loaded[0]?._id || "";
+    const selectedSpace = mode === "couple" && readyCouple ? couple : individual || loaded[0] || null;
+    const selected = selectedSpace?._id || "";
     setActiveMode(mode === "couple" && readyCouple ? "couple" : "individual");
     setActiveSpaceId(selected);
+    setReserve(Number(selectedSpace?.reserve ?? 300));
     if (selected) await loadSpaceData(selected);
   }
 
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem("finanflow_token");
+      localStorage.removeItem("finanflow_user");
+      setUser(null);
+      setMessage("Sua sessão expirou. Entre novamente.");
+    };
+    window.addEventListener("finanflow:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("finanflow:unauthorized", handleUnauthorized);
+  }, []);
 
   useEffect(() => {
     if (!pendingInvite?.code) return;
@@ -129,9 +139,15 @@ export default function App() {
 
   useEffect(() => {
     if (!message) return undefined;
-    const timer = window.setTimeout(() => setMessage(""), 4500);
+    const timer = window.setTimeout(() => setMessage(""), 8000);
     return () => window.clearTimeout(timer);
   }, [message]);
+
+  useEffect(() => {
+    if (activeMenu !== "Casal" || !coupleSpace || coupleReady) return undefined;
+    const timer = window.setInterval(() => refreshCoupleStatus({ silent: true }), 15000);
+    return () => window.clearInterval(timer);
+  }, [activeMenu, coupleSpace?._id, coupleReady]);
 
   async function handleAuth(event) {
     event.preventDefault();
@@ -154,23 +170,45 @@ export default function App() {
   async function addAccount(event) {
     event.preventDefault();
     if (!accountForm.name.trim()) return setMessage("Informe o nome da conta.");
-    await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name, balance: Number(accountForm.balance || 0), ownerName: accountForm.ownerName || (activeCoupleSpace ? "Casal" : firstName) }) });
-    setAccountForm({ name: "", balance: "", ownerName: "" });
-    await loadSpaceData(activeSpaceId);
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name, balance: Number(accountForm.balance || 0), ownerName: accountForm.ownerName || (activeCoupleSpace ? "Casal" : firstName) }) });
+      setAccountForm({ name: "", balance: "", ownerName: "" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Conta adicionada.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function updateAccount(account) {
     if (!account.name.trim()) return setMessage("Informe o nome da conta.");
-    await api(`/api/spaces/${activeSpaceId}/accounts/${account._id}`, { method: "PUT", body: JSON.stringify({ name: account.name, ownerName: account.ownerName || firstName, balance: Number(account.balance || 0) }) });
-    setMessage("Conta atualizada.");
-    await loadSpaceData(activeSpaceId);
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/accounts/${account._id}`, { method: "PUT", body: JSON.stringify({ name: account.name, ownerName: account.ownerName || firstName, balance: Number(account.balance || 0) }) });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Conta atualizada.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function deleteAccount(accountId) {
     if (!window.confirm("Deseja excluir esta conta? Os lançamentos ligados a ela ficarão sem conta.")) return;
-    await api(`/api/spaces/${activeSpaceId}/accounts/${accountId}`, { method: "DELETE" });
-    setMessage("Conta excluída.");
-    await loadSpaceData(activeSpaceId);
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/accounts/${accountId}`, { method: "DELETE" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Conta excluída.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function addTransaction(event) {
@@ -179,10 +217,18 @@ export default function App() {
     if (!txForm.amount) return setMessage("Informe o valor.");
     const payload = { ...txForm, amount: Number(txForm.amount || 0), accountId: txForm.accountId || null, responsibleName: firstName };
     const path = editingTransactionId ? `/api/spaces/${activeSpaceId}/transactions/${editingTransactionId}` : `/api/spaces/${activeSpaceId}/transactions`;
-    await api(path, { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
-    setEditingTransactionId("");
-    setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
-    await loadSpaceData(activeSpaceId);
+    setLoading(true);
+    try {
+      await api(path, { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
+      setEditingTransactionId("");
+      setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+      await loadSpaceData(activeSpaceId);
+      setMessage(editingTransactionId ? "Lançamento atualizado." : "Lançamento salvo.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function editTransaction(transaction) {
@@ -201,17 +247,51 @@ export default function App() {
 
   async function deleteTransaction(transactionId) {
     if (!window.confirm("Deseja excluir este lançamento?")) return;
-    await api(`/api/spaces/${activeSpaceId}/transactions/${transactionId}`, { method: "DELETE" });
-    setMessage("Lançamento excluído.");
-    await loadSpaceData(activeSpaceId);
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/transactions/${transactionId}`, { method: "DELETE" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Lançamento excluído.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function createCouple() {
-    const data = await api("/api/spaces/couple", { method: "POST", body: JSON.stringify({ partnerName: "Parceira" }) });
-    setCoupleInvite(data.invite || null);
-    await loadSpaces("individual");
-    setActiveMenu("Casal");
-    setMessage(data.invite ? "Convite do casal criado. O modo casal será liberado quando a outra pessoa aceitar." : "O espaço do casal já está ativo.");
+  async function createCouple(partnerName) {
+    setLoading(true);
+    try {
+      const data = await api("/api/spaces/couple", { method: "POST", body: JSON.stringify({ partnerName: partnerName?.trim() || "Parceiro(a)" }) });
+      setCoupleInvite(data.invite || null);
+      await loadSpaces("individual");
+      setActiveMenu("Casal");
+      setMessage(data.invite ? "Convite do casal criado. O modo casal será liberado quando a outra pessoa aceitar." : "O espaço do casal já está ativo.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshCoupleStatus({ silent = false } = {}) {
+    if (!silent) setLoading(true);
+    try {
+      const data = await api("/api/spaces");
+      const loaded = data.spaces || [];
+      const updatedCouple = loaded.find((space) => space.type === "couple");
+      setSpaces(loaded);
+      if (updatedCouple && Number(updatedCouple.memberCount || 0) > 1) {
+        setCoupleInvite(null);
+        if (!silent) setMessage("Convite aceito. O modo casal está ativo.");
+      } else if (!silent) {
+        setMessage("O convite ainda está aguardando aceite.");
+      }
+    } catch (error) {
+      if (!silent) setMessage(error.message);
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }
 
   async function goToCouple() {
@@ -225,27 +305,58 @@ export default function App() {
     }
     setActiveMode("couple");
     setActiveSpaceId(coupleSpace._id);
+    setReserve(Number(coupleSpace.reserve ?? 300));
     setActiveMenu("Início");
-    await loadSpaceData(coupleSpace._id);
+    try {
+      await loadSpaceData(coupleSpace._id);
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function goToIndividual() {
     const selected = individualSpace?._id || spaces.find((space) => space.type !== "couple")?._id || "";
     setActiveMode("individual");
     setActiveSpaceId(selected);
+    setReserve(Number(individualSpace?.reserve ?? 300));
     setActiveMenu("Início");
-    if (selected) await loadSpaceData(selected);
+    try {
+      if (selected) await loadSpaceData(selected);
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function resetSpaceData() {
     if (!activeSpaceId) return;
     const confirmed = window.confirm("Tem certeza que deseja zerar os dados deste espaço? Esta ação apagará contas e lançamentos deste espaço.");
     if (!confirmed) return;
-    await api(`/api/spaces/${activeSpaceId}/reset`, { method: "DELETE" });
-    setEditingTransactionId("");
-    setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
-    setMessage("Dados financeiros zerados.");
-    await loadSpaceData(activeSpaceId);
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/reset`, { method: "DELETE" });
+      setEditingTransactionId("");
+      setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Dados financeiros zerados.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveReserve() {
+    setLoading(true);
+    try {
+      const data = await api(`/api/spaces/${activeSpaceId}/settings`, { method: "PATCH", body: JSON.stringify({ reserve }) });
+      setSpaces((current) => current.map((space) => space._id === data.space._id ? data.space : space));
+      setReserve(Number(data.space.reserve ?? 0));
+      setMessage("Reserva protegida salva neste espaço.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function logout() {
@@ -257,11 +368,14 @@ export default function App() {
   async function deleteUserAccount() {
     const confirmed = window.confirm("Tem certeza que deseja apagar sua conta? Esta ação remove seus dados individuais e tira você dos espaços compartilhados.");
     if (!confirmed) return;
+    setLoading(true);
     try {
       await api("/api/me", { method: "DELETE" });
       logout();
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -284,7 +398,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <main className="auth-page"><section className="auth-card">{pendingInvite && <div className="invite-warning">Você recebeu um convite para o FinanFlow Casal. Entre ou crie sua conta para aceitar.</div>}<span className="eyebrow">FinanFlow</span><h1>{authMode === "login" ? "Entrar" : "Criar conta"}</h1><p>{authMode === "login" ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p><form className="form" onSubmit={handleAuth}>{authMode === "register" && <label>Nome<input value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} placeholder="Seu nome" /></label>}<label>E-mail<input value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} placeholder="seuemail@exemplo.com" type="email" /></label><label>Senha<input value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" type="password" /></label><button disabled={loading}>{loading ? "Aguarde..." : authMode === "login" ? "Entrar" : "Criar conta"}</button></form><button className="ghost-button" onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}>{authMode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}</button>{message && <div className="status-box">{message}</div>}</section></main>;
+    return <main className="auth-page"><section className="auth-card">{pendingInvite && <div className="invite-warning">Você recebeu um convite para o FinanFlow Casal. Entre ou crie sua conta para aceitar.</div>}<span className="eyebrow">FinanFlow</span><h1>{authMode === "login" ? "Entrar" : "Criar conta"}</h1><p>{authMode === "login" ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p><form className="form" onSubmit={handleAuth}>{authMode === "register" && <label>Nome<input value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} placeholder="Seu nome" /></label>}<label>E-mail<input value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} placeholder="seuemail@exemplo.com" type="email" /></label><label>Senha<input value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} placeholder="Mínimo 6 caracteres" type="password" /></label><button disabled={loading}>{loading ? "Aguarde..." : authMode === "login" ? "Entrar" : "Criar conta"}</button></form><button className="ghost-button" onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}>{authMode === "login" ? "Ainda não tenho conta" : "Já tenho conta"}</button>{message && <div className="status-box" role="status" aria-live="polite">{message}</div>}</section></main>;
   }
 
   if (pendingInvite) {
@@ -320,12 +434,12 @@ export default function App() {
       <section className="main-content">
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
-        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} />}
-        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} />}
+        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
+        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} />}
-        {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} firstName={firstName} />}
-        {message && <div className="floating-message">{message}</div>}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} />}
+        {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
+        {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
     </main>
   );
@@ -395,7 +509,7 @@ function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve,
   );
 }
 
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction }) {
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading }) {
   const resetForm = () => {
     setEditingTransactionId("");
     setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
@@ -426,7 +540,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <label>Conta<select value={txForm.accountId || ""} onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}><option value="">Sem conta</option>{accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}</select></label>
         </div>
         <div className="action-row">
-          <button>{editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
+          <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
           {editingTransactionId && <button type="button" className="ghost-button" onClick={resetForm}>Cancelar edição</button>}
         </div>
       </form>
@@ -447,8 +561,8 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
               </div>
               <em>{money(item.amount)}</em>
               <div className="row-actions">
-                <button type="button" className="ghost-button" onClick={() => editTransaction(item)}>Editar</button>
-                <button type="button" className="danger-button inline-danger" onClick={() => deleteTransaction(item._id)}>Excluir</button>
+                <button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button>
+                <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item._id)}>Excluir</button>
               </div>
             </article>
           )) : <Empty title="Nenhum lançamento neste mês" text="Cadastre receitas, despesas, dívidas ou metas para começar." />}
@@ -458,7 +572,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   );
 }
 
-function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName, activeMode }) {
+function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName, activeMode, loading }) {
   const updateLocalAccount = (accountId, field, value) => setAccounts(accounts.map((item) => item._id === accountId ? { ...item, [field]: value } : item));
   const ownerOptions = activeMode === "couple" ? [firstName, "Casal"] : [firstName, "Individual"];
 
@@ -480,8 +594,8 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
             </div>
             <em>{money(item.balance)}</em>
             <div className="row-actions">
-              <button type="button" onClick={() => updateAccount(item)}>Salvar</button>
-              <button type="button" className="danger-button inline-danger" onClick={() => deleteAccount(item._id)}>Excluir</button>
+              <button type="button" disabled={loading} onClick={() => updateAccount(item)}>{loading ? "Salvando..." : "Salvar"}</button>
+              <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteAccount(item._id)}>Excluir</button>
             </div>
           </article>
         ))}
@@ -492,7 +606,7 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
             <label>Saldo atual<input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" /></label>
           </div>
           <em>{money(accountForm.balance)}</em>
-          <div className="row-actions"><button>Adicionar</button></div>
+          <div className="row-actions"><button disabled={loading}>{loading ? "Adicionando..." : "Adicionar"}</button></div>
         </form>
       </div>
     </section>
@@ -524,7 +638,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm }) {
   );
 }
 
-function Config({ reserve, setReserve, firstName, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount }) {
+function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading }) {
   return (
     <section className="settings-stack">
       <section className="panel">
@@ -547,7 +661,10 @@ function Config({ reserve, setReserve, firstName, coupleSpace, coupleReady, setA
             <h2>Reserva mínima protegida</h2>
           </div>
         </div>
-        <label>Valor reservado<input type="number" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
+        <div className="setting-control">
+          <label>Valor reservado<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
+          <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar reserva"}</button>
+        </div>
       </section>
 
       <section className="panel">
@@ -576,18 +693,26 @@ function Config({ reserve, setReserve, firstName, coupleSpace, coupleReady, setA
         </div>
         <div className="security-actions">
           <button className="ghost-button" onClick={logout}>Sair da conta</button>
-          <button className="danger-button" onClick={resetSpaceData}>Zerar dados financeiros</button>
-          <button className="danger-button" onClick={deleteUserAccount}>Apagar conta</button>
+          <button className="danger-button" disabled={loading} onClick={resetSpaceData}>Zerar dados financeiros</button>
+          <button className="danger-button" disabled={loading} onClick={deleteUserAccount}>Apagar conta</button>
         </div>
       </section>
     </section>
   );
 }
 
-function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCouple, firstName }) {
+function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCouple, refreshCoupleStatus, setMessage, firstName, loading }) {
+  const [partnerName, setPartnerName] = useState("");
+  const [copied, setCopied] = useState(false);
   const code = coupleInvite?.code || "";
   const link = code ? `${window.location.origin}/convite-casal?code=${code}&from=${encodeURIComponent(firstName)}` : "";
   const whatsappText = encodeURIComponent(`Entre no nosso FinanFlow Casal: ${link}`);
+
+  useEffect(() => {
+    if (!copied) return undefined;
+    const timer = window.setTimeout(() => setCopied(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
 
   return (
     <section className="panel invite-panel">
@@ -602,7 +727,8 @@ function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCoupl
         <div className="invite-placeholder">
           <h3>Crie um convite para iniciar o modo casal</h3>
           <p>O espaço compartilhado só será usado depois que você criar ou aceitar um convite e entrar no modo casal.</p>
-          <button onClick={createCouple}>Criar convite do casal</button>
+          <label>Nome da outra pessoa<input value={partnerName} onChange={(event) => setPartnerName(event.target.value)} placeholder="Ex: Ana" /></label>
+          <button disabled={loading || !partnerName.trim()} onClick={() => createCouple(partnerName)}>{loading ? "Criando..." : "Criar convite do casal"}</button>
         </div>
       )}
 
@@ -610,7 +736,8 @@ function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCoupl
         <div className="invite-placeholder">
           <h3>Convite pendente</h3>
           <p>Gere um novo link para a outra pessoa aceitar. O modo casal permanece inativo até o aceite.</p>
-          <button onClick={createCouple}>Gerar link de convite</button>
+          <button disabled={loading} onClick={() => createCouple(partnerName)}>Gerar novo link</button>
+          <button className="ghost-button" disabled={loading} onClick={() => refreshCoupleStatus()}>{loading ? "Verificando..." : "Verificar aceite"}</button>
         </div>
       )}
 
@@ -625,17 +752,24 @@ function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCoupl
       {coupleSpace && coupleInvite && (
         <div className="invite-grid">
           <div className="qr-card">
-            <div className="fake-qr"><i /></div>
+            <div className="invite-code-mark">FF</div>
             <small>Código: {code}</small>
           </div>
           <div className="invite-content">
             <p>Compartilhe este convite para a outra pessoa entrar no mesmo espaço financeiro do casal. Seus dados individuais continuam separados.</p>
             <div className="invite-link-box">{link}</div>
             <div className="invite-actions">
-              <button type="button" onClick={() => navigator.clipboard?.writeText(link)}>Copiar link</button>
+              <button type="button" onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(link);
+                  setCopied(true);
+                } catch {
+                  setMessage("Não foi possível copiar automaticamente. Selecione o link acima.");
+                }
+              }}>{copied ? "Link copiado" : "Copiar link"}</button>
               <button type="button" className="ghost-button" onClick={() => window.open(`https://wa.me/?text=${whatsappText}`, "_blank", "noopener,noreferrer")}>Enviar WhatsApp</button>
-              <button type="button" className="ghost-button" onClick={() => window.print()}>Imprimir QR</button>
-              <button type="button" onClick={goToCouple}>{coupleReady ? "Entrar no modo casal" : "Aguardando aceite"}</button>
+              <button type="button" className="ghost-button" disabled={loading} onClick={() => refreshCoupleStatus()}>{loading ? "Verificando..." : "Verificar aceite"}</button>
+              <button type="button" disabled={!coupleReady} onClick={goToCouple}>{coupleReady ? "Entrar no modo casal" : "Aguardando aceite"}</button>
             </div>
             <div className="invite-warning">Seus dados individuais continuam separados. O modo casal só fica ativo depois que a outra pessoa aceitar este convite.</div>
           </div>
@@ -659,7 +793,7 @@ function InviteAccept({ invite, loading, message, acceptInvite }) {
           </div>
           <p>{invite ? `${invite.ownerName} convidou você para o espaço ${invite.spaceName}.` : "Carregando dados do convite..."}</p>
           {invite && unavailable && <div className="invite-warning">Este convite não está disponível. Ele pode ter expirado, já ter sido usado ou o casal já estar completo.</div>}
-          {message && <div className="status-box">{message}</div>}
+          {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
           <div className="invite-actions">
             <button type="button" disabled={!invite || unavailable || loading} onClick={acceptInvite}>{loading ? "Aceitando..." : "Aceitar convite"}</button>
             <button type="button" className="ghost-button" onClick={() => { window.history.replaceState({}, "", "/"); window.location.reload(); }}>Voltar ao FinanFlow</button>
@@ -696,9 +830,7 @@ function Empty({ title, text }) {
 
 function Decision({ buyForm, setBuyForm, ready, free }) {
   const total = Number(buyForm.total || 0);
-  const installments = Math.max(1, Number(buyForm.installments || 1));
-  const monthlyImpact = total / installments;
-  const canBuy = total > 0 && free >= monthlyImpact;
+  const { monthlyImpact, canBuy } = calculatePurchase(total, buyForm.installments, free);
   return (
     <section className="panel">
       <div className="panel-head">

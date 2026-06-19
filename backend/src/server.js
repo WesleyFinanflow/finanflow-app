@@ -10,10 +10,19 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
-const JWT_SECRET = process.env.JWT_SECRET || "trocar_em_producao";
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
+const JWT_SECRET = process.env.JWT_SECRET;
+const CORS_ORIGINS = String(process.env.CORS_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || CORS_ORIGINS.includes(origin)) return callback(null, true);
+    return callback(new Error("Origem não permitida pelo CORS."));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 const userSchema = new mongoose.Schema(
@@ -30,6 +39,7 @@ const spaceSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     type: { type: String, enum: ["individual", "couple"], required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    reserve: { type: Number, default: 300, min: 0, max: 1000000000000 },
   },
   { timestamps: true }
 );
@@ -87,6 +97,8 @@ const Member = mongoose.model("Member", memberSchema);
 const Account = mongoose.model("Account", accountSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 const Invite = mongoose.model("Invite", inviteSchema);
+
+const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 function createToken(user) {
   return jwt.sign({ userId: user._id.toString(), email: user.email }, JWT_SECRET, { expiresIn: "7d" });
@@ -175,7 +187,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-app.get("/api/me", auth, async (req, res) => res.json({ user: req.user }));
+app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: req.user })));
 
 app.delete("/api/me", auth, async (req, res) => {
   try {
@@ -206,9 +218,25 @@ app.delete("/api/me", auth, async (req, res) => {
   }
 });
 
-app.get("/api/spaces", auth, async (req, res) => {
+app.get("/api/spaces", auth, asyncHandler(async (req, res) => {
   const memberships = await Member.find({ userId: req.user._id }).populate("spaceId");
   res.json({ spaces: await Promise.all(memberships.filter((item) => item.spaceId).map(serializeSpaceForUser)) });
+}));
+
+app.patch("/api/spaces/:spaceId/settings", auth, async (req, res) => {
+  try {
+    if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+    const reserve = Number(req.body.reserve);
+    if (!Number.isFinite(reserve) || reserve < 0 || reserve > 1000000000000) {
+      return res.status(400).json({ message: "Informe uma reserva válida." });
+    }
+    const space = await Space.findByIdAndUpdate(req.params.spaceId, { reserve }, { new: true, runValidators: true });
+    if (!space) return res.status(404).json({ message: "Espaço não encontrado." });
+    const membership = await Member.findOne({ userId: req.user._id, spaceId: space._id });
+    res.json({ space: await serializeSpaceForUser({ spaceId: space, role: membership.role }) });
+  } catch (error) {
+    res.status(500).json({ message: "Erro ao salvar configurações.", error: error.message });
+  }
 });
 
 app.post("/api/spaces/couple", auth, async (req, res) => {
@@ -273,27 +301,36 @@ app.post("/api/invites/:code/accept", auth, async (req, res) => {
       const memberCount = await Member.countDocuments({ spaceId: invite.spaceId._id });
       if (memberCount >= 2) return res.status(409).json({ message: "Este espaço de casal já tem duas pessoas." });
     }
-    await Member.updateOne({ spaceId: invite.spaceId._id, userId: req.user._id }, { role: "member" }, { upsert: true });
-    invite.usedAt = new Date();
-    await invite.save();
+    const claimedInvite = await Invite.findOneAndUpdate(
+      { _id: invite._id, usedAt: { $exists: false }, expiresAt: { $gt: new Date() } },
+      { $set: { usedAt: new Date() } },
+      { new: true }
+    );
+    if (!claimedInvite) return res.status(410).json({ message: "Convite expirado ou já utilizado." });
+    try {
+      await Member.updateOne({ spaceId: invite.spaceId._id, userId: req.user._id }, { role: "member" }, { upsert: true });
+    } catch (error) {
+      await Invite.updateOne({ _id: claimedInvite._id }, { $unset: { usedAt: 1 } });
+      throw error;
+    }
     res.json({ space: invite.spaceId });
   } catch (error) {
     res.status(500).json({ message: "Erro ao aceitar convite.", error: error.message });
   }
 });
 
-app.get("/api/spaces/:spaceId/accounts", auth, async (req, res) => {
+app.get("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   res.json({ accounts: await Account.find({ spaceId: req.params.spaceId }).sort({ createdAt: 1 }) });
-});
+}));
 
-app.post("/api/spaces/:spaceId/accounts", auth, async (req, res) => {
+app.post("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const account = await Account.create({ spaceId: req.params.spaceId, name: req.body.name, ownerName: req.body.ownerName || req.user.name, balance: Number(req.body.balance || 0) });
   res.status(201).json({ account });
-});
+}));
 
-app.put("/api/spaces/:spaceId/accounts/:accountId", auth, async (req, res) => {
+app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const account = await Account.findOneAndUpdate(
     { _id: req.params.accountId, spaceId: req.params.spaceId },
@@ -306,20 +343,20 @@ app.put("/api/spaces/:spaceId/accounts/:accountId", auth, async (req, res) => {
   );
   if (!account) return res.status(404).json({ message: "Conta não encontrada." });
   res.json({ account });
-});
+}));
 
-app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, async (req, res) => {
+app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const account = await Account.findOneAndDelete({ _id: req.params.accountId, spaceId: req.params.spaceId });
   if (!account) return res.status(404).json({ message: "Conta não encontrada." });
   await Transaction.updateMany({ spaceId: req.params.spaceId, accountId: req.params.accountId }, { $set: { accountId: null } });
   res.json({ ok: true });
-});
+}));
 
-app.get("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
+app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   res.json({ transactions: await Transaction.find({ spaceId: req.params.spaceId }).sort({ date: -1, createdAt: -1 }) });
-});
+}));
 
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   try {
@@ -368,14 +405,14 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
   }
 });
 
-app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
+app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const transaction = await Transaction.findOneAndDelete({ _id: req.params.transactionId, spaceId: req.params.spaceId });
   if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
   res.json({ ok: true });
-});
+}));
 
-app.delete("/api/spaces/:spaceId/reset", auth, async (req, res) => {
+app.delete("/api/spaces/:spaceId/reset", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const space = await Space.findById(req.params.spaceId);
   await Transaction.deleteMany({ spaceId: req.params.spaceId });
@@ -387,13 +424,23 @@ app.delete("/api/spaces/:spaceId/reset", auth, async (req, res) => {
     await Account.create({ spaceId: req.params.spaceId, name: "Dinheiro", ownerName: req.user.name, balance: 0 });
   }
   res.json({ ok: true });
-});
+}));
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
+
+app.use((error, _req, res, _next) => {
+  console.error("Erro na API:", error);
+  const invalidInput = error.name === "ValidationError" || error.name === "CastError";
+  res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? "Dados inválidos." : "Erro interno da API." });
+});
 
 async function start() {
   if (!MONGODB_URI) {
     console.error("MONGODB_URI não configurado.");
+    process.exit(1);
+  }
+  if (!JWT_SECRET || JWT_SECRET.length < 32 || JWT_SECRET.includes("COLE_AQUI")) {
+    console.error("JWT_SECRET não configurado ou muito curto. Use pelo menos 32 caracteres.");
     process.exit(1);
   }
   await mongoose.connect(MONGODB_URI);

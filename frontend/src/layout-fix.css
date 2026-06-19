@@ -47,6 +47,10 @@
 }
 
 @media (max-width: 720px) {
+  .setting-control {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     align-items: flex-start;
     flex-direction: column;

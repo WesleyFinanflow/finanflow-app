@@ -544,6 +544,11 @@ button {
   padding: 0 16px;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .ghost-button,
 .mode-button {
   border: 1px solid rgba(34, 211, 238, 0.26);
@@ -706,6 +711,13 @@ button {
   margin-top: 0;
 }
 
+.setting-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
 .mode-inline {
   margin-bottom: 0;
   border: 1px solid rgba(34, 211, 238, 0.18);
@@ -804,34 +816,18 @@ button {
   gap: 12px;
 }
 
-.fake-qr {
-  width: 172px;
-  height: 172px;
-  border: 10px solid #f8fafc;
-  border-radius: 18px;
-  background:
-    linear-gradient(90deg, #02070d 10px, transparent 10px 22px, #02070d 22px 32px, transparent 32px 48px, #02070d 48px 58px, transparent 58px 72px, #02070d 72px 84px, transparent 84px 98px, #02070d 98px 112px, transparent 112px 132px, #02070d 132px 144px, transparent 144px),
-    linear-gradient(#02070d 10px, transparent 10px 20px, #02070d 20px 36px, transparent 36px 52px, #02070d 52px 62px, transparent 62px 78px, #02070d 78px 92px, transparent 92px 106px, #02070d 106px 118px, transparent 118px 138px, #02070d 138px 150px, transparent 150px),
-    #f8fafc;
-  position: relative;
-  overflow: hidden;
-  color: transparent;
+.invite-code-mark {
+  width: 112px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(34, 211, 238, 0.42);
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--cyan);
+  font-size: 34px;
+  font-weight: 900;
 }
-
-.fake-qr::before,
-.fake-qr::after,
-.fake-qr i {
-  content: "";
-  position: absolute;
-  width: 42px;
-  height: 42px;
-  border: 8px solid #02070d;
-  background: #f8fafc;
-}
-
-.fake-qr::before { top: 8px; left: 8px; }
-.fake-qr::after { top: 8px; right: 8px; }
-.fake-qr i { left: 8px; bottom: 8px; }
 
 .qr-card small {
   color: #94a3b8;
