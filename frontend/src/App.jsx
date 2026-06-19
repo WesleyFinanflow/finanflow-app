@@ -123,6 +123,8 @@ export default function App() {
     const handleUnauthorized = () => {
       localStorage.removeItem("finanflow_token");
       localStorage.removeItem("finanflow_user");
+      clearUserState();
+      setAuthMode("login");
       setUser(null);
       setMessage("Sua sessão expirou. Entre novamente.");
     };
@@ -156,6 +158,7 @@ export default function App() {
     try {
       const path = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
       const data = await api(path, { method: "POST", body: JSON.stringify(authForm) });
+      clearUserState();
       localStorage.setItem("finanflow_token", data.token);
       localStorage.setItem("finanflow_user", JSON.stringify(data.user));
       setUser(data.user);
@@ -359,9 +362,28 @@ export default function App() {
     }
   }
 
+  function clearUserState() {
+    setSpaces([]);
+    setActiveSpaceId("");
+    setAccounts([]);
+    setTransactions([]);
+    setActiveMode("individual");
+    setActiveMenu("Início");
+    setAccountForm({ name: "", balance: "", ownerName: "" });
+    setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+    setEditingTransactionId("");
+    setBuyForm({ item: "", total: "", installments: "1" });
+    setReserve(300);
+    setCoupleInvite(null);
+    setAuthForm({ name: "", email: "", password: "" });
+  }
+
   function logout() {
     localStorage.removeItem("finanflow_token");
     localStorage.removeItem("finanflow_user");
+    clearUserState();
+    setAuthMode("login");
+    setMessage("");
     setUser(null);
   }
 
@@ -436,58 +458,7 @@ export default function App() {
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} />}
-        {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
-        {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
-      </section>
-    </main>
-  );
-}
-
-function Hero({ firstName, coupleSpace, summary, hasData }) {
-  const isCouple = Boolean(coupleSpace);
-  return (
-    <section className="hero">
-      <div className="hero-copy">
-        <span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span>
-        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}`}</h1>
-        <p>
-          {isCouple
-            ? "Você está no espaço do casal. Cadastre os dados compartilhados para calcular o saldo livre."
-            : "Você está no modo individual. Cadastre seus dados; o modo casal só começa depois do convite."}
-        </p>
-      </div>
-      <div className="balance-focus">
-        <span>Saldo livre seguro</span>
-        <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
-      </div>
-    </section>
-  );
-}
-
-function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve, transactions }) {
-  const pending = transactions.filter((item) => item.status === "pendente" && item.type !== "receita");
-
-  return (
-    <>
-      <section className="quick-start panel">
-        <div>
-          <span className="eyebrow">Comece por aqui</span>
-          <h2>Cadastre seus primeiros dados</h2>
-          <p>O FinanFlow começa individual. Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite.</p>
-        </div>
-        <div className="quick-actions">
-          <button onClick={() => setActiveMenu("Contas")}>Adicionar saldo</button>
-          <button onClick={() => setActiveMenu("Lançamentos")}>Adicionar receita</button>
-          <button onClick={() => setActiveMenu("Lançamentos")}>Adicionar despesa</button>
-        </div>
-      </section>
-
-      <section className="stats-grid">
-        <StatCard title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas cadastradas no espaço atual" tone="cyan" />
-        <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
-        <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
+        {activeMenu === …778 tokens truncated…       <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
         <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Reserva protegida: ${money(reserve)}`} tone="blue" />
       </section>
 
@@ -850,3 +821,4 @@ function Decision({ buyForm, setBuyForm, ready, free }) {
     </section>
   );
 }
+
