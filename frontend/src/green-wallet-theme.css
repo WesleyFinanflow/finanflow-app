@@ -1,0 +1,355 @@
+/* Green Wallet theme: apenas troca de cores, sem alterar estrutura/layout. */
+:root {
+  --bg: #e8f5ee;
+  --panel: #ffffff;
+  --panel-soft: #f0fdf4;
+  --line: #cfe5d8;
+  --line-strong: #86efac;
+  --text: #064e3b;
+  --muted: #64746b;
+  --cyan: #10b981;
+  --green: #059669;
+  --yellow: #ca8a04;
+  --red: #dc2626;
+  --blue: #2563eb;
+}
+
+body {
+  color: #064e3b !important;
+  background:
+    radial-gradient(circle at 0 0, rgba(16, 185, 129, 0.18), transparent 28%),
+    radial-gradient(circle at 100% 0, rgba(20, 184, 166, 0.15), transparent 26%),
+    radial-gradient(circle at 90% 100%, rgba(187, 247, 208, 0.55), transparent 30%),
+    linear-gradient(135deg, #e8f5ee 0%, #f7fffb 48%, #dcfce7 100%) !important;
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #064e3b 0%, #052e25 100%) !important;
+  border-right-color: rgba(16, 185, 129, 0.30) !important;
+}
+
+.brand {
+  border-bottom-color: rgba(187, 247, 208, 0.18) !important;
+}
+
+.brand-icon {
+  color: #ecfdf5 !important;
+  background: #10b981 !important;
+  border-color: #6ee7b7 !important;
+}
+
+.brand strong {
+  color: #ecfdf5 !important;
+}
+
+.brand span,
+.sidebar nav button.active,
+.sidebar-nav button.active {
+  color: #bbf7d0 !important;
+}
+
+.sidebar nav button,
+.sidebar-nav button {
+  color: rgba(220, 252, 231, 0.72) !important;
+}
+
+.sidebar nav button:hover,
+.sidebar-nav button:hover {
+  color: #ffffff !important;
+  background: rgba(16, 185, 129, 0.16) !important;
+}
+
+.sidebar nav button.active,
+.sidebar-nav button.active {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  border-color: #6ee7b7 !important;
+  color: #ffffff !important;
+}
+
+.mode-button,
+.primary-btn,
+.mini-form button,
+button:not(.ghost-button):not(.danger-button):not(.inline-danger) {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  border-color: rgba(16, 185, 129, 0.28) !important;
+}
+
+.mode-button:hover,
+.primary-btn:hover,
+.mini-form button:hover,
+button:not(.ghost-button):not(.danger-button):not(.inline-danger):hover {
+  background: linear-gradient(135deg, #059669, #047857) !important;
+  color: #ffffff !important;
+}
+
+.main-content,
+.hero-copy,
+.panel,
+.quick-start,
+.stat-card,
+.account-row,
+.transaction-row,
+.data-row,
+.mode-inline,
+.empty-state,
+.invite-placeholder,
+.invite-content,
+.invite-accept-card {
+  color: #064e3b !important;
+}
+
+.hero {
+  background: #ffffff !important;
+  border-color: #cfe5d8 !important;
+  box-shadow: 0 18px 45px rgba(6, 78, 59, 0.10), inset 0 1px 0 rgba(255,255,255,0.75) !important;
+}
+
+.hero h1,
+.panel-head h2,
+.quick-start h2,
+.invite-placeholder h3,
+.empty-state strong,
+.transaction-main strong,
+.account-row strong {
+  color: #064e3b !important;
+}
+
+.hero p,
+.quick-start p,
+.stat-card p,
+.empty-state p,
+.transaction-main span,
+.account-row span,
+.data-row span,
+.mode-inline span,
+.invite-content p,
+.invite-placeholder p {
+  color: #64746b !important;
+}
+
+.eyebrow,
+.panel-head span {
+  color: #059669 !important;
+}
+
+.balance-focus {
+  background: #064e3b !important;
+  border-color: #0f766e !important;
+}
+
+.balance-focus span {
+  color: #a7f3d0 !important;
+}
+
+.balance-focus strong {
+  color: #ffffff !important;
+}
+
+.panel,
+.quick-start,
+.stat-card {
+  background: #ffffff !important;
+  border-color: #cfe5d8 !important;
+  box-shadow: 0 14px 38px rgba(6, 78, 59, 0.09), inset 0 1px 0 rgba(255,255,255,0.75) !important;
+}
+
+.quick-start {
+  border-color: #bbf7d0 !important;
+}
+
+.stat-card span {
+  color: #64746b !important;
+}
+
+.stat-card.cyan strong,
+.stat-card.green strong {
+  color: #047857 !important;
+}
+
+.stat-card.yellow strong {
+  color: #ca8a04 !important;
+}
+
+.stat-card.blue strong {
+  color: #2563eb !important;
+}
+
+.stat-card.red strong {
+  color: #dc2626 !important;
+}
+
+input,
+select,
+textarea,
+.buy-grid input,
+.buy-grid select,
+.field-grid input,
+.field-grid select,
+.account-edit-grid input,
+.account-edit-grid select {
+  background: #f0fdf4 !important;
+  color: #064e3b !important;
+  border-color: #bbf7d0 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #7b8f86 !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14) !important;
+}
+
+label,
+.field-grid label {
+  color: #64746b !important;
+}
+
+.quick-actions button,
+.invite-actions button,
+.type-grid button,
+.ghost-button {
+  background: #ecfdf5 !important;
+  border-color: #bbf7d0 !important;
+  color: #047857 !important;
+}
+
+.quick-actions button:hover,
+.invite-actions button:hover,
+.type-grid button:hover,
+.ghost-button:hover {
+  background: #d1fae5 !important;
+  border-color: #86efac !important;
+  color: #064e3b !important;
+}
+
+.type-grid button.selected,
+.type-grid button.active {
+  background: #10b981 !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
+
+.account-row,
+.transaction-row,
+.data-row,
+.upcoming-list article,
+.planning-lines div,
+.mode-inline {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+}
+
+.transaction-row.receita em,
+.transaction-row.receita .transaction-main strong {
+  color: #047857 !important;
+}
+
+.transaction-row.despesa em,
+.transaction-row.despesa .transaction-main strong,
+.transaction-row.divida em,
+.transaction-row.divida .transaction-main strong {
+  color: #dc2626 !important;
+}
+
+.transaction-row.meta em,
+.transaction-row.meta .transaction-main strong {
+  color: #2563eb !important;
+}
+
+.data-row strong,
+.account-row em,
+.transaction-row em {
+  color: #064e3b !important;
+}
+
+.highlight-row {
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+}
+
+.decision-box.ok {
+  background: #dcfce7 !important;
+  border-color: #86efac !important;
+  color: #047857 !important;
+}
+
+.decision-box.bad {
+  background: #fff7ed !important;
+  border-color: #fed7aa !important;
+  color: #c2410c !important;
+}
+
+.empty-state,
+.invite-warning,
+.status-box {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+  color: #064e3b !important;
+}
+
+.danger-zone {
+  border-color: #fecaca !important;
+  background: #fff7f7 !important;
+}
+
+.danger-button,
+.inline-danger {
+  background: #fee2e2 !important;
+  border-color: #fecaca !important;
+  color: #b91c1c !important;
+}
+
+.danger-button:hover,
+.inline-danger:hover {
+  background: #fecaca !important;
+  color: #7f1d1d !important;
+}
+
+.invite-link-box,
+.fake-qr,
+.qr-card {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+  color: #064e3b !important;
+}
+
+.fake-qr i {
+  background: #064e3b !important;
+}
+
+.floating-message {
+  background: #064e3b !important;
+  border: 1px solid #10b981 !important;
+  color: #ecfdf5 !important;
+}
+
+.auth-page {
+  background:
+    radial-gradient(circle at 0 0, rgba(16, 185, 129, 0.18), transparent 30%),
+    linear-gradient(135deg, #e8f5ee, #f7fffb) !important;
+}
+
+.auth-card {
+  background: #ffffff !important;
+  border-color: #cfe5d8 !important;
+  color: #064e3b !important;
+  box-shadow: 0 20px 60px rgba(6, 78, 59, 0.12) !important;
+}
+
+.auth-card h1,
+.auth-card p {
+  color: #064e3b !important;
+}
+
+@media (max-width: 1100px) {
+  .sidebar {
+    background: linear-gradient(180deg, #064e3b 0%, #052e25 100%) !important;
+    border-bottom-color: rgba(16, 185, 129, 0.30) !important;
+  }
+}
