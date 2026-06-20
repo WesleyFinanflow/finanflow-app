@@ -292,7 +292,7 @@ app.patch("/api/me/password", auth, async (req, res) => {
     if (currentPassword === newPassword) return res.status(400).json({ message: "A nova senha deve ser diferente da atual." });
     const user = await User.findById(req.user._id);
     const valid = user && await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) return res.status(401).json({ message: "A senha atual está incorreta." });
+    if (!valid) return res.status(400).json({ message: "A senha atual está incorreta." });
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.passwordChangedAt = new Date();
     user.passwordVersion = Number(user.passwordVersion || 0) + 1;
