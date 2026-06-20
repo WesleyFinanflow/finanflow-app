@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChartNoAxesCombined, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards } from "lucide-react";
+import { ArrowLeftRight, ChartNoAxesCombined, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 
@@ -34,6 +34,12 @@ function getInviteFromUrl() {
   const code = params.get("code");
   if (!code || window.location.pathname !== "/convite-casal") return null;
   return { code, from: params.get("from") || "" };
+}
+
+function getPasswordResetFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  return window.location.pathname === "/recuperar-senha" && token ? token : "";
 }
 
 function money(value) {
@@ -94,6 +100,7 @@ export default function App() {
   const [coupleInvite, setCoupleInvite] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
   const [inviteInfo, setInviteInfo] = useState(null);
+  const [passwordResetToken, setPasswordResetToken] = useState(() => getPasswordResetFromUrl());
   const spaceRequestId = useRef(0);
 
   const firstName = user?.name?.split(" ")?.[0] || "Wesley";
@@ -462,6 +469,14 @@ export default function App() {
     }
   }
 
+  if (passwordResetToken) {
+    return <ResetPasswordScreen token={passwordResetToken} onComplete={() => {
+      window.history.replaceState({}, "", "/");
+      setPasswordResetToken("");
+      setAuthMode("login");
+    }} />;
+  }
+
   if (!user) {
     return <AuthScreen pendingInvite={pendingInvite} authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} loading={loading} message={message} setMessage={setMessage} />;
   }
@@ -514,6 +529,10 @@ export default function App() {
 
 function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthForm, handleAuth, loading, message, setMessage }) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState(authForm.email || "");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState("");
   const isLogin = authMode === "login";
 
   function changeMode() {
@@ -523,7 +542,23 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
   }
 
   function forgotPassword() {
-    setMessage("A recuperação automática ainda não está ativa. Entre em contato com o suporte do FinanFlow informando o e-mail cadastrado.");
+    setRecoveryEmail(authForm.email || "");
+    setRecoveryMessage("");
+    setShowRecovery(true);
+  }
+
+  async function requestPasswordReset(event) {
+    event.preventDefault();
+    setRecoveryLoading(true);
+    setRecoveryMessage("");
+    try {
+      const data = await api("/api/auth/forgot-password", { method: "POST", body: JSON.stringify({ email: recoveryEmail }) });
+      setRecoveryMessage(data.message);
+    } catch (error) {
+      setRecoveryMessage(error.message);
+    } finally {
+      setRecoveryLoading(false);
+    }
   }
 
   return (
@@ -551,7 +586,72 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
         <button className="ghost-button auth-switch" onClick={changeMode}>{isLogin ? "Ainda não tenho conta" : "Já tenho conta"}</button>
         {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
       </section>
+      {showRecovery && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowRecovery(false); }}>
+          <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
+            <button className="modal-close" type="button" onClick={() => setShowRecovery(false)} aria-label="Fechar recuperação" title="Fechar"><X size={20} aria-hidden="true" /></button>
+            <span className="eyebrow">Segurança da conta</span>
+            <h2 id="recovery-title">Recuperar senha</h2>
+            <p>Informe seu e-mail. Se ele estiver cadastrado, enviaremos um link de confirmação válido por 30 minutos.</p>
+            <form className="form" onSubmit={requestPasswordReset}>
+              <label>E-mail da conta<input type="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="seuemail@exemplo.com" required maxLength={254} autoComplete="email" /></label>
+              <button disabled={recoveryLoading}>{recoveryLoading ? "Enviando..." : "Enviar link de recuperação"}</button>
+            </form>
+            {recoveryMessage && <div className="status-box" role="status" aria-live="polite">{recoveryMessage}</div>}
+          </section>
+        </div>
+      )}
     </main>
+  );
+}
+
+function ResetPasswordScreen({ token, onComplete }) {
+  const [form, setForm] = useState({ password: "", confirmation: "" });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    if (form.password !== form.confirmation) return setMessage("As senhas não coincidem.");
+    setLoading(true);
+    try {
+      const data = await api("/api/auth/reset-password", { method: "POST", body: JSON.stringify({ token, password: form.password }) });
+      setMessage(data.message);
+      window.setTimeout(onComplete, 1200);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        <span className="eyebrow">Segurança da conta</span>
+        <h1>Crie uma nova senha</h1>
+        <p>O link só pode ser usado uma vez.</p>
+        <form className="form" onSubmit={submit}>
+          <PasswordInput id="reset-password" label="Nova senha" value={form.password} onChange={(value) => setForm({ ...form, password: value })} visible={showPassword} toggle={() => setShowPassword((current) => !current)} autoComplete="new-password" />
+          <label>Confirmar nova senha<input type={showPassword ? "text" : "password"} value={form.confirmation} onChange={(event) => setForm({ ...form, confirmation: event.target.value })} required minLength={6} maxLength={128} autoComplete="new-password" /></label>
+          <button disabled={loading}>{loading ? "Salvando..." : "Redefinir senha"}</button>
+        </form>
+        {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
+      </section>
+    </main>
+  );
+}
+
+function PasswordInput({ id, label, value, onChange, visible, toggle, autoComplete }) {
+  return (
+    <div className="password-field">
+      <label htmlFor={id}>{label}</label>
+      <span className="password-input">
+        <input id={id} aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} type={visible ? "text" : "password"} required minLength={6} maxLength={128} autoComplete={autoComplete} />
+        <button className="password-toggle" type="button" onClick={toggle} aria-label={visible ? "Ocultar senha" : "Mostrar senha"} title={visible ? "Ocultar senha" : "Mostrar senha"}>{visible ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}</button>
+      </span>
+    </div>
   );
 }
 
@@ -794,6 +894,8 @@ function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coup
         </div>
       </section>
 
+      <PasswordSettings logout={logout} />
+
       <section className="panel danger-zone">
         <div className="panel-head">
           <div>
@@ -807,6 +909,47 @@ function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coup
           <button className="danger-button" disabled={loading} onClick={deleteUserAccount}>Apagar conta</button>
         </div>
       </section>
+    </section>
+  );
+}
+
+function PasswordSettings({ logout }) {
+  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmation: "" });
+  const [visible, setVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    if (form.newPassword !== form.confirmation) return setMessage("As senhas não coincidem.");
+    setLoading(true);
+    setMessage("");
+    try {
+      const data = await api("/api/me/password", { method: "PATCH", body: JSON.stringify({ currentPassword: form.currentPassword, newPassword: form.newPassword }) });
+      setMessage(data.message);
+      window.setTimeout(logout, 1200);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="panel password-settings">
+      <div className="panel-head">
+        <div>
+          <span className="eyebrow">Acesso</span>
+          <h2>Alterar senha</h2>
+        </div>
+      </div>
+      <form className="password-settings-form" onSubmit={submit}>
+        <PasswordInput id="current-password" label="Senha atual" value={form.currentPassword} onChange={(value) => setForm({ ...form, currentPassword: value })} visible={visible} toggle={() => setVisible((current) => !current)} autoComplete="current-password" />
+        <label>Nova senha<input type={visible ? "text" : "password"} value={form.newPassword} onChange={(event) => setForm({ ...form, newPassword: event.target.value })} required minLength={6} maxLength={128} autoComplete="new-password" /></label>
+        <label>Confirmar nova senha<input type={visible ? "text" : "password"} value={form.confirmation} onChange={(event) => setForm({ ...form, confirmation: event.target.value })} required minLength={6} maxLength={128} autoComplete="new-password" /></label>
+        <button disabled={loading}>{loading ? "Alterando..." : "Alterar senha"}</button>
+      </form>
+      {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
     </section>
   );
 }

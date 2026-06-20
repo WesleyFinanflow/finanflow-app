@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 
 dotenv.config();
@@ -12,6 +13,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAIL_FROM = process.env.EMAIL_FROM;
+const FRONTEND_URL = String(process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 const CORS_ORIGINS = String(process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
@@ -31,6 +35,10 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 },
     passwordHash: { type: String, required: true },
+    passwordChangedAt: { type: Date },
+    passwordVersion: { type: Number, default: 0 },
+    passwordResetTokenHash: { type: String, select: false },
+    passwordResetExpiresAt: { type: Date, select: false },
   },
   { timestamps: true }
 );
@@ -102,7 +110,35 @@ const Invite = mongoose.model("Invite", inviteSchema);
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 function createToken(user) {
-  return jwt.sign({ userId: user._id.toString(), email: user.email }, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ userId: user._id.toString(), email: user.email, passwordVersion: Number(user.passwordVersion || 0) }, JWT_SECRET, { expiresIn: "7d" });
+}
+
+function validatePassword(value, label = "A senha") {
+  if (typeof value !== "string" || !value) throw new InputError(`${label} é obrigatória.`);
+  if (value.length < 6) throw new InputError(`${label} precisa ter pelo menos 6 caracteres.`);
+  if (value.length > 128) throw new InputError(`${label} deve ter até 128 caracteres.`);
+  return value;
+}
+
+function hashResetToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function sendPasswordResetEmail(email, token) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: EMAIL_FROM,
+      to: [email],
+      subject: "Redefina sua senha do FinanFlow",
+      html: `<p>Recebemos uma solicitação para redefinir sua senha.</p><p><a href="${FRONTEND_URL}/recuperar-senha?token=${encodeURIComponent(token)}">Criar uma nova senha</a></p><p>Este link expira em 30 minutos. Se você não fez a solicitação, ignore este e-mail.</p>`,
+    }),
+  });
+  if (!response.ok) throw new Error("Falha ao enviar e-mail de recuperação.");
 }
 
 async function auth(req, res, next) {
@@ -113,6 +149,9 @@ async function auth(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
+    if (Number(decoded.passwordVersion || 0) !== Number(user.passwordVersion || 0)) {
+      return res.status(401).json({ message: "Sua senha foi alterada. Entre novamente." });
+    }
     req.user = user;
     next();
   } catch {
@@ -164,9 +203,7 @@ app.post("/api/auth/register", async (req, res) => {
     const { name: rawName, email: rawEmail, password } = req.body || {};
     const name = requiredText(rawName, "Nome", 80);
     const email = emailAddress(rawEmail);
-    if (typeof password !== "string" || !password) return res.status(400).json({ message: "A senha é obrigatória." });
-    if (String(password).length < 6) return res.status(400).json({ message: "A senha precisa ter pelo menos 6 caracteres." });
-    if (String(password).length > 128) return res.status(400).json({ message: "A senha deve ter até 128 caracteres." });
+    validatePassword(password);
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
     const passwordHash = await bcrypt.hash(password, 10);
@@ -177,6 +214,57 @@ app.post("/api/auth/register", async (req, res) => {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
     if (error?.code === 11000) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
     res.status(500).json({ message: "Erro ao criar cadastro." });
+  }
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const genericMessage = "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha.";
+  try {
+    if (!RESEND_API_KEY || !EMAIL_FROM) {
+      return res.status(503).json({ message: "A recuperação por e-mail ainda não está configurada." });
+    }
+    const email = emailAddress(req.body?.email);
+    const user = await User.findOne({ email });
+    if (user) {
+      const token = crypto.randomBytes(32).toString("base64url");
+      user.passwordResetTokenHash = hashResetToken(token);
+      user.passwordResetExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+      await user.save();
+      try {
+        await sendPasswordResetEmail(user.email, token);
+      } catch (error) {
+        user.passwordResetTokenHash = undefined;
+        user.passwordResetExpiresAt = undefined;
+        await user.save();
+        throw error;
+      }
+    }
+    res.json({ ok: true, message: genericMessage });
+  } catch (error) {
+    if (error instanceof InputError) return res.status(400).json({ message: error.message });
+    res.status(502).json({ message: "Não foi possível enviar o e-mail agora. Tente novamente." });
+  }
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const token = requiredText(req.body?.token, "Token", 100);
+    const password = validatePassword(req.body?.password, "A nova senha");
+    const user = await User.findOne({
+      passwordResetTokenHash: hashResetToken(token),
+      passwordResetExpiresAt: { $gt: new Date() },
+    }).select("+passwordResetTokenHash +passwordResetExpiresAt");
+    if (!user) return res.status(400).json({ message: "Este link é inválido ou expirou." });
+    user.passwordHash = await bcrypt.hash(password, 10);
+    user.passwordChangedAt = new Date();
+    user.passwordVersion = Number(user.passwordVersion || 0) + 1;
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    await user.save();
+    res.json({ ok: true, message: "Senha redefinida. Entre novamente." });
+  } catch (error) {
+    if (error instanceof InputError) return res.status(400).json({ message: error.message });
+    res.status(500).json({ message: "Erro ao redefinir senha." });
   }
 });
 
@@ -196,6 +284,27 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: req.user })));
+
+app.patch("/api/me/password", auth, async (req, res) => {
+  try {
+    const currentPassword = validatePassword(req.body?.currentPassword, "A senha atual");
+    const newPassword = validatePassword(req.body?.newPassword, "A nova senha");
+    if (currentPassword === newPassword) return res.status(400).json({ message: "A nova senha deve ser diferente da atual." });
+    const user = await User.findById(req.user._id);
+    const valid = user && await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) return res.status(401).json({ message: "A senha atual está incorreta." });
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordChangedAt = new Date();
+    user.passwordVersion = Number(user.passwordVersion || 0) + 1;
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    await user.save();
+    res.json({ ok: true, message: "Senha alterada. Entre novamente." });
+  } catch (error) {
+    if (error instanceof InputError) return res.status(400).json({ message: error.message });
+    res.status(500).json({ message: "Erro ao alterar senha." });
+  }
+});
 
 app.delete("/api/me", auth, async (req, res) => {
   try {
