@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ChartNoAxesCombined, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
+import { createTransactionForm } from "./form-state.js";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -18,6 +19,7 @@ function getApiUrl() {
 
 const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
+const MAX_MONEY = 1_000_000_000_000;
 const menu = [
   { label: "Início", shortLabel: "Início", icon: House },
   { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
@@ -85,13 +87,14 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [accountForm, setAccountForm] = useState({ name: "", balance: "", ownerName: "" });
-  const [txForm, setTxForm] = useState({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+  const [txForm, setTxForm] = useState(() => createTransactionForm());
   const [editingTransactionId, setEditingTransactionId] = useState("");
   const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
   const [reserve, setReserve] = useState(300);
   const [coupleInvite, setCoupleInvite] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
   const [inviteInfo, setInviteInfo] = useState(null);
+  const spaceRequestId = useRef(0);
 
   const firstName = user?.name?.split(" ")?.[0] || "Wesley";
   const individualSpace = spaces.find((space) => space.type === "individual");
@@ -105,7 +108,9 @@ export default function App() {
 
   async function loadSpaceData(spaceId) {
     if (!spaceId) return;
+    const requestId = ++spaceRequestId.current;
     const [accountData, txData] = await Promise.all([api(`/api/spaces/${spaceId}/accounts`), api(`/api/spaces/${spaceId}/transactions`)]);
+    if (requestId !== spaceRequestId.current) return;
     setAccounts(accountData.accounts || []);
     setTransactions(txData.transactions || []);
   }
@@ -180,10 +185,14 @@ export default function App() {
 
   async function addAccount(event) {
     event.preventDefault();
+    if (!activeSpaceId) return setMessage("Espaço financeiro ainda não carregado.");
     if (!accountForm.name.trim()) return setMessage("Informe o nome da conta.");
+    if (accountForm.name.trim().length > 80) return setMessage("O nome da conta deve ter até 80 caracteres.");
+    const balance = Number(accountForm.balance || 0);
+    if (!Number.isFinite(balance) || Math.abs(balance) > MAX_MONEY) return setMessage("Informe um saldo válido.");
     setLoading(true);
     try {
-      await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name, balance: Number(accountForm.balance || 0), ownerName: accountForm.ownerName || (activeCoupleSpace ? "Casal" : firstName) }) });
+      await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name.trim(), balance, ownerName: accountForm.ownerName || (activeCoupleSpace ? "Casal" : firstName) }) });
       setAccountForm({ name: "", balance: "", ownerName: "" });
       await loadSpaceData(activeSpaceId);
       setMessage("Conta adicionada.");
@@ -195,10 +204,14 @@ export default function App() {
   }
 
   async function updateAccount(account) {
+    if (!activeSpaceId) return setMessage("Espaço financeiro ainda não carregado.");
     if (!account.name.trim()) return setMessage("Informe o nome da conta.");
+    if (account.name.trim().length > 80) return setMessage("O nome da conta deve ter até 80 caracteres.");
+    const balance = Number(account.balance || 0);
+    if (!Number.isFinite(balance) || Math.abs(balance) > MAX_MONEY) return setMessage("Informe um saldo válido.");
     setLoading(true);
     try {
-      await api(`/api/spaces/${activeSpaceId}/accounts/${account._id}`, { method: "PUT", body: JSON.stringify({ name: account.name, ownerName: account.ownerName || firstName, balance: Number(account.balance || 0) }) });
+      await api(`/api/spaces/${activeSpaceId}/accounts/${account._id}`, { method: "PUT", body: JSON.stringify({ name: account.name.trim(), ownerName: account.ownerName || firstName, balance }) });
       await loadSpaceData(activeSpaceId);
       setMessage("Conta atualizada.");
     } catch (error) {
@@ -209,6 +222,7 @@ export default function App() {
   }
 
   async function deleteAccount(accountId) {
+    if (!activeSpaceId) return setMessage("Selecione um espaço antes de excluir a conta.");
     if (!window.confirm("Deseja excluir esta conta? Os lançamentos ligados a ela ficarão sem conta.")) return;
     setLoading(true);
     try {
@@ -224,15 +238,19 @@ export default function App() {
 
   async function addTransaction(event) {
     event.preventDefault();
+    if (!activeSpaceId) return setMessage("Espaço financeiro ainda não carregado.");
     if (!txForm.description.trim()) return setMessage("Informe a descrição.");
-    if (!txForm.amount) return setMessage("Informe o valor.");
-    const payload = { ...txForm, amount: Number(txForm.amount || 0), accountId: txForm.accountId || null, responsibleName: firstName };
+    if (txForm.description.trim().length > 160) return setMessage("A descrição deve ter até 160 caracteres.");
+    const amount = Number(txForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
+    if (!txForm.date) return setMessage("Informe a data do lançamento.");
+    const payload = { ...txForm, description: txForm.description.trim(), amount, accountId: txForm.accountId || null, responsibleName: firstName };
     const path = editingTransactionId ? `/api/spaces/${activeSpaceId}/transactions/${editingTransactionId}` : `/api/spaces/${activeSpaceId}/transactions`;
     setLoading(true);
     try {
       await api(path, { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
       setEditingTransactionId("");
-      setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+      setTxForm(createTransactionForm());
       await loadSpaceData(activeSpaceId);
       setMessage(editingTransactionId ? "Lançamento atualizado." : "Lançamento salvo.");
     } catch (error) {
@@ -256,7 +274,14 @@ export default function App() {
     setActiveMenu("Lançamentos");
   }
 
+  function startTransaction(type) {
+    setEditingTransactionId("");
+    setTxForm(createTransactionForm(type));
+    setActiveMenu("Lançamentos");
+  }
+
   async function deleteTransaction(transactionId) {
+    if (!activeSpaceId) return setMessage("Selecione um espaço antes de excluir o lançamento.");
     if (!window.confirm("Deseja excluir este lançamento?")) return;
     setLoading(true);
     try {
@@ -271,9 +296,11 @@ export default function App() {
   }
 
   async function createCouple(partnerName) {
+    const normalizedPartnerName = partnerName?.trim() || "Parceiro(a)";
+    if (normalizedPartnerName.length > 80) return setMessage("O nome da outra pessoa deve ter até 80 caracteres.");
     setLoading(true);
     try {
-      const data = await api("/api/spaces/couple", { method: "POST", body: JSON.stringify({ partnerName: partnerName?.trim() || "Parceiro(a)" }) });
+      const data = await api("/api/spaces/couple", { method: "POST", body: JSON.stringify({ partnerName: normalizedPartnerName }) });
       setCoupleInvite(data.invite || null);
       await loadSpaces("individual");
       setActiveMenu("Casal");
@@ -317,6 +344,8 @@ export default function App() {
     setActiveMode("couple");
     setActiveSpaceId(coupleSpace._id);
     setReserve(Number(coupleSpace.reserve ?? 300));
+    setAccounts([]);
+    setTransactions([]);
     setActiveMenu("Início");
     try {
       await loadSpaceData(coupleSpace._id);
@@ -330,6 +359,8 @@ export default function App() {
     setActiveMode("individual");
     setActiveSpaceId(selected);
     setReserve(Number(individualSpace?.reserve ?? 300));
+    setAccounts([]);
+    setTransactions([]);
     setActiveMenu("Início");
     try {
       if (selected) await loadSpaceData(selected);
@@ -346,7 +377,7 @@ export default function App() {
     try {
       await api(`/api/spaces/${activeSpaceId}/reset`, { method: "DELETE" });
       setEditingTransactionId("");
-      setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+      setTxForm(createTransactionForm());
       await loadSpaceData(activeSpaceId);
       setMessage("Dados financeiros zerados.");
     } catch (error) {
@@ -357,9 +388,12 @@ export default function App() {
   }
 
   async function saveReserve() {
+    if (!activeSpaceId) return setMessage("Selecione um espaço antes de salvar a reserva.");
+    const normalizedReserve = Number(reserve);
+    if (!Number.isFinite(normalizedReserve) || normalizedReserve < 0 || normalizedReserve > MAX_MONEY) return setMessage("Informe uma reserva válida.");
     setLoading(true);
     try {
-      const data = await api(`/api/spaces/${activeSpaceId}/settings`, { method: "PATCH", body: JSON.stringify({ reserve }) });
+      const data = await api(`/api/spaces/${activeSpaceId}/settings`, { method: "PATCH", body: JSON.stringify({ reserve: normalizedReserve }) });
       setSpaces((current) => current.map((space) => space._id === data.space._id ? data.space : space));
       setReserve(Number(data.space.reserve ?? 0));
       setMessage("Reserva protegida salva neste espaço.");
@@ -378,12 +412,13 @@ export default function App() {
     setActiveMode("individual");
     setActiveMenu("Início");
     setAccountForm({ name: "", balance: "", ownerName: "" });
-    setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+    setTxForm(createTransactionForm());
     setEditingTransactionId("");
     setBuyForm({ item: "", total: "", installments: "1" });
     setReserve(300);
     setCoupleInvite(null);
     setAuthForm({ name: "", email: "", password: "" });
+    spaceRequestId.current += 1;
   }
 
   function logout() {
@@ -448,7 +483,7 @@ export default function App() {
 
         <nav className="sidebar-nav">
           {menu.map(({ label, shortLabel, icon: Icon }) => (
-            <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label}>
+            <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label} title={label}>
               <Icon size={18} strokeWidth={2} aria-hidden="true" />
               <span className="nav-label-full">{label}</span>
               <span className="nav-label-short">{shortLabel}</span>
@@ -465,7 +500,7 @@ export default function App() {
 
       <section className="main-content">
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
-        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
+        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} startTransaction={startTransaction} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
@@ -499,12 +534,12 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
         <h1>{isLogin ? "Entrar" : "Criar conta"}</h1>
         <p>{isLogin ? "Acesse seu painel financeiro." : "Crie seu acesso para começar."}</p>
         <form className="form" onSubmit={handleAuth}>
-          {!isLogin && <label>Nome<input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Seu nome" autoComplete="name" /></label>}
-          <label>E-mail<input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="seuemail@exemplo.com" type="email" autoComplete="email" /></label>
+          {!isLogin && <label>Nome<input value={authForm.name} onChange={(event) => setAuthForm({ ...authForm, name: event.target.value })} placeholder="Seu nome" autoComplete="name" required maxLength={80} /></label>}
+          <label>E-mail<input value={authForm.email} onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })} placeholder="seuemail@exemplo.com" type="email" autoComplete="email" required maxLength={254} /></label>
           <div className="password-field">
             <label htmlFor="auth-password">Senha</label>
             <span className="password-input">
-              <input id="auth-password" aria-label="Senha" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Mínimo 6 caracteres" type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} />
+              <input id="auth-password" aria-label="Senha" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Mínimo 6 caracteres" type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} required minLength={6} maxLength={128} />
               <button className="password-toggle" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} title={showPassword ? "Ocultar senha" : "Mostrar senha"}>
                 {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
               </button>
@@ -541,7 +576,7 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
   );
 }
 
-function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve, transactions }) {
+function Inicio({ summary, hasData, setActiveMenu, startTransaction, buyForm, setBuyForm, reserve, transactions }) {
   const pending = transactions.filter((item) => item.status === "pendente" && item.type !== "receita");
 
   return (
@@ -554,8 +589,8 @@ function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve,
         </div>
         <div className="quick-actions">
           <button onClick={() => setActiveMenu("Contas")}>Adicionar saldo</button>
-          <button onClick={() => setActiveMenu("Lançamentos")}>Adicionar receita</button>
-          <button onClick={() => setActiveMenu("Lançamentos")}>Adicionar despesa</button>
+          <button onClick={() => startTransaction("receita")}>Adicionar receita</button>
+          <button onClick={() => startTransaction("despesa")}>Adicionar despesa</button>
         </div>
       </section>
 
@@ -587,7 +622,7 @@ function Inicio({ summary, hasData, setActiveMenu, buyForm, setBuyForm, reserve,
 function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading }) {
   const resetForm = () => {
     setEditingTransactionId("");
-    setTxForm({ type: "despesa", description: "", amount: "", date: today, category: "Moradia", status: "pendente", accountId: "" });
+    setTxForm(createTransactionForm());
   };
 
   return (
@@ -607,9 +642,9 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           ))}
         </div>
         <div className="field-grid">
-          <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" /></label>
-          <label>Valor<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" /></label>
-          <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} /></label>
+          <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} /></label>
+          <label>Valor<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+          <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
           <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}><option>Moradia</option><option>Alimentação</option><option>Transporte</option><option>Renda</option><option>Dívida</option><option>Reserva</option></select></label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">Pago</option></select></label>
           <label>Conta<select value={txForm.accountId || ""} onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}><option value="">Sem conta</option>{accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}</select></label>
@@ -663,9 +698,9 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
         {accounts.map((item) => (
           <article className="account-row account-row-editable" key={item._id}>
             <div className="account-edit-grid">
-              <label>Conta<input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} /></label>
+              <label>Conta<input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} required maxLength={80} /></label>
               <label>Dono<select value={item.ownerName || ownerOptions[0]} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-              <label>Saldo atual<input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} /></label>
+              <label>Saldo atual<input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} min={-MAX_MONEY} max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
             </div>
             <em>{money(item.balance)}</em>
             <div className="row-actions">
@@ -676,9 +711,9 @@ function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount
         ))}
         <form className="account-row account-row-editable" onSubmit={addAccount}>
           <div className="account-edit-grid">
-            <label>Conta<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" /></label>
+            <label>Conta<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" required maxLength={80} /></label>
             <label>Dono<select value={accountForm.ownerName || ownerOptions[0]} onChange={(e) => setAccountForm({ ...accountForm, ownerName: e.target.value })}>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Saldo atual<input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" /></label>
+            <label>Saldo atual<input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" min={-MAX_MONEY} max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
           </div>
           <em>{money(accountForm.balance)}</em>
           <div className="row-actions"><button disabled={loading}>{loading ? "Adicionando..." : "Adicionar"}</button></div>
@@ -802,7 +837,7 @@ function Casal({ coupleSpace, coupleReady, coupleInvite, createCouple, goToCoupl
         <div className="invite-placeholder">
           <h3>Crie um convite para iniciar o modo casal</h3>
           <p>O espaço compartilhado só será usado depois que você criar ou aceitar um convite e entrar no modo casal.</p>
-          <label>Nome da outra pessoa<input value={partnerName} onChange={(event) => setPartnerName(event.target.value)} placeholder="Ex: Ana" /></label>
+          <label>Nome da outra pessoa<input value={partnerName} onChange={(event) => setPartnerName(event.target.value)} placeholder="Ex: Ana" maxLength={80} /></label>
           <button disabled={loading || !partnerName.trim()} onClick={() => createCouple(partnerName)}>{loading ? "Criando..." : "Criar convite do casal"}</button>
         </div>
       )}
@@ -916,8 +951,8 @@ function Decision({ buyForm, setBuyForm, ready, free }) {
       </div>
       <div className="buy-grid">
         <label>Compra<input value={buyForm.item} onChange={(e) => setBuyForm({ ...buyForm, item: e.target.value })} placeholder="Ex: geladeira" /></label>
-        <label>Valor total<input type="number" value={buyForm.total} onChange={(e) => setBuyForm({ ...buyForm, total: e.target.value })} placeholder="0,00" /></label>
-        <label>Parcelas<input type="number" value={buyForm.installments} onChange={(e) => setBuyForm({ ...buyForm, installments: e.target.value })} /></label>
+        <label>Valor total<input type="number" value={buyForm.total} onChange={(e) => setBuyForm({ ...buyForm, total: e.target.value })} placeholder="0,00" min="0" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+        <label>Parcelas<input type="number" value={buyForm.installments} onChange={(e) => setBuyForm({ ...buyForm, installments: e.target.value })} min="1" max="600" step="1" inputMode="numeric" /></label>
       </div>
       <div className={canBuy ? "decision-box ok" : "decision-box bad"}>
         {ready ? (total > 0 ? (canBuy ? `Compra parece possível. Parcela estimada: ${money(monthlyImpact)}.` : `Compra não recomendada agora. Parcela estimada: ${money(monthlyImpact)}.`) : "Informe uma compra para simular.") : "Aguardando dados. Cadastre saldo, receita e despesas antes de simular uma compra."}

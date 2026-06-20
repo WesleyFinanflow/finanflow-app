@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 
 dotenv.config();
 
@@ -23,12 +24,12 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    name: { type: String, required: true, trim: true, maxlength: 80 },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 },
     passwordHash: { type: String, required: true },
   },
   { timestamps: true }
@@ -36,7 +37,7 @@ const userSchema = new mongoose.Schema(
 
 const spaceSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, maxlength: 80 },
     type: { type: String, enum: ["individual", "couple"], required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     reserve: { type: Number, default: 300, min: 0, max: 1000000000000 },
@@ -57,8 +58,8 @@ memberSchema.index({ spaceId: 1, userId: 1 }, { unique: true });
 const accountSchema = new mongoose.Schema(
   {
     spaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Space", required: true },
-    name: { type: String, required: true, trim: true },
-    ownerName: { type: String, default: "Individual" },
+    name: { type: String, required: true, trim: true, maxlength: 80 },
+    ownerName: { type: String, default: "Individual", maxlength: 80 },
     balance: { type: Number, default: 0 },
   },
   { timestamps: true }
@@ -69,13 +70,13 @@ const transactionSchema = new mongoose.Schema(
     spaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Space", required: true },
     accountId: { type: mongoose.Schema.Types.ObjectId, ref: "Account" },
     type: { type: String, enum: ["receita", "despesa", "divida", "meta"], required: true },
-    description: { type: String, required: true, trim: true },
-    amount: { type: Number, required: true, min: 0 },
+    description: { type: String, required: true, trim: true, maxlength: 160 },
+    amount: { type: Number, required: true, min: 0.01, max: 1000000000000 },
     date: { type: String, required: true },
     status: { type: String, enum: ["pendente", "pago"], default: "pendente" },
-    category: { type: String, default: "Outro" },
+    category: { type: String, default: "Outro", maxlength: 50 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    responsibleName: { type: String, default: "Individual" },
+    responsibleName: { type: String, default: "Individual", maxlength: 80 },
   },
   { timestamps: true }
 );
@@ -160,30 +161,37 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: "Nome, e-mail e senha são obrigatórios." });
+    const { name: rawName, email: rawEmail, password } = req.body || {};
+    const name = requiredText(rawName, "Nome", 80);
+    const email = emailAddress(rawEmail);
+    if (typeof password !== "string" || !password) return res.status(400).json({ message: "A senha é obrigatória." });
     if (String(password).length < 6) return res.status(400).json({ message: "A senha precisa ter pelo menos 6 caracteres." });
-    const existing = await User.findOne({ email: String(email).toLowerCase().trim() });
+    if (String(password).length > 128) return res.status(400).json({ message: "A senha deve ter até 128 caracteres." });
+    const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ name, email, passwordHash });
     await createIndividualSpaceForUser(user);
     res.status(201).json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email } });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao criar cadastro.", error: error.message });
+    if (error instanceof InputError) return res.status(400).json({ message: error.message });
+    if (error?.code === 11000) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
+    res.status(500).json({ message: "Erro ao criar cadastro." });
   }
 });
 
 app.post("/api/auth/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email: String(email || "").toLowerCase().trim() });
+    const { email: rawEmail, password } = req.body || {};
+    const email = emailAddress(rawEmail);
+    const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     const valid = await bcrypt.compare(password || "", user.passwordHash);
     if (!valid) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     res.json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email } });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao fazer login.", error: error.message });
+    if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
+    res.status(500).json({ message: "Erro ao fazer login." });
   }
 });
 
@@ -214,7 +222,7 @@ app.delete("/api/me", auth, async (req, res) => {
     await User.deleteOne({ _id: req.user._id });
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao apagar conta.", error: error.message });
+    res.status(500).json({ message: "Erro ao apagar conta." });
   }
 });
 
@@ -235,13 +243,13 @@ app.patch("/api/spaces/:spaceId/settings", auth, async (req, res) => {
     const membership = await Member.findOne({ userId: req.user._id, spaceId: space._id });
     res.json({ space: await serializeSpaceForUser({ spaceId: space, role: membership.role }) });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao salvar configurações.", error: error.message });
+    res.status(500).json({ message: "Erro ao salvar configurações." });
   }
 });
 
 app.post("/api/spaces/couple", auth, async (req, res) => {
   try {
-    const partnerName = String(req.body.partnerName || "Parceira").trim();
+    const partnerName = optionalText(req.body?.partnerName, "Parceiro(a)", 80);
     const existingOwnedCouple = await Space.findOne({ ownerId: req.user._id, type: "couple" }).sort({ createdAt: 1 });
     if (existingOwnedCouple) {
       const memberCount = await Member.countDocuments({ spaceId: existingOwnedCouple._id });
@@ -260,7 +268,8 @@ app.post("/api/spaces/couple", auth, async (req, res) => {
     const invite = await createInviteForSpace(space._id, req.user._id);
     res.status(201).json({ space: { ...space.toObject(), memberCount: 1 }, invite });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao criar espaço casal.", error: error.message });
+    if (error instanceof InputError) return res.status(400).json({ message: error.message });
+    res.status(500).json({ message: "Erro ao criar espaço casal." });
   }
 });
 
@@ -281,7 +290,7 @@ app.get("/api/invites/:code", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao consultar convite.", error: error.message });
+    res.status(500).json({ message: "Erro ao consultar convite." });
   }
 });
 
@@ -315,7 +324,7 @@ app.post("/api/invites/:code/accept", auth, async (req, res) => {
     }
     res.json({ space: invite.spaceId });
   } catch (error) {
-    res.status(500).json({ message: "Erro ao aceitar convite.", error: error.message });
+    res.status(500).json({ message: "Erro ao aceitar convite." });
   }
 });
 
@@ -326,7 +335,12 @@ app.get("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => 
 
 app.post("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  const account = await Account.create({ spaceId: req.params.spaceId, name: req.body.name, ownerName: req.body.ownerName || req.user.name, balance: Number(req.body.balance || 0) });
+  const account = await Account.create({
+    spaceId: req.params.spaceId,
+    name: requiredText(req.body?.name, "Conta", 80),
+    ownerName: optionalText(req.body?.ownerName, req.user.name, 80),
+    balance: moneyValue(req.body?.balance ?? 0, { label: "Saldo" }),
+  });
   res.status(201).json({ account });
 }));
 
@@ -335,9 +349,9 @@ app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (re
   const account = await Account.findOneAndUpdate(
     { _id: req.params.accountId, spaceId: req.params.spaceId },
     {
-      name: req.body.name,
-      ownerName: req.body.ownerName || req.user.name,
-      balance: Number(req.body.balance || 0),
+      name: requiredText(req.body?.name, "Conta", 80),
+      ownerName: optionalText(req.body?.ownerName, req.user.name, 80),
+      balance: moneyValue(req.body?.balance ?? 0, { label: "Saldo" }),
     },
     { new: true, runValidators: true }
   );
@@ -361,47 +375,49 @@ app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res)
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-    const accountId = await normalizeAccountIdForSpace(req.body.accountId, req.params.spaceId);
+    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId);
     const transaction = await Transaction.create({
       spaceId: req.params.spaceId,
       accountId,
-      type: req.body.type,
-      description: req.body.description,
-      amount: Number(req.body.amount || 0),
-      date: req.body.date,
-      status: req.body.status || "pendente",
-      category: req.body.category || "Outro",
+      type: oneOf(req.body?.type, ["receita", "despesa", "divida", "meta"], "Tipo"),
+      description: requiredText(req.body?.description, "Descrição", 160),
+      amount: moneyValue(req.body?.amount, { min: 0.01 }),
+      date: isoDate(req.body?.date),
+      status: oneOf(req.body?.status || "pendente", ["pendente", "pago"], "Status"),
+      category: optionalText(req.body?.category, "Outro", 50),
       createdBy: req.user._id,
-      responsibleName: req.body.responsibleName || req.user.name,
+      responsibleName: optionalText(req.body?.responsibleName, req.user.name, 80),
     });
     res.status(201).json({ transaction });
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || "Erro ao criar lançamento." });
+    const invalidInput = error.status === 400 || error.name === "ValidationError";
+    res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message : "Erro ao criar lançamento." });
   }
 });
 
 app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-    const accountId = await normalizeAccountIdForSpace(req.body.accountId, req.params.spaceId);
+    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId);
     const transaction = await Transaction.findOneAndUpdate(
       { _id: req.params.transactionId, spaceId: req.params.spaceId },
       {
         accountId,
-        type: req.body.type,
-        description: req.body.description,
-        amount: Number(req.body.amount || 0),
-        date: req.body.date,
-        status: req.body.status || "pendente",
-        category: req.body.category || "Outro",
-        responsibleName: req.body.responsibleName || req.user.name,
+        type: oneOf(req.body?.type, ["receita", "despesa", "divida", "meta"], "Tipo"),
+        description: requiredText(req.body?.description, "Descrição", 160),
+        amount: moneyValue(req.body?.amount, { min: 0.01 }),
+        date: isoDate(req.body?.date),
+        status: oneOf(req.body?.status || "pendente", ["pendente", "pago"], "Status"),
+        category: optionalText(req.body?.category, "Outro", 50),
+        responsibleName: optionalText(req.body?.responsibleName, req.user.name, 80),
       },
       { new: true, runValidators: true }
     );
     if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
     res.json({ transaction });
   } catch (error) {
-    res.status(error.status || 500).json({ message: error.message || "Erro ao atualizar lançamento." });
+    const invalidInput = error.status === 400 || error.name === "ValidationError";
+    res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message : "Erro ao atualizar lançamento." });
   }
 });
 
@@ -430,8 +446,8 @@ app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }
 
 app.use((error, _req, res, _next) => {
   console.error("Erro na API:", error);
-  const invalidInput = error.name === "ValidationError" || error.name === "CastError";
-  res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? "Dados inválidos." : "Erro interno da API." });
+  const invalidInput = error.status === 400 || error.name === "ValidationError" || error.name === "CastError";
+  res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message || "Dados inválidos." : "Erro interno da API." });
 });
 
 async function start() {
