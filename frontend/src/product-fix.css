@@ -237,6 +237,19 @@ html body #root .auth-page .auth-card .form button.auth-forgot:hover {
   margin-top: 14px;
 }
 
+.install-panel > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@media (display-mode: standalone) {
+  .finanflow-app {
+    min-height: 100dvh;
+  }
+}
+
 .mode-button {
   min-height: 42px !important;
   border-radius: 13px !important;

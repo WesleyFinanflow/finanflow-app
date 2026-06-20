@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChartNoAxesCombined, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards, X } from "lucide-react";
+import { ArrowLeftRight, ChartNoAxesCombined, Download, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 
@@ -101,6 +101,8 @@ export default function App() {
   const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
   const [inviteInfo, setInviteInfo] = useState(null);
   const [passwordResetToken, setPasswordResetToken] = useState(() => getPasswordResetFromUrl());
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
   const spaceRequestId = useRef(0);
 
   const firstName = user?.name?.split(" ")?.[0] || "Wesley";
@@ -170,6 +172,32 @@ export default function App() {
     const timer = window.setInterval(() => refreshCoupleStatus({ silent: true }), 15000);
     return () => window.clearInterval(timer);
   }, [activeMenu, coupleSpace?._id, coupleReady]);
+
+  useEffect(() => {
+    const handleInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    const handleInstalled = () => {
+      setInstallPrompt(null);
+      setIsInstalled(true);
+      setMessage("FinanFlow instalado com sucesso.");
+    };
+    window.addEventListener("beforeinstallprompt", handleInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
+
+  async function installApp() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    const choice = await installPrompt.userChoice;
+    if (choice.outcome === "accepted") setMessage("Instalação iniciada.");
+    setInstallPrompt(null);
+  }
 
   async function handleAuth(event) {
     event.preventDefault();
@@ -519,7 +547,7 @@ export default function App() {
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
@@ -848,7 +876,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm }) {
   );
 }
 
-function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading }) {
+function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp }) {
   return (
     <section className="settings-stack">
       <section className="panel">
@@ -895,6 +923,21 @@ function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coup
       </section>
 
       <PasswordSettings logout={logout} />
+
+      {(installPrompt || isInstalled) && (
+        <section className="panel install-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Aplicativo</span>
+              <h2>{isInstalled ? "FinanFlow instalado" : "Instalar FinanFlow"}</h2>
+            </div>
+          </div>
+          <button type="button" disabled={isInstalled} onClick={installApp}>
+            <Download size={18} aria-hidden="true" />
+            {isInstalled ? "Aplicativo instalado" : "Instalar aplicativo"}
+          </button>
+        </section>
+      )}
 
       <section className="panel danger-zone">
         <div className="panel-head">
