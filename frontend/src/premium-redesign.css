@@ -196,3 +196,18 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .hero-copy .user-avatar{width:60px!important;height:60px!important}.hero h1{font-size:24px!important}.balance-chart{min-height:142px}.balance-chart svg{height:116px}.chart-value-label{font-size:6px}.recent-copy small{font-size:8px}.tip-plant{width:44px;height:44px}.plant-stem{left:21px;top:12px;height:18px}.plant-leaf{top:9px;width:14px;height:10px}.leaf-left{left:8px}.leaf-right{right:7px;top:6px}.plant-pot{left:14px;bottom:7px;width:17px;height:13px}
 }
+
+/* Hero copy and balance-card finishing pass. */
+.hero-copy p{display:grid!important;gap:2px}.hero-copy p>span{display:block}
+.balance-label{justify-content:flex-start!important;gap:7px!important;font-size:10px!important;font-weight:800;letter-spacing:.01em}.balance-label svg{display:block!important;width:14px;height:14px;color:rgba(255,255,255,.72)}
+.balance-focus strong{display:block;letter-spacing:-.045em;line-height:1!important}.balance-focus small{line-height:1.35!important;letter-spacing:.005em}
+.balance-details{gap:7px!important;margin-top:10px!important;padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-size:9px!important;font-weight:750!important;letter-spacing:.01em;opacity:.9}
+.details-arrow{display:grid!important;place-items:center;width:20px;height:20px;border:1px solid rgba(255,255,255,.38);border-radius:50%;color:#fff!important;font-size:11px;line-height:1;transition:transform .2s ease,background .2s ease}.balance-details:hover .details-arrow{transform:translateX(2px);background:rgba(255,255,255,.1)}
+
+@media(min-width:1101px){
+  .hero-copy p{font-size:14px!important;line-height:1.35!important}.balance-focus{padding:20px 25px!important}.balance-focus strong{margin:7px 0 4px!important;font-size:clamp(28px,2.2vw,32px)!important}.balance-focus small{font-size:9.5px!important}.balance-focus:after{right:26px!important;top:29px!important;width:52px!important;height:62px!important;font-size:31px!important}
+}
+
+@media(max-width:720px){
+  .hero-copy p{gap:1px;font-size:11px!important}.balance-focus strong{margin:6px 0 4px!important;font-size:23px!important}.balance-label{font-size:9px!important}.balance-details{margin-top:8px!important;font-size:8px!important}.details-arrow{width:18px;height:18px}
+}
