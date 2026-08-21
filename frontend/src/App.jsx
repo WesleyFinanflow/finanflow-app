@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartNoAxesCombined, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, Plus, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, CalendarDays, ChartNoAxesCombined, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, Plus, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 
@@ -19,6 +19,7 @@ function getApiUrl() {
 
 const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
+const currentMonthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date());
 const MAX_MONEY = 1_000_000_000_000;
 const menu = [
   { label: "Início", shortLabel: "Início", icon: House },
@@ -527,7 +528,9 @@ export default function App() {
     <main className="finanflow-app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon" aria-hidden="true"><i /><i /><i /></div>
+          <div className="brand-icon" aria-hidden="true">
+            <svg viewBox="0 0 64 44" role="presentation"><path d="M3 14c12 7 20 7 31 0S51 7 61 10" /><path d="M3 24c12 7 20 7 31 0s17-7 27-4" /><path d="M3 34c12 7 20 7 31 0s17-7 27-4" /></svg>
+          </div>
           <div>
             <strong>FinanFlow</strong>
             <span>Sua vida financeira em fluxo.</span>
@@ -557,6 +560,10 @@ export default function App() {
       </aside>
 
       <section className="main-content">
+        <div className="dashboard-toolbar" aria-label="Informações do painel">
+          <span className="notification-mark"><Bell size={21} aria-hidden="true" /><i /></span>
+          <span className="month-chip"><CalendarDays size={19} aria-hidden="true" /><span>{currentMonthLabel}</span></span>
+        </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} startTransaction={startTransaction} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
@@ -710,7 +717,7 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
         <p>
           {isCouple
             ? "Você está no espaço do casal. Cadastre os dados compartilhados para calcular o saldo livre."
-            : "Você está no modo individual. Cadastre seus dados; o modo casal só começa depois do convite."}
+            : "Você está no modo individual. Gerencie suas finanças com foco e tranquilidade."}
         </p>
         </div>
       </div>
@@ -718,14 +725,13 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
         <div className="balance-label"><span>Saldo livre seguro</span><ShieldCheck size={22} aria-hidden="true" /></div>
         <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
         <small>Protegido pela sua reserva financeira.</small>
+        <span className="balance-details">Ver detalhes <span aria-hidden="true">→</span></span>
       </div>
     </section>
   );
 }
 
-function Inicio({ summary, hasData, setActiveMenu, startTransaction, buyForm, setBuyForm, reserve, transactions }) {
-  const pending = transactions.filter((item) => item.status === "pendente" && item.type !== "receita");
-
+function Inicio({ summary, hasData, setActiveMenu, startTransaction, reserve, transactions }) {
   return (
     <>
       <section className="stats-grid">
@@ -735,19 +741,9 @@ function Inicio({ summary, hasData, setActiveMenu, startTransaction, buyForm, se
         <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Reserva protegida: ${money(reserve)}`} tone="blue" />
       </section>
 
-      <section className="grid-two">
-        <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
-        <section className="panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Próximos vencimentos</span>
-              <h2>O que ainda precisa pagar</h2>
-            </div>
-          </div>
-          <div className="upcoming-list">
-            {pending.length ? pending.map((item) => <DataRow key={item._id} label={item.description} value={money(item.amount)} />) : <Empty title="Aguardando os primeiros dados" text="Depois que você cadastrar despesas pendentes, elas aparecerão aqui." />}
-          </div>
-        </section>
+      <section className="dashboard-grid">
+        <MonthlyOverview summary={summary} hasData={hasData} />
+        <RecentTransactions transactions={transactions} setActiveMenu={setActiveMenu} />
       </section>
 
       <section className="quick-start panel">
@@ -975,6 +971,62 @@ function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpac
           <button className="danger-button" disabled={loading} onClick={deleteUserAccount}>Apagar conta</button>
         </div>
       </section>
+    </section>
+  );
+}
+
+function MonthlyOverview({ summary, hasData }) {
+  const values = [summary.income, summary.commitments, Math.max(summary.free, 0)];
+  const ceiling = Math.max(...values, 1);
+  const rows = [
+    { label: "Receitas previstas", value: summary.income, tone: "income" },
+    { label: "Compromissos", value: summary.commitments, tone: "expense" },
+    { label: "Saldo livre seguro", value: Math.max(summary.free, 0), tone: "free" },
+  ];
+
+  return (
+    <section className="panel monthly-overview">
+      <div className="panel-head dashboard-panel-head">
+        <div><span className="eyebrow">Resumo do mês</span><h2>Visão financeira</h2></div>
+        <span className="summary-badge">Período atual</span>
+      </div>
+      {hasData ? (
+        <div className="overview-bars">
+          {rows.map((row) => (
+            <div className={`overview-row ${row.tone}`} key={row.label}>
+              <div><span>{row.label}</span><strong>{money(row.value)}</strong></div>
+              <span className="overview-track"><i style={{ width: `${Math.max(5, (row.value / ceiling) * 100)}%` }} /></span>
+            </div>
+          ))}
+        </div>
+      ) : <Empty title="Seu resumo aparecerá aqui" text="Cadastre uma conta ou lançamento para visualizar o período atual." />}
+    </section>
+  );
+}
+
+function RecentTransactions({ transactions, setActiveMenu }) {
+  const recent = transactions.slice(0, 5);
+  const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
+  return (
+    <section className="panel recent-panel">
+      <div className="panel-head dashboard-panel-head">
+        <div><span className="eyebrow">Movimentações</span><h2>Lançamentos recentes</h2></div>
+        {recent.length > 0 && <button type="button" className="text-action" onClick={() => setActiveMenu("Lançamentos")}>Ver todos</button>}
+      </div>
+      {recent.length ? (
+        <div className="recent-list">
+          {recent.map((item) => {
+            const Icon = icons[item.type] || CircleDollarSign;
+            return (
+              <article className={`recent-item ${item.type}`} key={item._id}>
+                <span className="recent-icon"><Icon size={18} aria-hidden="true" /></span>
+                <span className="recent-copy"><strong>{item.description}</strong><small>{item.category} · {item.status}</small></span>
+                <strong className="recent-value">{item.type === "receita" ? "+" : "−"}{money(item.amount)}</strong>
+              </article>
+            );
+          })}
+        </div>
+      ) : <Empty title="Nenhum lançamento recente" text="Suas receitas e despesas mais recentes aparecerão nesta lista." />}
     </section>
   );
 }
