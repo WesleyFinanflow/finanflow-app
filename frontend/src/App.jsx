@@ -754,7 +754,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
           <h2>{hasData ? "Planeje hoje para ter mais tranquilidade amanhã" : "Comece seu planejamento financeiro"}</h2>
           <p>{hasData ? "Acompanhe metas e proteja sua reserva para tomar decisões com mais segurança." : "Cadastre seus primeiros dados e organize seus próximos objetivos."}</p>
         </div>
-        <span className="tip-plant" aria-hidden="true">🌱</span>
+        <span className="tip-plant" aria-hidden="true"><i className="plant-leaf leaf-left" /><i className="plant-leaf leaf-right" /><i className="plant-stem" /><i className="plant-pot" /></span>
         <button type="button" className="planning-cta" onClick={() => setActiveMenu("Planejamento")}>Ir para Planejamento <span aria-hidden="true">→</span></button>
       </section>
     </>
@@ -992,8 +992,9 @@ function MonthlyOverview({ transactions }) {
   const min = Math.min(0, ...months.map((item) => item.value));
   const max = Math.max(0, ...months.map((item) => item.value));
   const range = Math.max(max - min, 1);
-  const points = months.map((item, index) => `${12 + index * 55.2},${112 - ((item.value - min) / range) * 88}`).join(" ");
-  const areaPoints = `12,122 ${points} 288,122`;
+  const compactMoney = (value) => new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  const points = months.map((item, index) => `${32 + index * 51.2},${112 - ((item.value - min) / range) * 88}`).join(" ");
+  const areaPoints = `32,122 ${points} 288,122`;
 
   return (
     <section className="panel monthly-overview">
@@ -1005,10 +1006,14 @@ function MonthlyOverview({ transactions }) {
         <div className="balance-chart">
           <svg viewBox="0 0 300 130" role="img" aria-label="Evolução financeira dos últimos seis meses">
             <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#36b979" stopOpacity=".28" /><stop offset="1" stopColor="#36b979" stopOpacity="0" /></linearGradient></defs>
-            <line x1="10" y1="122" x2="290" y2="122" className="chart-axis" />
+            {[24, 68, 112].map((y) => <line key={y} x1="28" y1={y} x2="290" y2={y} className="chart-grid-line" />)}
+            <text x="2" y="28" className="chart-value-label">{compactMoney(max)}</text>
+            <text x="2" y="72" className="chart-value-label">{compactMoney((max + min) / 2)}</text>
+            <text x="2" y="116" className="chart-value-label">{compactMoney(min)}</text>
+            <line x1="28" y1="122" x2="290" y2="122" className="chart-axis" />
             <polygon points={areaPoints} fill="url(#chartFill)" />
             <polyline points={points} className="chart-line" />
-            {months.map((item, index) => <circle key={item.key} cx={12 + index * 55.2} cy={112 - ((item.value - min) / range) * 88} r="3.7" className="chart-point" />)}
+            {months.map((item, index) => <circle key={item.key} cx={32 + index * 51.2} cy={112 - ((item.value - min) / range) * 88} r="3.7" className="chart-point" />)}
           </svg>
           <div className="chart-labels">{months.map((item) => <span key={item.key}>{item.label}</span>)}</div>
         </div>
@@ -1033,7 +1038,7 @@ function RecentTransactions({ transactions, setActiveMenu }) {
             return (
               <article className={`recent-item ${item.type}`} key={item._id}>
                 <span className="recent-icon"><Icon size={18} aria-hidden="true" /></span>
-                <span className="recent-copy"><strong>{item.description}</strong><small>{item.category} · {item.status}</small></span>
+                <span className="recent-copy"><strong>{item.description}</strong><small>{item.category} · {item.status} · {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${item.date}T12:00:00`)).replace(".", "")}</small></span>
                 <strong className="recent-value">{item.type === "receita" ? "+" : "−"}{money(item.amount)}</strong>
               </article>
             );

@@ -166,12 +166,13 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 .balance-chart{position:relative;min-height:185px;margin-top:8px;padding:8px 4px 0}
 .balance-chart svg{display:block;width:100%;height:155px;overflow:visible}
 .chart-axis{stroke:#e4eee9;stroke-width:1}
+.chart-grid-line{stroke:#e7efeb;stroke-width:1;stroke-dasharray:2 3}.chart-value-label{fill:#82928a;font-size:7px;font-weight:650}
 .chart-line{fill:none;stroke:#0b935c;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .chart-point{fill:#0b935c;stroke:#fff;stroke-width:2}
 .chart-labels{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin-top:2px;color:#71847b;font-size:10px;text-align:center}
 .quick-start{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;align-items:center!important}
 .quick-start>div:first-child{grid-column:2;max-width:none!important}
-.tip-plant{grid-column:1;grid-row:1;display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#e2f5e9;font-size:30px;filter:saturate(.85)}
+.tip-plant{position:relative;grid-column:1;grid-row:1;display:block;width:58px;height:58px;border-radius:50%;background:linear-gradient(145deg,#edf9f1,#dff2e6)}.plant-stem{position:absolute;left:28px;top:17px;width:3px;height:22px;border-radius:3px;background:#287d52}.plant-leaf{position:absolute;top:13px;width:18px;height:12px;background:linear-gradient(135deg,#75cc8b,#32a86a)}.leaf-left{left:12px;border-radius:14px 2px 14px 2px;transform:rotate(20deg)}.leaf-right{right:11px;top:9px;border-radius:2px 14px 2px 14px;transform:rotate(-20deg)}.plant-pot{position:absolute;left:20px;bottom:10px;width:19px;height:15px;border-radius:2px 2px 7px 7px;background:linear-gradient(135deg,#b98768,#8e5f49);clip-path:polygon(8% 0,92% 0,78% 100%,22% 100%)}
 .planning-cta{grid-column:3;grid-row:1;display:inline-flex;align-items:center;justify-content:center;min-width:180px;min-height:44px;padding:10px 20px;color:#fff!important;border:0;border-radius:12px;background:linear-gradient(135deg,#086d4e,#034a38)!important;box-shadow:0 8px 20px rgba(4,74,55,.18);font-weight:800}
 .planning-cta:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(4,74,55,.23)}
 
@@ -182,4 +183,16 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .profile-chevron{display:none}.balance-chart{min-height:158px;padding-top:2px}.balance-chart svg{height:128px}.chart-labels{font-size:8px}
   .quick-start{display:grid!important;grid-template-columns:44px minmax(0,1fr)!important;gap:10px 12px!important}.quick-start>div:first-child{grid-column:2}.tip-plant{grid-column:1;grid-row:1;width:44px;height:44px;font-size:23px}.planning-cta{grid-column:2;grid-row:2;width:100%;min-width:0;min-height:40px;margin-top:2px;font-size:11px}
+}
+
+/* Final density and hierarchy pass. */
+@media(min-width:1101px){
+  .hero{min-height:186px!important;padding-bottom:20px!important}.hero-copy{gap:24px!important}.hero-copy .user-avatar{width:112px!important;height:112px!important}.hero p{max-width:470px!important}
+  html body #root .sidebar .sidebar-nav button{min-height:52px!important;font-size:14.5px!important}.sidebar-nav button svg{width:23px;height:23px}.sidebar-profile .user-avatar{width:54px!important;height:54px!important}
+  .dashboard-grid{grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr)!important}.dashboard-grid>.panel{min-height:254px!important;padding:20px 22px!important}.balance-chart{min-height:148px;margin-top:2px}.balance-chart svg{height:126px}.recent-item{min-height:58px;padding:9px 2px}.stat-card{box-shadow:0 10px 26px rgba(22,86,64,.065)!important}
+  .quick-start{min-height:102px!important;padding:16px 22px!important}
+}
+
+@media(max-width:720px){
+  .hero-copy .user-avatar{width:60px!important;height:60px!important}.hero h1{font-size:24px!important}.balance-chart{min-height:142px}.balance-chart svg{height:116px}.chart-value-label{font-size:6px}.recent-copy small{font-size:8px}.tip-plant{width:44px;height:44px}.plant-stem{left:21px;top:12px;height:18px}.plant-leaf{top:9px;width:14px;height:10px}.leaf-left{left:8px}.leaf-right{right:7px;top:6px}.plant-pot{left:14px;bottom:7px;width:17px;height:13px}
 }
