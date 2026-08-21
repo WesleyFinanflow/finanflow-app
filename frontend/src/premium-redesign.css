@@ -83,6 +83,23 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:900px){.dashboard-grid{grid-template-columns:1fr}}
 @media(max-width:720px){.balance-details{margin-top:12px!important;padding:7px 11px!important}.dashboard-grid{grid-template-columns:1fr;gap:12px;margin-top:12px}.dashboard-grid>.panel{min-height:0!important;padding:17px!important}.overview-bars{gap:16px;margin-top:18px}.overview-row>div{margin-bottom:7px}.recent-item{grid-template-columns:36px minmax(0,1fr) auto;gap:9px}.recent-icon{width:32px;height:32px}.recent-value{font-size:11px!important}.summary-badge{display:none!important}}
 
+/* Reference-accurate desktop fit: no hero collision and a full-height navigation rail. */
+@media(min-width:1101px){
+  .sidebar{position:fixed!important;inset:0 auto 0 0!important;height:100vh!important;min-height:100vh!important;overflow:hidden!important}
+  .main-content{grid-column:2!important;min-width:0!important;padding-top:18px!important}
+  .dashboard-toolbar{min-height:34px!important;margin-bottom:2px!important}.notification-mark{width:34px;height:34px}.month-chip{min-height:38px!important;padding-inline:13px!important}
+  .hero{min-height:184px!important;grid-template-columns:minmax(500px,1.18fr) minmax(360px,.82fr)!important;gap:24px!important;padding-bottom:14px!important}
+  .hero-copy{min-width:0!important;gap:20px!important}.hero-copy>div{flex:1;min-width:0!important;max-width:none!important}.hero-copy .user-avatar{width:106px;height:106px;font-size:28px!important}
+  .hero h1{max-width:100%!important;margin:3px 0 7px!important;font-size:clamp(36px,3vw,42px)!important;line-height:1.04!important;white-space:nowrap!important;overflow:visible!important}.hero p{max-width:380px!important;font-size:14px!important;line-height:1.45!important}
+  .balance-focus{min-height:164px!important;padding:24px 28px!important}.balance-focus strong{font-size:clamp(33px,2.7vw,39px)!important}.balance-focus:after{top:32px!important;width:68px!important;height:79px!important;font-size:43px!important}.balance-details{margin-top:12px!important;padding:7px 12px!important}
+  .stats-grid{gap:13px!important;margin-top:0!important}.stat-card{min-height:120px!important;padding:16px 18px!important}.stat-icon{width:31px;height:31px}.stat-card strong{font-size:clamp(20px,1.8vw,26px)!important}.stat-card p{font-size:10px!important}
+  .dashboard-grid{margin-top:13px!important;gap:13px!important}.dashboard-grid>.panel{min-height:250px!important;padding:19px 21px!important}.dashboard-grid .panel-head h2{font-size:21px!important}.overview-bars{gap:17px!important;margin-top:17px!important}.recent-item{min-height:48px!important;padding-block:6px!important}
+  .quick-start{min-height:104px!important;margin-top:13px!important;padding:17px 22px!important}.quick-start h2{font-size:17px!important}.quick-actions button{min-height:58px!important}
+  .mode-button{min-height:32px!important;padding:5px 8px!important;border-color:rgba(255,255,255,.12)!important;background:transparent!important;font-size:10px!important;box-shadow:none!important}
+}
+
+@media(min-width:1101px) and (max-width:1240px){.hero{grid-template-columns:minmax(430px,1.15fr) minmax(340px,.85fr)!important}.hero h1{font-size:36px!important}.hero-copy .user-avatar{width:94px;height:94px}.main-content{padding-inline:28px!important}}
+
 /* Final fidelity pass: proportions and hierarchy from the approved concept. */
 .brand-icon svg{display:block;width:100%;height:100%;overflow:visible}.brand-icon svg path{fill:none;stroke:#43e29a;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
 .dashboard-toolbar{display:flex;align-items:center;justify-content:flex-end;gap:18px;min-height:38px;margin-bottom:6px;color:#173d31}.notification-mark{position:relative;display:grid;place-items:center;width:38px;height:38px}.notification-mark i{position:absolute;top:5px;right:5px;width:8px;height:8px;border:2px solid #f5faf7;border-radius:50%;background:#10a568}.month-chip{display:flex;align-items:center;gap:10px;min-height:42px;padding:0 15px;border:1px solid #d9e5df;border-radius:12px;background:rgba(255,255,255,.78);box-shadow:0 4px 14px rgba(23,74,56,.04);font-size:13px;font-weight:700;text-transform:capitalize}
