@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChartNoAxesCombined, Download, Eye, EyeOff, HeartHandshake, House, Settings, WalletCards, X } from "lucide-react";
+import { ArrowLeftRight, ChartNoAxesCombined, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 
@@ -527,11 +527,16 @@ export default function App() {
     <main className="finanflow-app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon">F</div>
+          <div className="brand-icon">≈</div>
           <div>
             <strong>FinanFlow</strong>
-            <span>{activeCoupleSpace ? "Modo casal ativo" : "Modo individual"}</span>
+            <span>Sua vida financeira em fluxo.</span>
           </div>
+        </div>
+
+        <div className="sidebar-profile">
+          <Avatar name={user.name} />
+          <div><strong>{user.name}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
         </div>
 
         <nav className="sidebar-nav">
@@ -557,7 +562,7 @@ export default function App() {
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
@@ -698,17 +703,21 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
   return (
     <section className="hero">
       <div className="hero-copy">
+        <Avatar name={firstName} size="large" />
+        <div>
         <span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span>
-        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}`}</h1>
+        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}!`} <span className="hello-mark">👋</span></h1>
         <p>
           {isCouple
             ? "Você está no espaço do casal. Cadastre os dados compartilhados para calcular o saldo livre."
             : "Você está no modo individual. Cadastre seus dados; o modo casal só começa depois do convite."}
         </p>
+        </div>
       </div>
       <div className="balance-focus">
-        <span>Saldo livre seguro</span>
+        <div className="balance-label"><span>Saldo livre seguro</span><ShieldCheck size={22} aria-hidden="true" /></div>
         <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
+        <small>Protegido pela sua reserva financeira.</small>
       </div>
     </section>
   );
@@ -721,9 +730,9 @@ function Inicio({ summary, hasData, setActiveMenu, startTransaction, buyForm, se
     <>
       <section className="quick-start panel">
         <div>
-          <span className="eyebrow">Comece por aqui</span>
-          <h2>Cadastre seus primeiros dados</h2>
-          <p>O FinanFlow começa individual. Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite.</p>
+          <span className="eyebrow">{hasData ? "Seu próximo passo" : "Comece por aqui"}</span>
+          <h2>{hasData ? "Continue acompanhando suas finanças" : "Cadastre seus primeiros dados"}</h2>
+          <p>{hasData ? "Mantenha seus saldos e movimentações atualizados para enxergar decisões com clareza." : "O FinanFlow começa individual. Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite."}</p>
         </div>
         <div className="quick-actions">
           <button onClick={() => setActiveMenu("Contas")}>Adicionar saldo</button>
@@ -886,7 +895,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm }) {
   );
 }
 
-function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp }) {
+function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp }) {
   return (
     <section className="settings-stack">
       <section className="panel">
@@ -896,9 +905,13 @@ function Config({ reserve, setReserve, saveReserve, firstName, coupleSpace, coup
             <h2>Dados individuais</h2>
           </div>
         </div>
-        <div className="field-grid">
-          <label>Seu nome<input value={firstName} readOnly /></label>
-          <label>Espaço ativo<input value={activeMode === "couple" ? "Casal" : "Individual"} readOnly /></label>
+        <div className="profile-settings">
+          <Avatar name={firstName} size="large" />
+          <div className="field-grid">
+            <label>Seu nome<input value={firstName} readOnly /></label>
+            <label>E-mail<input value={email || ""} readOnly /></label>
+            <label>Espaço ativo<input value={activeMode === "couple" ? "Casal" : "Individual"} readOnly /></label>
+          </div>
         </div>
       </section>
 
@@ -1112,13 +1125,20 @@ function InviteAccept({ invite, loading, message, acceptInvite }) {
 }
 
 function StatCard({ title, value, text, tone }) {
+  const icons = { cyan: WalletCards, green: TrendingUp, yellow: ReceiptText, blue: ShieldCheck };
+  const Icon = icons[tone] || CircleDollarSign;
   return (
     <article className={`stat-card ${tone}`}>
-      <span>{title}</span>
+      <div className="stat-title"><span>{title}</span><span className="stat-icon"><Icon size={18} aria-hidden="true" /></span></div>
       <strong>{value}</strong>
       <p>{text}</p>
     </article>
   );
+}
+
+function Avatar({ name, size = "small" }) {
+  const initials = String(name || "F").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  return <span className={`user-avatar ${size}`} aria-hidden="true">{initials || "F"}</span>;
 }
 
 function DataRow({ label, value, className = "" }) {
