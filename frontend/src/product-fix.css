@@ -695,14 +695,7 @@ label,
   }
 
   .sidebar-footer {
-    margin: 0 0 0 auto !important;
-  }
-
-  .sidebar-footer .mode-button {
-    width: auto !important;
-    min-height: 36px !important;
-    padding: 0 11px !important;
-    font-size: 11px !important;
+    display: none !important;
   }
 
   .main-content {
