@@ -211,3 +211,21 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .hero-copy p{gap:1px;font-size:11px!important}.balance-focus strong{margin:6px 0 4px!important;font-size:23px!important}.balance-label{font-size:9px!important}.balance-details{margin-top:8px!important;font-size:8px!important}.details-arrow{width:18px;height:18px}
 }
+
+/* Final spacing, chart utilization and low-data state. */
+.finanflow-app{background:radial-gradient(circle at 68% 8%,rgba(95,203,150,.08),transparent 32%),linear-gradient(135deg,#f7fbf8 0%,#f1f8f4 52%,#f8fbf9 100%)!important}
+.sidebar-profile strong{white-space:normal!important;line-height:1.15!important}.planning-cta{gap:8px!important}
+.balance-focus{position:relative;overflow:hidden}.balance-focus>*{position:relative;z-index:1}.balance-focus:after{z-index:1}.balance-focus:before{content:"";position:absolute;z-index:0;inset:0;pointer-events:none;background:repeating-radial-gradient(circle at 91% 28%,transparent 0 14px,rgba(255,255,255,.025) 15px 16px);opacity:.8}
+.balance-details{padding:5px 7px 5px 9px!important;border:1px solid rgba(255,255,255,.26)!important;border-radius:999px!important;background:rgba(255,255,255,.045)!important}.details-arrow{width:18px;height:18px}
+.recent-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:11px 12px;border-top:1px solid #e2ece7;border-radius:10px;color:#73877e;background:#f7fbf9;font-size:9px}.recent-summary strong{color:#164335;font-size:11px}
+
+@media(min-width:1101px){
+  .hero{min-height:174px!important;padding-bottom:12px!important}.hero-copy{transform:translateY(-2px)}
+  .stats-grid{margin-top:4px!important}.stat-card{min-height:108px!important;padding:14px 17px!important}.stat-card strong{margin-top:3px!important}.stat-card p{font-size:9.5px!important}
+  .dashboard-grid>.panel{min-height:250px!important}.balance-chart{min-height:157px;margin-top:0;padding-top:0}.balance-chart svg{height:143px}.chart-labels{padding:0 2px 0 27px;margin-top:-2px}
+  .recent-panel .recent-list{margin-top:10px}.recent-panel:has(.recent-item:only-child){min-height:250px!important}
+}
+
+@media(max-width:720px){
+  .finanflow-app{background:#f5faf7!important}.balance-details{padding:4px 6px 4px 8px!important}.recent-summary{margin-top:8px;padding:9px 10px}.chart-labels{padding-left:22px}
+}

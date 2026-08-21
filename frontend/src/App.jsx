@@ -550,7 +550,7 @@ export default function App() {
 
         <div className="sidebar-profile">
           <Avatar name={user.name} />
-          <div><strong>{user.name}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
+          <div><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
           <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
         </div>
 
@@ -1043,6 +1043,7 @@ function RecentTransactions({ transactions, setActiveMenu }) {
               </article>
             );
           })}
+          <div className="recent-summary"><span>{recent.length} {recent.length === 1 ? "movimentação" : "movimentações"} no período</span><strong>{money(recent.reduce((total, item) => total + (item.type === "receita" ? Number(item.amount || 0) : -Number(item.amount || 0)), 0))}</strong></div>
         </div>
       ) : <Empty title="Nenhum lançamento recente" text="Suas receitas e despesas mais recentes aparecerão nesta lista." />}
     </section>
