@@ -50,6 +50,16 @@ function moneyOrWaiting(value, hasData) {
   return hasData ? money(value) : "Aguardando dados";
 }
 
+function readStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem("finanflow_user") || "null");
+  } catch {
+    localStorage.removeItem("finanflow_token");
+    localStorage.removeItem("finanflow_user");
+    return null;
+  }
+}
+
 async function api(path, options = {}) {
   if (!API_URL) throw new Error("API não configurada. Defina VITE_API_URL no ambiente do frontend.");
   const token = localStorage.getItem("finanflow_token");
@@ -81,7 +91,7 @@ async function api(path, options = {}) {
 }
 
 export default function App() {
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem("finanflow_user") || "null"));
+  const [user, setUser] = useState(() => readStoredUser());
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [activeMenu, setActiveMenu] = useState("Início");
