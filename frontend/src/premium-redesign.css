@@ -157,3 +157,5 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .balance-focus{min-height:116px!important;padding:15px 16px!important}.balance-focus strong{font-size:24px!important}.balance-focus small{font-size:9px!important}.balance-focus:after{right:17px!important;top:29px!important;width:44px!important;height:52px!important;font-size:27px!important;box-shadow:0 0 0 13px rgba(92,226,155,.035)!important}.balance-details{margin-top:8px!important;padding:5px 9px!important;font-size:8px!important}
 }
+
+@media(min-width:1101px){.hero{display:grid!important;align-items:center!important}.balance-focus{align-self:center!important;height:148px!important;min-height:148px!important}}
