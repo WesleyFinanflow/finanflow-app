@@ -159,3 +159,27 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 }
 
 @media(min-width:1101px){.hero{display:grid!important;align-items:center!important}.balance-focus{align-self:center!important;height:148px!important;min-height:148px!important}}
+
+/* Final reference polish: real-data chart, profile affordance and planning banner. */
+.profile-chevron{margin-left:auto;color:rgba(255,255,255,.7)}
+.user-avatar{overflow:hidden}.user-avatar img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 22%;filter:grayscale(.15) contrast(1.04)}
+.balance-chart{position:relative;min-height:185px;margin-top:8px;padding:8px 4px 0}
+.balance-chart svg{display:block;width:100%;height:155px;overflow:visible}
+.chart-axis{stroke:#e4eee9;stroke-width:1}
+.chart-line{fill:none;stroke:#0b935c;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.chart-point{fill:#0b935c;stroke:#fff;stroke-width:2}
+.chart-labels{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));margin-top:2px;color:#71847b;font-size:10px;text-align:center}
+.quick-start{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto!important;align-items:center!important}
+.quick-start>div:first-child{grid-column:2;max-width:none!important}
+.tip-plant{grid-column:1;grid-row:1;display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#e2f5e9;font-size:30px;filter:saturate(.85)}
+.planning-cta{grid-column:3;grid-row:1;display:inline-flex;align-items:center;justify-content:center;min-width:180px;min-height:44px;padding:10px 20px;color:#fff!important;border:0;border-radius:12px;background:linear-gradient(135deg,#086d4e,#034a38)!important;box-shadow:0 8px 20px rgba(4,74,55,.18);font-weight:800}
+.planning-cta:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(4,74,55,.23)}
+
+@media(max-width:900px){
+  .quick-start{grid-template-columns:auto minmax(0,1fr)!important}.planning-cta{grid-column:2;grid-row:2;justify-self:start;min-width:160px;margin-top:10px}.tip-plant{grid-row:1 / span 2}
+}
+
+@media(max-width:720px){
+  .profile-chevron{display:none}.balance-chart{min-height:158px;padding-top:2px}.balance-chart svg{height:128px}.chart-labels{font-size:8px}
+  .quick-start{display:grid!important;grid-template-columns:44px minmax(0,1fr)!important;gap:10px 12px!important}.quick-start>div:first-child{grid-column:2}.tip-plant{grid-column:1;grid-row:1;width:44px;height:44px;font-size:23px}.planning-cta{grid-column:2;grid-row:2;width:100%;min-width:0;min-height:40px;margin-top:2px;font-size:11px}
+}

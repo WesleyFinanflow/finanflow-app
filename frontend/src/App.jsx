@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, CalendarDays, ChartNoAxesCombined, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, Plus, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, CalendarDays, ChartNoAxesCombined, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
+import wesleyAvatar from "./assets/wesley-avatar.jpeg";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -550,6 +551,7 @@ export default function App() {
         <div className="sidebar-profile">
           <Avatar name={user.name} />
           <div><strong>{user.name}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
+          <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
         </div>
 
         <div className="sidebar-footer">
@@ -565,7 +567,7 @@ export default function App() {
           <span className="month-chip"><CalendarDays size={19} aria-hidden="true" /><span>{currentMonthLabel}</span></span>
         </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
-        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} startTransaction={startTransaction} buyForm={buyForm} setBuyForm={setBuyForm} reserve={reserve} transactions={transactions} />}
+        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
@@ -731,7 +733,7 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
   );
 }
 
-function Inicio({ summary, hasData, setActiveMenu, startTransaction, reserve, transactions }) {
+function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
   return (
     <>
       <section className="stats-grid">
@@ -742,21 +744,18 @@ function Inicio({ summary, hasData, setActiveMenu, startTransaction, reserve, tr
       </section>
 
       <section className="dashboard-grid">
-        <MonthlyOverview summary={summary} hasData={hasData} />
+        <MonthlyOverview transactions={transactions} />
         <RecentTransactions transactions={transactions} setActiveMenu={setActiveMenu} />
       </section>
 
       <section className="quick-start panel">
         <div>
-          <span className="eyebrow">{hasData ? "Dica para suas finanças" : "Comece por aqui"}</span>
-          <h2>{hasData ? "Mantenha sua vida financeira em dia" : "Cadastre seus primeiros dados"}</h2>
-          <p>{hasData ? "Atualize saldos e movimentações para tomar decisões com mais tranquilidade." : "Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite."}</p>
+          <span className="eyebrow">Dica para suas finanças</span>
+          <h2>{hasData ? "Planeje hoje para ter mais tranquilidade amanhã" : "Comece seu planejamento financeiro"}</h2>
+          <p>{hasData ? "Acompanhe metas e proteja sua reserva para tomar decisões com mais segurança." : "Cadastre seus primeiros dados e organize seus próximos objetivos."}</p>
         </div>
-        <div className="quick-actions">
-          <button onClick={() => setActiveMenu("Contas")}><span className="action-icon"><Plus size={20} /></span><span><strong>Adicionar saldo</strong><small>Atualizar contas</small></span></button>
-          <button onClick={() => startTransaction("receita")}><span className="action-icon income"><ArrowDownLeft size={20} /></span><span><strong>Adicionar receita</strong><small>Cadastrar entrada</small></span></button>
-          <button onClick={() => startTransaction("despesa")}><span className="action-icon expense"><ArrowUpRight size={20} /></span><span><strong>Adicionar despesa</strong><small>Cadastrar saída</small></span></button>
-        </div>
+        <span className="tip-plant" aria-hidden="true">🌱</span>
+        <button type="button" className="planning-cta" onClick={() => setActiveMenu("Planejamento")}>Ir para Planejamento <span aria-hidden="true">→</span></button>
       </section>
     </>
   );
@@ -975,31 +974,45 @@ function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpac
   );
 }
 
-function MonthlyOverview({ summary, hasData }) {
-  const values = [summary.income, summary.commitments, Math.max(summary.free, 0)];
-  const ceiling = Math.max(...values, 1);
-  const rows = [
-    { label: "Receitas previstas", value: summary.income, tone: "income" },
-    { label: "Compromissos", value: summary.commitments, tone: "expense" },
-    { label: "Saldo livre seguro", value: Math.max(summary.free, 0), tone: "free" },
-  ];
+function MonthlyOverview({ transactions }) {
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() - (5 - index));
+    return { key: date.toISOString().slice(0, 7), label: new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", ""), value: 0 };
+  });
+  const byMonth = new Map(months.map((item) => [item.key, item]));
+  transactions.forEach((item) => {
+    const month = byMonth.get(String(item.date || "").slice(0, 7));
+    if (!month) return;
+    const amount = Number(item.amount || 0);
+    month.value += item.type === "receita" ? amount : -amount;
+  });
+  const hasMovement = months.some((item) => item.value !== 0);
+  const min = Math.min(0, ...months.map((item) => item.value));
+  const max = Math.max(0, ...months.map((item) => item.value));
+  const range = Math.max(max - min, 1);
+  const points = months.map((item, index) => `${12 + index * 55.2},${112 - ((item.value - min) / range) * 88}`).join(" ");
+  const areaPoints = `12,122 ${points} 288,122`;
 
   return (
     <section className="panel monthly-overview">
       <div className="panel-head dashboard-panel-head">
-        <div><span className="eyebrow">Resumo do mês</span><h2>Visão financeira</h2></div>
-        <span className="summary-badge">Período atual</span>
+        <div><span className="eyebrow">Últimos seis meses</span><h2>Evolução financeira</h2></div>
+        <span className="summary-badge">Fluxo real</span>
       </div>
-      {hasData ? (
-        <div className="overview-bars">
-          {rows.map((row) => (
-            <div className={`overview-row ${row.tone}`} key={row.label}>
-              <div><span>{row.label}</span><strong>{money(row.value)}</strong></div>
-              <span className="overview-track"><i style={{ width: `${Math.max(5, (row.value / ceiling) * 100)}%` }} /></span>
-            </div>
-          ))}
+      {hasMovement ? (
+        <div className="balance-chart">
+          <svg viewBox="0 0 300 130" role="img" aria-label="Evolução financeira dos últimos seis meses">
+            <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#36b979" stopOpacity=".28" /><stop offset="1" stopColor="#36b979" stopOpacity="0" /></linearGradient></defs>
+            <line x1="10" y1="122" x2="290" y2="122" className="chart-axis" />
+            <polygon points={areaPoints} fill="url(#chartFill)" />
+            <polyline points={points} className="chart-line" />
+            {months.map((item, index) => <circle key={item.key} cx={12 + index * 55.2} cy={112 - ((item.value - min) / range) * 88} r="3.7" className="chart-point" />)}
+          </svg>
+          <div className="chart-labels">{months.map((item) => <span key={item.key}>{item.label}</span>)}</div>
         </div>
-      ) : <Empty title="Seu resumo aparecerá aqui" text="Cadastre uma conta ou lançamento para visualizar o período atual." />}
+      ) : <Empty title="A evolução aparecerá aqui" text="Cadastre lançamentos para construir seu histórico financeiro real." />}
     </section>
   );
 }
@@ -1190,7 +1203,12 @@ function StatCard({ title, value, text, tone }) {
 
 function Avatar({ name, size = "small" }) {
   const initials = String(name || "F").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-  return <span className={`user-avatar ${size}`} aria-hidden="true">{initials || "F"}</span>;
+  const isWesley = /^wesley\b/i.test(String(name || "").trim());
+  return (
+    <span className={`user-avatar ${size}`} aria-hidden="true">
+      {isWesley ? <img src={wesleyAvatar} alt="" /> : initials || "F"}
+    </span>
+  );
 }
 
 function DataRow({ label, value, className = "" }) {
