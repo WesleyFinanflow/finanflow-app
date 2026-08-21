@@ -215,8 +215,8 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 /* Final spacing, chart utilization and low-data state. */
 .finanflow-app{background:radial-gradient(circle at 68% 8%,rgba(95,203,150,.08),transparent 32%),linear-gradient(135deg,#f7fbf8 0%,#f1f8f4 52%,#f8fbf9 100%)!important}
 .sidebar-profile strong{white-space:normal!important;line-height:1.15!important}.planning-cta{gap:8px!important}
-.balance-focus{position:relative;overflow:hidden}.balance-focus>*{position:relative;z-index:1}.balance-focus:after{z-index:1}.balance-focus:before{content:"";position:absolute;z-index:0;inset:0;pointer-events:none;background:repeating-radial-gradient(circle at 91% 28%,transparent 0 14px,rgba(255,255,255,.025) 15px 16px);opacity:.8}
-.balance-details{padding:5px 7px 5px 9px!important;border:1px solid rgba(255,255,255,.26)!important;border-radius:999px!important;background:rgba(255,255,255,.045)!important}.details-arrow{width:18px;height:18px}
+.balance-focus{position:relative;overflow:hidden}.balance-focus>*{position:relative;z-index:1}.balance-focus:after{z-index:1}.balance-focus:before{content:none!important}
+.balance-details{padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}.details-arrow{width:18px;height:18px}
 .recent-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:11px 12px;border-top:1px solid #e2ece7;border-radius:10px;color:#73877e;background:#f7fbf9;font-size:9px}.recent-summary strong{color:#164335;font-size:11px}
 
 @media(min-width:1101px){
@@ -227,5 +227,5 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 }
 
 @media(max-width:720px){
-  .finanflow-app{background:#f5faf7!important}.balance-details{padding:4px 6px 4px 8px!important}.recent-summary{margin-top:8px;padding:9px 10px}.chart-labels{padding-left:22px}
+  .finanflow-app{background:#f5faf7!important}.balance-details{padding:0!important}.recent-summary{margin-top:8px;padding:9px 10px}.chart-labels{padding-left:22px}
 }
