@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ChartNoAxesCombined, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ChartNoAxesCombined, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, Plus, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 
@@ -527,16 +527,11 @@ export default function App() {
     <main className="finanflow-app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon">≈</div>
+          <div className="brand-icon" aria-hidden="true"><i /><i /><i /></div>
           <div>
             <strong>FinanFlow</strong>
             <span>Sua vida financeira em fluxo.</span>
           </div>
-        </div>
-
-        <div className="sidebar-profile">
-          <Avatar name={user.name} />
-          <div><strong>{user.name}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
         </div>
 
         <nav className="sidebar-nav">
@@ -548,6 +543,11 @@ export default function App() {
             </button>
           ))}
         </nav>
+
+        <div className="sidebar-profile">
+          <Avatar name={user.name} />
+          <div><strong>{user.name}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
+        </div>
 
         <div className="sidebar-footer">
           <button className="mode-button" onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
@@ -728,19 +728,6 @@ function Inicio({ summary, hasData, setActiveMenu, startTransaction, buyForm, se
 
   return (
     <>
-      <section className="quick-start panel">
-        <div>
-          <span className="eyebrow">{hasData ? "Seu próximo passo" : "Comece por aqui"}</span>
-          <h2>{hasData ? "Continue acompanhando suas finanças" : "Cadastre seus primeiros dados"}</h2>
-          <p>{hasData ? "Mantenha seus saldos e movimentações atualizados para enxergar decisões com clareza." : "O FinanFlow começa individual. Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite."}</p>
-        </div>
-        <div className="quick-actions">
-          <button onClick={() => setActiveMenu("Contas")}>Adicionar saldo</button>
-          <button onClick={() => startTransaction("receita")}>Adicionar receita</button>
-          <button onClick={() => startTransaction("despesa")}>Adicionar despesa</button>
-        </div>
-      </section>
-
       <section className="stats-grid">
         <StatCard title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas cadastradas no espaço atual" tone="cyan" />
         <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
@@ -761,6 +748,19 @@ function Inicio({ summary, hasData, setActiveMenu, startTransaction, buyForm, se
             {pending.length ? pending.map((item) => <DataRow key={item._id} label={item.description} value={money(item.amount)} />) : <Empty title="Aguardando os primeiros dados" text="Depois que você cadastrar despesas pendentes, elas aparecerão aqui." />}
           </div>
         </section>
+      </section>
+
+      <section className="quick-start panel">
+        <div>
+          <span className="eyebrow">{hasData ? "Dica para suas finanças" : "Comece por aqui"}</span>
+          <h2>{hasData ? "Mantenha sua vida financeira em dia" : "Cadastre seus primeiros dados"}</h2>
+          <p>{hasData ? "Atualize saldos e movimentações para tomar decisões com mais tranquilidade." : "Cadastre saldos, receitas e despesas. O modo casal só será ativado quando você criar ou aceitar um convite."}</p>
+        </div>
+        <div className="quick-actions">
+          <button onClick={() => setActiveMenu("Contas")}><span className="action-icon"><Plus size={20} /></span><span><strong>Adicionar saldo</strong><small>Atualizar contas</small></span></button>
+          <button onClick={() => startTransaction("receita")}><span className="action-icon income"><ArrowDownLeft size={20} /></span><span><strong>Adicionar receita</strong><small>Cadastrar entrada</small></span></button>
+          <button onClick={() => startTransaction("despesa")}><span className="action-icon expense"><ArrowUpRight size={20} /></span><span><strong>Adicionar despesa</strong><small>Cadastrar saída</small></span></button>
+        </div>
       </section>
     </>
   );
@@ -1144,7 +1144,7 @@ function Avatar({ name, size = "small" }) {
 function DataRow({ label, value, className = "" }) {
   return (
     <div className={`data-row ${className}`}>
-      <span>{label}</span>
+      <span className="data-row-copy"><span className="data-row-icon"><ReceiptText size={17} aria-hidden="true" /></span><span>{label}<small>Compromisso pendente</small></span></span>
       <strong>{value}</strong>
     </div>
   );
