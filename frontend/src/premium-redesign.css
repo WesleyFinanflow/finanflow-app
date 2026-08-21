@@ -142,3 +142,18 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
   html body #root .quick-actions button{display:grid!important;justify-items:center!important;gap:5px!important;min-width:0!important;min-height:68px!important;padding:8px 4px!important;color:#153d31!important;border:1px solid #deebe4!important;border-radius:14px!important;background:#fff!important;box-shadow:0 5px 14px rgba(18,85,62,.05)!important}
   html body #root .quick-actions button strong{color:#163c31!important;font-size:9px!important}html body #root .quick-actions button small{display:none!important}
 }
+
+/* Balance-card hierarchy — intentionally last to win the desktop and mobile cascade. */
+@media(min-width:1101px){
+  .hero{min-height:172px!important;grid-template-columns:minmax(0,3fr) minmax(340px,2fr)!important;gap:26px!important;padding-bottom:14px!important}
+  .hero-copy{min-width:0!important;gap:20px!important}.hero-copy>div{flex:1;min-width:0!important;max-width:none!important}.hero-copy .user-avatar{width:102px;height:102px;font-size:27px!important}
+  .hero h1{max-width:100%!important;margin:3px 0 7px!important;font-size:clamp(35px,2.8vw,41px)!important;line-height:1.05!important;white-space:nowrap!important}.hero p{max-width:440px!important;font-size:14px!important;line-height:1.45!important}
+  .balance-focus{width:auto!important;min-height:148px!important;padding:21px 24px!important;border-radius:19px!important}.balance-focus strong{margin:5px 0 5px!important;font-size:clamp(29px,2.35vw,34px)!important}.balance-focus small{font-size:9px!important}.balance-focus:after{right:24px!important;top:28px!important;width:56px!important;height:66px!important;border-width:2px!important;font-size:34px!important;box-shadow:0 0 0 17px rgba(92,226,155,.035)!important}.balance-focus .balance-label,.balance-focus strong,.balance-focus small{max-width:76%!important}.balance-details{margin-top:9px!important;padding:6px 10px!important;font-size:9px!important}
+  .stat-card{min-height:118px!important;padding:16px 18px!important}.stat-card strong{font-size:clamp(20px,1.7vw,25px)!important}
+}
+
+@media(min-width:1101px) and (max-width:1240px){.hero{grid-template-columns:minmax(0,1fr) minmax(330px,38%)!important;gap:20px!important}.hero-copy .user-avatar{width:90px;height:90px}.hero h1{font-size:34px!important}}
+
+@media(max-width:720px){
+  .balance-focus{min-height:116px!important;padding:15px 16px!important}.balance-focus strong{font-size:24px!important}.balance-focus small{font-size:9px!important}.balance-focus:after{right:17px!important;top:29px!important;width:44px!important;height:52px!important;font-size:27px!important;box-shadow:0 0 0 13px rgba(92,226,155,.035)!important}.balance-details{margin-top:8px!important;padding:5px 9px!important;font-size:8px!important}
+}
