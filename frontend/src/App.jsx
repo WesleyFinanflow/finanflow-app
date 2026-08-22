@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HandCoins, HeartHandshake, House, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HandCoins, HeartHandshake, House, Info, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
@@ -1216,9 +1216,12 @@ function StatCard({ title, value, text, tone }) {
   const Icon = icons[tone] || CircleDollarSign;
   return (
     <article className={`stat-card ${tone}`}>
-      <div className="stat-title"><span>{title}</span><span className="stat-icon"><Icon size={18} aria-hidden="true" /></span></div>
-      <strong>{value}</strong>
-      <p>{text}</p>
+      <span className="stat-icon"><Icon size={20} aria-hidden="true" /></span>
+      <div className="stat-card-copy">
+        <span className="stat-card-label">{title}<Info size={12} aria-hidden="true" /></span>
+        <strong>{value}</strong>
+        <p>{text}</p>
+      </div>
     </article>
   );
 }
