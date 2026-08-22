@@ -242,3 +242,17 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .chart-current{right:4px;top:0;font-size:7px}.chart-month-label{font-size:6px}.quick-start:after{display:none}
 }
+
+/* Detailed icon system inspired by the approved reference. */
+.sidebar-nav button svg{flex:0 0 auto;stroke-width:2.15;filter:drop-shadow(0 2px 3px rgba(0,0,0,.08))}.sidebar-nav button.active svg{color:#f3fff8;filter:drop-shadow(0 3px 5px rgba(0,0,0,.14))}.sidebar-nav button.active{box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 18px rgba(0,45,32,.12)!important}
+.stat-icon{position:relative;border-radius:50%!important;border:1px solid rgba(255,255,255,.88);box-shadow:0 0 0 6px rgba(29,170,103,.045),0 7px 16px rgba(15,112,73,.1)!important;background:linear-gradient(145deg,#f3fff8,#dcf5e7)!important}.stat-icon svg{stroke-width:2.35}.stat-card.yellow .stat-icon{box-shadow:0 0 0 6px rgba(232,170,45,.05),0 7px 16px rgba(169,112,5,.09)!important;background:linear-gradient(145deg,#fffaf0,#ffedc7)!important}.stat-card.blue .stat-icon{box-shadow:0 0 0 6px rgba(69,133,231,.05),0 7px 16px rgba(33,100,190,.09)!important;background:linear-gradient(145deg,#f6faff,#dfeeff)!important}
+.recent-icon{position:relative;border:1px solid rgba(255,255,255,.9);box-shadow:0 0 0 5px rgba(20,157,94,.04),0 6px 13px rgba(9,111,70,.1);background:linear-gradient(145deg,#effcf5,#d8f5e5)!important}.recent-icon svg{stroke-width:2.25}.recent-item.despesa .recent-icon,.recent-item.divida .recent-icon{box-shadow:0 0 0 5px rgba(222,76,63,.035),0 6px 13px rgba(171,52,44,.08);background:linear-gradient(145deg,#fff8f6,#ffe5df)!important}.recent-item.meta .recent-icon{background:linear-gradient(145deg,#f6faff,#e1efff)!important}
+.tip-plant{display:grid!important;place-items:center!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 8px 18px rgba(35,130,79,.09)}.tip-plant svg{width:48px;height:48px;overflow:visible}.plant-leaf,.plant-stem,.plant-pot{display:none}
+
+@media(min-width:1101px){
+  .stat-icon{width:42px!important;height:42px!important}.stat-icon svg{width:21px;height:21px}.recent-icon{width:40px;height:40px}.recent-icon svg{width:19px;height:19px}
+}
+
+@media(max-width:720px){
+  .stat-icon{width:34px!important;height:34px!important;box-shadow:0 0 0 4px rgba(29,170,103,.04),0 5px 11px rgba(15,112,73,.08)!important}.tip-plant svg{width:38px;height:38px}
+}

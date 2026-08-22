@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, CalendarDays, ChartNoAxesCombined, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, HeartHandshake, House, ReceiptText, Settings, ShieldCheck, TrendingUp, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HeartHandshake, House, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, WalletCards, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
@@ -25,8 +25,8 @@ const MAX_MONEY = 1_000_000_000_000;
 const menu = [
   { label: "Início", shortLabel: "Início", icon: House },
   { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
-  { label: "Contas", shortLabel: "Contas", icon: WalletCards },
-  { label: "Planejamento", shortLabel: "Planejar", icon: ChartNoAxesCombined },
+  { label: "Contas", shortLabel: "Contas", icon: Wallet },
+  { label: "Planejamento", shortLabel: "Planejar", icon: ChartPie },
   { label: "Casal", shortLabel: "Casal", icon: HeartHandshake },
   { label: "Configurações", shortLabel: "Ajustes", icon: Settings },
 ];
@@ -754,7 +754,14 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
           <h2>{hasData ? "Planeje hoje para ter mais tranquilidade amanhã" : "Comece seu planejamento financeiro"}</h2>
           <p>{hasData ? "Acompanhe metas e proteja sua reserva para tomar decisões com mais segurança." : "Cadastre seus primeiros dados e organize seus próximos objetivos."}</p>
         </div>
-        <span className="tip-plant" aria-hidden="true"><i className="plant-leaf leaf-left" /><i className="plant-leaf leaf-right" /><i className="plant-stem" /><i className="plant-pot" /></span>
+        <span className="tip-plant" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="presentation">
+            <defs><linearGradient id="leafGradient" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#80d49a" /><stop offset="1" stopColor="#23955d" /></linearGradient><linearGradient id="potGradient" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#c89572" /><stop offset="1" stopColor="#825642" /></linearGradient></defs>
+            <path d="M32 40V20M32 28c-8-10-17-8-21-10 2 11 9 17 21 14M32 25c7-11 17-11 22-12-2 11-9 18-22 16" fill="none" stroke="#277b50" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M31 31C19 32 12 26 11 18c10-1 18 2 21 11M33 28c3-9 11-14 21-15-1 9-8 16-21 17" fill="url(#leafGradient)" opacity=".96" />
+            <path d="M20 39h25l-4 18H24z" fill="url(#potGradient)" /><path d="M18 37h29v6H18z" rx="2" fill="#a66e51" /><path d="M26 47h13" stroke="#d8aa87" strokeWidth="2" strokeLinecap="round" opacity=".7" />
+          </svg>
+        </span>
         <button type="button" className="planning-cta" onClick={() => setActiveMenu("Planejamento")}>Ir para Planejamento <span aria-hidden="true">→</span></button>
       </section>
     </>
@@ -1033,6 +1040,7 @@ function MonthlyOverview({ transactions }) {
 function RecentTransactions({ transactions, setActiveMenu }) {
   const recent = transactions.slice(0, 5);
   const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
+  const categoryIcons = { renda: Banknote, alimentação: ShoppingCart, alimentacao: ShoppingCart, transporte: Fuel, assinaturas: Music2, lazer: Music2, restaurante: Utensils };
   return (
     <section className={`panel recent-panel ${recent.length <= 1 ? "is-sparse" : ""}`}>
       <div className="panel-head dashboard-panel-head">
@@ -1042,7 +1050,8 @@ function RecentTransactions({ transactions, setActiveMenu }) {
       {recent.length ? (
         <div className="recent-list">
           {recent.map((item) => {
-            const Icon = icons[item.type] || CircleDollarSign;
+            const categoryKey = String(item.category || "").trim().toLocaleLowerCase("pt-BR");
+            const Icon = categoryIcons[categoryKey] || icons[item.type] || CircleDollarSign;
             return (
               <article className={`recent-item ${item.type}`} key={item._id}>
                 <span className="recent-icon"><Icon size={18} aria-hidden="true" /></span>
