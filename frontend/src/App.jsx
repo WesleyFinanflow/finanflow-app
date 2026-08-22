@@ -993,8 +993,15 @@ function MonthlyOverview({ transactions }) {
   const max = Math.max(0, ...months.map((item) => item.value));
   const range = Math.max(max - min, 1);
   const compactMoney = (value) => new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-  const points = months.map((item, index) => `${32 + index * 51.2},${112 - ((item.value - min) / range) * 88}`).join(" ");
-  const areaPoints = `32,122 ${points} 288,122`;
+  const chartPoints = months.map((item, index) => ({ x: 32 + index * 51.2, y: 112 - ((item.value - min) / range) * 88 }));
+  const linePath = chartPoints.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`;
+    if (index === chartPoints.length - 1) return `${path} Q ${chartPoints[index - 1].x} ${chartPoints[index - 1].y} ${point.x} ${point.y}`;
+    const next = chartPoints[index + 1];
+    return `${path} Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`;
+  }, "");
+  const areaPath = `${linePath} L 288 122 L 32 122 Z`;
+  const currentValue = months.at(-1)?.value || 0;
 
   return (
     <section className="panel monthly-overview">
@@ -1004,18 +1011,19 @@ function MonthlyOverview({ transactions }) {
       </div>
       {hasMovement ? (
         <div className="balance-chart">
-          <svg viewBox="0 0 300 130" role="img" aria-label="Evolução financeira dos últimos seis meses">
+          <span className="chart-current">{money(currentValue)}</span>
+          <svg viewBox="0 0 300 145" role="img" aria-label="Evolução financeira dos últimos seis meses">
             <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#36b979" stopOpacity=".28" /><stop offset="1" stopColor="#36b979" stopOpacity="0" /></linearGradient></defs>
             {[24, 68, 112].map((y) => <line key={y} x1="28" y1={y} x2="290" y2={y} className="chart-grid-line" />)}
             <text x="2" y="28" className="chart-value-label">{compactMoney(max)}</text>
             <text x="2" y="72" className="chart-value-label">{compactMoney((max + min) / 2)}</text>
             <text x="2" y="116" className="chart-value-label">{compactMoney(min)}</text>
             <line x1="28" y1="122" x2="290" y2="122" className="chart-axis" />
-            <polygon points={areaPoints} fill="url(#chartFill)" />
-            <polyline points={points} className="chart-line" />
-            {months.map((item, index) => <circle key={item.key} cx={32 + index * 51.2} cy={112 - ((item.value - min) / range) * 88} r="3.7" className="chart-point" />)}
+            <path d={areaPath} fill="url(#chartFill)" />
+            <path d={linePath} className="chart-line" />
+            {chartPoints.map((point, index) => <circle key={months[index].key} cx={point.x} cy={point.y} r={index === chartPoints.length - 1 ? "4.6" : "3.4"} className={index === chartPoints.length - 1 ? "chart-point chart-point-current" : "chart-point"} />)}
+            {months.map((item, index) => <text key={item.key} x={32 + index * 51.2} y="139" textAnchor="middle" className="chart-month-label">{item.label}</text>)}
           </svg>
-          <div className="chart-labels">{months.map((item) => <span key={item.key}>{item.label}</span>)}</div>
         </div>
       ) : <Empty title="A evolução aparecerá aqui" text="Cadastre lançamentos para construir seu histórico financeiro real." />}
     </section>
@@ -1026,7 +1034,7 @@ function RecentTransactions({ transactions, setActiveMenu }) {
   const recent = transactions.slice(0, 5);
   const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
   return (
-    <section className="panel recent-panel">
+    <section className={`panel recent-panel ${recent.length <= 1 ? "is-sparse" : ""}`}>
       <div className="panel-head dashboard-panel-head">
         <div><span className="eyebrow">Movimentações</span><h2>Lançamentos recentes</h2></div>
         {recent.length > 0 && <button type="button" className="text-action" onClick={() => setActiveMenu("Lançamentos")}>Ver todos</button>}

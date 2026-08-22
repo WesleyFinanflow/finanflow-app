@@ -229,3 +229,16 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .finanflow-app{background:#f5faf7!important}.balance-details{padding:0!important}.recent-summary{margin-top:8px;padding:9px 10px}.chart-labels{padding-left:22px}
 }
+
+/* Real-data dashboard finishing pass — balance card intentionally untouched. */
+.chart-month-label{fill:#71847b;font-size:7px;font-weight:650;text-transform:capitalize}.chart-current{position:absolute;z-index:2;right:7px;top:3px;padding:5px 8px;border-radius:8px;color:#fff;background:#086747;box-shadow:0 5px 12px rgba(5,88,59,.16);font-size:8px;font-weight:800}.chart-point-current{stroke-width:3;filter:drop-shadow(0 2px 3px rgba(7,125,78,.22))}
+.quick-start{position:relative;overflow:hidden}.quick-start:after{content:"";position:absolute;right:-20px;bottom:-37px;width:126px;height:94px;pointer-events:none;opacity:.38;background:radial-gradient(ellipse at 20% 70%,#6fbd87 0 8%,transparent 9%),radial-gradient(ellipse at 42% 45%,#48a96d 0 10%,transparent 11%),radial-gradient(ellipse at 67% 70%,#87c99b 0 9%,transparent 10%),linear-gradient(105deg,transparent 47%,#55996d 48% 50%,transparent 51%);transform:rotate(-10deg)}.quick-start>*{position:relative;z-index:1}
+
+@media(min-width:1101px){
+  .dashboard-grid>.panel{min-height:232px!important}.balance-chart{min-height:151px!important}.balance-chart svg{height:151px!important}.recent-panel.is-sparse{min-height:232px!important}.recent-panel.is-sparse .recent-summary{margin-top:8px}
+  .stat-title>span:first-child{font-size:12px!important;font-weight:650}.stat-icon{width:38px!important;height:38px!important;border-radius:12px!important}.stat-icon svg{width:19px;height:19px}.stat-card strong{font-size:clamp(21px,1.75vw,26px)!important}.stat-card p{margin-top:4px!important}
+}
+
+@media(max-width:720px){
+  .chart-current{right:4px;top:0;font-size:7px}.chart-month-label{font-size:6px}.quick-start:after{display:none}
+}
