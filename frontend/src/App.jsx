@@ -727,7 +727,6 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
         <div className="balance-label"><span>Saldo livre seguro</span><ShieldCheck size={22} aria-hidden="true" /></div>
         <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
         <small>Protegido pela sua reserva financeira.</small>
-        <span className="balance-details">Ver detalhes <span className="details-arrow" aria-hidden="true">→</span></span>
       </div>
     </section>
   );
