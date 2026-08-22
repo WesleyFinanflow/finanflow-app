@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HeartHandshake, House, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HandCoins, HeartHandshake, House, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
@@ -1212,7 +1212,7 @@ function InviteAccept({ invite, loading, message, acceptInvite }) {
 }
 
 function StatCard({ title, value, text, tone }) {
-  const icons = { cyan: WalletCards, green: TrendingUp, yellow: ReceiptText, blue: ShieldCheck };
+  const icons = { cyan: Wallet, green: HandCoins, yellow: CalendarClock, blue: ShieldCheck };
   const Icon = icons[tone] || CircleDollarSign;
   return (
     <article className={`stat-card ${tone}`}>

@@ -256,3 +256,9 @@ input,select,textarea,.buy-grid input,.buy-grid select,.field-grid input,.field-
 @media(max-width:720px){
   .stat-icon{width:34px!important;height:34px!important;box-shadow:0 0 0 4px rgba(29,170,103,.04),0 5px 11px rgba(15,112,73,.08)!important}.tip-plant svg{width:38px;height:38px}
 }
+
+/* Financial-card symbols: clearer glyphs and layered premium badges. */
+.stat-icon{isolation:isolate;overflow:visible}.stat-icon:before{content:"";position:absolute;z-index:-1;inset:-5px;border:1px solid rgba(20,160,96,.09);border-radius:50%;background:rgba(232,248,239,.5)}.stat-icon:after{content:"";position:absolute;right:1px;bottom:1px;width:7px;height:7px;border:2px solid #fff;border-radius:50%;background:#29b975;box-shadow:0 2px 5px rgba(14,117,70,.18)}.stat-card.yellow .stat-icon:before{border-color:rgba(215,148,18,.1);background:rgba(255,246,222,.55)}.stat-card.yellow .stat-icon:after{background:#e0a21e}.stat-card.blue .stat-icon:before{border-color:rgba(48,112,224,.1);background:rgba(235,244,255,.6)}.stat-card.blue .stat-icon:after{background:#397deb}.stat-icon svg{filter:drop-shadow(0 2px 2px rgba(17,115,72,.1))}
+
+@media(min-width:1101px){.stat-icon{width:44px!important;height:44px!important}.stat-icon svg{width:22px;height:22px}}
+@media(max-width:720px){.stat-icon:before{inset:-3px}.stat-icon:after{width:6px;height:6px;border-width:1.5px}}
