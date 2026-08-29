@@ -403,8 +403,6 @@ export default function App() {
 
   async function resetSpaceData() {
     if (!activeSpaceId) return;
-    const confirmed = window.confirm("Tem certeza que deseja zerar os dados deste espaço? Esta ação apagará os lançamentos e zerará o saldo inicial deste espaço.");
-    if (!confirmed) return;
     setLoading(true);
     try {
       await api(`/api/spaces/${activeSpaceId}/reset`, { method: "DELETE" });
@@ -466,8 +464,6 @@ export default function App() {
   }
 
   async function deleteUserAccount() {
-    const confirmed = window.confirm("Tem certeza que deseja apagar sua conta? Esta ação remove seus dados individuais e tira você dos espaços compartilhados.");
-    if (!confirmed) return;
     setLoading(true);
     try {
       await api("/api/me", { method: "DELETE" });
@@ -907,6 +903,14 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goa
 }
 
 function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp }) {
+  const [confirmation, setConfirmation] = useState(null);
+
+  async function confirmDestructiveAction() {
+    const action = confirmation?.action;
+    setConfirmation(null);
+    if (action) await action();
+  }
+
   return (
     <section className="settings-stack">
       <section className="panel">
@@ -983,10 +987,40 @@ function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpac
         </div>
         <div className="security-actions">
           <button className="ghost-button" onClick={logout}>Sair da conta</button>
-          <button className="danger-button" disabled={loading} onClick={resetSpaceData}>Zerar dados financeiros</button>
-          <button className="danger-button" disabled={loading} onClick={deleteUserAccount}>Apagar conta</button>
+          <button className="danger-button" disabled={loading} onClick={() => setConfirmation({
+            eyebrow: "Recomeçar este espaço",
+            title: "Zerar dados financeiros?",
+            description: "Todos os lançamentos e saldos cadastrados neste espaço serão apagados.",
+            note: "Seu acesso, configurações e outros espaços continuarão preservados.",
+            confirmLabel: "Zerar dados",
+            action: resetSpaceData,
+          })}>Zerar dados financeiros</button>
+          <button className="danger-button" disabled={loading} onClick={() => setConfirmation({
+            eyebrow: "Exclusão definitiva",
+            title: "Apagar sua conta?",
+            description: "Seus dados individuais serão removidos e você sairá dos espaços compartilhados.",
+            note: "Esta ação não pode ser desfeita.",
+            confirmLabel: "Apagar minha conta",
+            action: deleteUserAccount,
+          })}>Apagar conta</button>
         </div>
       </section>
+      {confirmation && (
+        <div className="modal-backdrop confirmation-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) setConfirmation(null); }}>
+          <section className="modal-card confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
+            <button className="modal-close" type="button" disabled={loading} onClick={() => setConfirmation(null)} aria-label="Fechar confirmação" title="Fechar"><X size={20} aria-hidden="true" /></button>
+            <span className="confirmation-icon" aria-hidden="true"><ReceiptText size={25} /></span>
+            <span className="eyebrow">{confirmation.eyebrow}</span>
+            <h2 id="confirmation-title">{confirmation.title}</h2>
+            <p id="confirmation-description">{confirmation.description}</p>
+            <div className="confirmation-note"><ShieldCheck size={18} aria-hidden="true" /><span>{confirmation.note}</span></div>
+            <div className="confirmation-actions">
+              <button type="button" className="ghost-button" disabled={loading} onClick={() => setConfirmation(null)}>Cancelar</button>
+              <button type="button" className="confirmation-danger" disabled={loading} onClick={confirmDestructiveAction}>{loading ? "Aguarde..." : confirmation.confirmLabel}</button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }
