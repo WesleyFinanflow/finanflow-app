@@ -11,6 +11,8 @@ test("atalho de receita abre o tipo e a categoria corretos", () => {
     category: "Renda",
     status: "pendente",
     accountId: "",
+    recurrence: "none",
+    installmentCount: "1",
   });
 });
 

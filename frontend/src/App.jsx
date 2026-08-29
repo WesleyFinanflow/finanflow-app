@@ -20,6 +20,7 @@ function getApiUrl() {
 
 const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
+const currentMonthKey = today.slice(0, 7);
 const currentMonthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date());
 const MAX_MONEY = 1_000_000_000_000;
 const menu = [
@@ -105,6 +106,8 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [txForm, setTxForm] = useState(() => createTransactionForm());
+  const [transactionFormOpen, setTransactionFormOpen] = useState(false);
+  const [goalForm, setGoalForm] = useState({ description: "", amount: "" });
   const [editingTransactionId, setEditingTransactionId] = useState("");
   const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
   const [reserve, setReserve] = useState(300);
@@ -122,7 +125,7 @@ export default function App() {
   const coupleReady = Boolean(coupleSpace && Number(coupleSpace.memberCount || 0) > 1);
   const activeCoupleSpace = activeMode === "couple" && coupleReady ? coupleSpace : null;
 
-  const summary = useMemo(() => calculateSummary(accounts, transactions, reserve), [accounts, transactions, reserve]);
+  const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, currentMonthKey), [accounts, transactions, reserve]);
 
   const hasData = summary.balance || summary.income || summary.commitments || transactions.length > 0;
 
@@ -255,13 +258,14 @@ export default function App() {
     const amount = Number(txForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
-    const payload = { ...txForm, description: txForm.description.trim(), amount, accountId: txForm.accountId || null, responsibleName: firstName };
+    const payload = { ...txForm, description: txForm.description.trim(), category: txForm.category.trim() || "Outro", amount, installmentCount: Number(txForm.installmentCount || 1), accountId: txForm.accountId || null, responsibleName: firstName };
     const path = editingTransactionId ? `/api/spaces/${activeSpaceId}/transactions/${editingTransactionId}` : `/api/spaces/${activeSpaceId}/transactions`;
     setLoading(true);
     try {
       await api(path, { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
       setEditingTransactionId("");
       setTxForm(createTransactionForm());
+      setTransactionFormOpen(false);
       await loadSpaceData(activeSpaceId);
       setMessage(editingTransactionId ? "Lançamento atualizado." : "Lançamento salvo.");
     } catch (error) {
@@ -281,23 +285,39 @@ export default function App() {
       category: transaction.category || "Moradia",
       status: transaction.status || "pendente",
       accountId: transaction.accountId || "",
+      recurrence: transaction.recurrence || "none",
+      installmentCount: String(transaction.installmentCount || 1),
     });
+    setTransactionFormOpen(true);
     setActiveMenu("Lançamentos");
   }
 
-  function startTransaction(type) {
-    setEditingTransactionId("");
-    const form = createTransactionForm(type);
-    setTxForm(type === "meta" ? { ...form, status: "pago", category: "Reserva" } : form);
-    setActiveMenu("Lançamentos");
-  }
-
-  async function deleteTransaction(transactionId) {
-    if (!activeSpaceId) return setMessage("Selecione um espaço antes de excluir o lançamento.");
-    if (!window.confirm("Deseja excluir este lançamento?")) return;
+  async function saveGoal(event) {
+    event.preventDefault();
+    const description = goalForm.description.trim();
+    const amount = Number(goalForm.amount);
+    if (!description) return setMessage("Informe o nome da meta ou reserva.");
+    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
     setLoading(true);
     try {
-      await api(`/api/spaces/${activeSpaceId}/transactions/${transactionId}`, { method: "DELETE" });
+      await api(`/api/spaces/${activeSpaceId}/transactions`, { method: "POST", body: JSON.stringify({ type: "meta", description, amount, date: today, category: "Planejamento", status: "pago", recurrence: "none", installmentCount: 1, responsibleName: firstName }) });
+      setGoalForm({ description: "", amount: "" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Dinheiro separado para o planejamento.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteTransaction(transaction) {
+    if (!activeSpaceId) return setMessage("Selecione um espaço antes de excluir o lançamento.");
+    const grouped = transaction.seriesId && (transaction.recurrence === "monthly" || Number(transaction.installmentCount || 1) > 1);
+    if (!window.confirm(grouped ? "Deseja excluir toda esta série, incluindo os próximos meses?" : "Deseja excluir este lançamento?")) return;
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/transactions/${transaction._id}`, { method: "DELETE" });
       await loadSpaceData(activeSpaceId);
       setMessage("Lançamento excluído.");
     } catch (error) {
@@ -390,6 +410,8 @@ export default function App() {
       await api(`/api/spaces/${activeSpaceId}/reset`, { method: "DELETE" });
       setEditingTransactionId("");
       setTxForm(createTransactionForm());
+      setTransactionFormOpen(false);
+      setGoalForm({ description: "", amount: "" });
       await loadSpaceData(activeSpaceId);
       setMessage("Dados financeiros zerados.");
     } catch (error) {
@@ -424,6 +446,8 @@ export default function App() {
     setActiveMode("individual");
     setActiveMenu("Início");
     setTxForm(createTransactionForm());
+    setTransactionFormOpen(false);
+    setGoalForm({ description: "", amount: "" });
     setEditingTransactionId("");
     setBuyForm({ item: "", total: "", installments: "1" });
     setReserve(300);
@@ -532,9 +556,9 @@ export default function App() {
         </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} />}
-        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
+        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} startTransaction={startTransaction} />}
+        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
@@ -731,63 +755,69 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
   );
 }
 
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading }) {
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen }) {
   const resetForm = () => {
     setEditingTransactionId("");
     setTxForm(createTransactionForm());
+    setFormOpen(false);
   };
+  const monthTransactions = transactions.filter((item) => String(item.date || "").slice(0, 7) === currentMonthKey && item.type !== "meta");
+  const categories = Array.from(new Set(["Moradia", "Alimentação", "Transporte", "Renda", "Saúde", "Educação", "Lazer", "Assinaturas", "Outro", ...transactions.map((item) => item.category).filter(Boolean)]));
+  const isInstallment = !editingTransactionId && Number(txForm.installmentCount || 1) > 1;
 
   return (
-    <section className="grid-two top-align">
-      <form className="panel" onSubmit={addTransaction}>
+    <section className={`transactions-layout ${formOpen ? "with-form" : ""}`}>
+      <div className="transactions-toolbar">
+        <div><span className="eyebrow">Movimentações</span><h2>Extrato de {currentMonthLabel}</h2></div>
+        {!formOpen && <button type="button" onClick={() => { setTxForm(createTransactionForm()); setEditingTransactionId(""); setFormOpen(true); }}>Novo lançamento</button>}
+      </div>
+      {formOpen && <form className="panel transaction-form-panel" onSubmit={addTransaction}>
         <div className="panel-head">
           <div>
             <span className="eyebrow">{editingTransactionId ? "Editar lançamento" : "Novo lançamento"}</span>
-            <h2>{editingTransactionId ? "Salvar movimentação" : "Adicionar movimentação"}</h2>
+            <h2>{editingTransactionId ? "Salvar movimentação" : "Adicionar à conta principal"}</h2>
           </div>
-        </div>
-        <div className="type-grid">
-          {["receita", "despesa", "divida", "meta"].map((type) => (
-            <button type="button" key={type} className={txForm.type === type ? "selected" : ""} onClick={() => setTxForm({ ...txForm, type })}>
-              {type === "meta" ? "Meta" : type}
-            </button>
-          ))}
+          <button type="button" className="icon-close" aria-label="Fechar formulário" onClick={resetForm}><X size={18} /></button>
         </div>
         <div className="field-grid">
+          <label>Tipo<select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, category: e.target.value === "receita" ? "Renda" : txForm.category })}><option value="receita">Receita</option><option value="despesa">Despesa</option><option value="divida">Dívida</option></select></label>
           <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} /></label>
-          <label>Valor<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+          <label>{isInstallment ? "Valor total da compra" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
           <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
-          <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}><option>Moradia</option><option>Alimentação</option><option>Transporte</option><option>Renda</option><option>Dívida</option><option>Reserva</option></select></label>
+          <label>Categoria<input list="finanflow-categories" value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} placeholder="Digite ou escolha" maxLength={50} /><datalist id="finanflow-categories">{categories.map((category) => <option value={category} key={category} />)}</datalist></label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
+          {!editingTransactionId && <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez</option><option value="monthly">Conta fixa todo mês</option></select></label>}
+          {!editingTransactionId && txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "À vista" : `${count} parcelas`}</option>)}</select></label>}
+          {isInstallment && !editingTransactionId && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de aproximadamente {money(Number(txForm.amount || 0) / Number(txForm.installmentCount || 1))}</strong><small>As parcelas serão lançadas automaticamente nos próximos meses.</small></span></div>}
           <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{accounts[0]?.name || "Conta principal"}</strong><small>Este lançamento movimentará automaticamente esta conta quando for concluído.</small></span></div>
         </div>
         <div className="action-row">
           <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
           {editingTransactionId && <button type="button" className="ghost-button" onClick={resetForm}>Cancelar edição</button>}
         </div>
-      </form>
+      </form>}
 
-      <section className="panel">
+      <section className="panel transaction-statement">
         <div className="panel-head">
           <div>
             <span className="eyebrow">Extrato do mês</span>
-            <h2>Lançamentos</h2>
+            <h2>{monthTransactions.length} {monthTransactions.length === 1 ? "lançamento" : "lançamentos"}</h2>
           </div>
         </div>
         <div className="transaction-list">
-          {transactions.length ? transactions.map((item) => (
+          {monthTransactions.length ? monthTransactions.map((item) => (
             <article className={`transaction-row ${item.type}`} key={item._id}>
               <div className="transaction-main">
                 <strong>{item.description}</strong>
-                <span>{item.category} · {item.status}</span>
+                <span>{item.category} · {item.status}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
               </div>
-              <em>{money(item.amount)}</em>
+              <div className="transaction-value"><em>{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
               <div className="row-actions">
                 <button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button>
-                <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item._id)}>Excluir</button>
+                <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button>
               </div>
             </article>
-          )) : <Empty title="Nenhum lançamento neste mês" text="Cadastre receitas, despesas, dívidas ou metas para começar." />}
+          )) : <Empty title="Nenhum lançamento neste mês" text="Use Novo lançamento para cadastrar receitas, despesas ou dívidas." />}
         </div>
       </section>
     </section>
@@ -821,9 +851,9 @@ function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loa
         <div className="panel-head"><div><span className="eyebrow">Movimentação da conta</span><h2>Como o saldo foi formado</h2></div></div>
         <div className="account-flow-list">
           <div><span>Saldo inicial</span><strong>{money(summary.baseBalance)}</strong></div>
-          <div className="positive"><span>Receitas recebidas</span><strong>+ {money(summary.received)}</strong></div>
-          <div className="negative"><span>Despesas pagas</span><strong>− {money(summary.paidExpenses)}</strong></div>
-          <div className="negative"><span>Dívidas pagas</span><strong>− {money(summary.paidDebt)}</strong></div>
+          <div className="positive"><span>Receitas recebidas</span><strong>+ {money(summary.totalReceived)}</strong></div>
+          <div className="negative"><span>Despesas pagas</span><strong>− {money(summary.totalPaidExpenses)}</strong></div>
+          <div className="negative"><span>Dívidas pagas</span><strong>− {money(summary.totalPaidDebt)}</strong></div>
           <div className="reserved"><span>Separado para objetivos</span><strong>− {money(summary.savedGoals)}</strong></div>
           <div className="flow-total"><span>Saldo atual</span><strong>{money(summary.balance)}</strong></div>
         </div>
@@ -832,7 +862,7 @@ function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loa
   );
 }
 
-function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, startTransaction }) {
+function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goalForm, setGoalForm, saveGoal, loading }) {
   const goals = Array.from(transactions.reduce((map, item) => {
     if (item.type !== "meta" || item.status !== "pago") return map;
     const name = item.description?.trim() || "Objetivo";
@@ -843,9 +873,13 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, sta
     <>
       <section className="panel planning-wallet">
         <div className="panel-head">
-          <div><span className="eyebrow">Dinheiro separado</span><h2>Reservas e objetivos</h2><p>Valores separados deixam a conta principal, mas continuam sendo seus.</p></div>
-          <button type="button" onClick={() => startTransaction("meta")}>Separar dinheiro</button>
+          <div><span className="eyebrow">Dinheiro separado</span><h2>Metas, reservas e sonhos</h2><p>Valores separados deixam a conta principal, mas continuam sendo seus.</p></div>
         </div>
+        <form className="goal-form" onSubmit={saveGoal}>
+          <label>Nome da meta<input value={goalForm.description} onChange={(event) => setGoalForm({ ...goalForm, description: event.target.value })} placeholder="Ex: reserva, viagem, casa" maxLength={160} required /></label>
+          <label>Valor a separar<input type="number" value={goalForm.amount} onChange={(event) => setGoalForm({ ...goalForm, amount: event.target.value })} placeholder="0,00" min="0.01" max={MAX_MONEY} step="0.01" required /></label>
+          <button disabled={loading}>{loading ? "Separando..." : "Separar dinheiro"}</button>
+        </form>
         <div className="planning-total"><span>Total separado</span><strong>{money(summary.savedGoals)}</strong></div>
         {goals.length ? <div className="goal-wallet-grid">{goals.map((goal) => <article key={goal.name}><span className="goal-icon"><ShieldCheck size={19} aria-hidden="true" /></span><div><strong>{goal.name}</strong><small>Objetivo protegido</small></div><em>{money(goal.amount)}</em></article>)}</div> : <div className="planning-empty"><ShieldCheck size={26} aria-hidden="true" /><span><strong>Nenhum valor separado ainda</strong><small>Crie uma reserva, um sonho ou outro objetivo.</small></span></div>}
       </section>
@@ -1016,7 +1050,7 @@ function MonthlyOverview({ transactions }) {
 }
 
 function RecentTransactions({ transactions, setActiveMenu }) {
-  const recent = transactions.slice(0, 5);
+  const recent = transactions.filter((item) => item.date <= today).slice(0, 5);
   const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
   const categoryIcons = { renda: Banknote, alimentação: ShoppingCart, alimentacao: ShoppingCart, transporte: Fuel, assinaturas: Music2, lazer: Music2, restaurante: Utensils };
   return (

@@ -21,11 +21,14 @@ test("calcula o saldo livre sem descontar lançamentos já pagos duas vezes", ()
     balance: 2900,
     income: 1000,
     received: 700,
+    totalReceived: 700,
     expenses: 400,
     paidExpenses: 300,
+    totalPaidExpenses: 300,
     debt: 200,
     goals: 100,
     paidDebt: 0,
+    totalPaidDebt: 0,
     savedGoals: 0,
     balanceDelta: 400,
     commitments: 700,
@@ -50,6 +53,24 @@ test("movimenta automaticamente a conta principal com lançamentos pagos", () =>
   assert.equal(summary.savedGoals, 300);
   assert.equal(summary.expenses, 90);
   assert.equal(summary.commitments, 90);
+});
+
+test("mantém o saldo acumulado e limita compromissos ao mês atual", () => {
+  const summary = calculateSummary(
+    [{ balance: 0 }],
+    [
+      { type: "receita", status: "pago", amount: 1000, date: "2026-07-05" },
+      { type: "despesa", status: "pago", amount: 200, date: "2026-07-10" },
+      { type: "despesa", status: "pendente", amount: 90, date: "2026-08-10" },
+      { type: "despesa", status: "pendente", amount: 500, date: "2026-09-10" },
+    ],
+    0,
+    "2026-08"
+  );
+  assert.equal(summary.balance, 800);
+  assert.equal(summary.expenses, 90);
+  assert.equal(summary.commitments, 90);
+  assert.equal(summary.totalReceived, 1000);
 });
 
 test("mantém reservas independentes por espaço", () => {

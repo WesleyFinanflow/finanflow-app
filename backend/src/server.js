@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
+import { addMonthsToIsoDate, splitInstallmentAmounts } from "./recurrence.js";
 
 dotenv.config();
 
@@ -83,6 +84,11 @@ const transactionSchema = new mongoose.Schema(
     date: { type: String, required: true },
     status: { type: String, enum: ["pendente", "pago"], default: "pendente" },
     category: { type: String, default: "Outro", maxlength: 50 },
+    seriesId: { type: String, index: true },
+    recurrence: { type: String, enum: ["none", "monthly"], default: "none" },
+    installmentNumber: { type: Number, min: 1, max: 120 },
+    installmentCount: { type: Number, min: 1, max: 120 },
+    totalAmount: { type: Number, min: 0.01, max: 1000000000000 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     responsibleName: { type: String, default: "Individual", maxlength: 80 },
   },
@@ -204,6 +210,40 @@ async function ensurePrimaryAccount(spaceId, ownerName = "Individual") {
 async function normalizeAccountIdForSpace(accountId, spaceId, ownerName) {
   const primary = await ensurePrimaryAccount(spaceId, ownerName);
   return primary._id;
+}
+
+function transactionInput(body, accountId, user) {
+  return {
+    accountId,
+    type: oneOf(body?.type, ["receita", "despesa", "divida", "meta"], "Tipo"),
+    description: requiredText(body?.description, "Descrição", 160),
+    amount: moneyValue(body?.amount, { label: "Valor", min: 0.01 }),
+    date: isoDate(body?.date, "Data"),
+    status: oneOf(body?.status ?? "pendente", ["pendente", "pago"], "Status"),
+    category: optionalText(body?.category, "Outro", 50),
+    createdBy: user._id,
+    responsibleName: optionalText(body?.responsibleName, user.name, 80),
+  };
+}
+
+async function extendRecurringTransactions(spaceId) {
+  const recurring = await Transaction.find({ spaceId, recurrence: "monthly", seriesId: { $exists: true } }).sort({ date: 1 });
+  const groups = new Map();
+  recurring.forEach((item) => groups.set(item.seriesId, item));
+  const horizon = addMonthsToIsoDate(new Date().toISOString().slice(0, 10), 12);
+  for (const last of groups.values()) {
+    const additions = [];
+    let nextDate = addMonthsToIsoDate(last.date, 1);
+    while (nextDate <= horizon && additions.length < 24) {
+      additions.push({
+        spaceId: last.spaceId, accountId: last.accountId, type: last.type, description: last.description,
+        amount: last.amount, date: nextDate, status: "pendente", category: last.category,
+        createdBy: last.createdBy, responsibleName: last.responsibleName, seriesId: last.seriesId, recurrence: "monthly",
+      });
+      nextDate = addMonthsToIsoDate(nextDate, 1);
+    }
+    if (additions.length) await Transaction.insertMany(additions);
+  }
 }
 
 async function createIndividualSpaceForUser(user) {
@@ -494,6 +534,7 @@ app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async 
 
 app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  await extendRecurringTransactions(req.params.spaceId);
   res.json({ transactions: await Transaction.find({ spaceId: req.params.spaceId }).sort({ date: -1, createdAt: -1 }) });
 }));
 
@@ -501,19 +542,26 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
     const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId, req.user.name);
-    const transaction = await Transaction.create({
-      spaceId: req.params.spaceId,
-      accountId,
-      type: oneOf(req.body?.type, ["receita", "despesa", "divida", "meta"], "Tipo"),
-      description: requiredText(req.body?.description, "Descrição", 160),
-      amount: moneyValue(req.body?.amount, { min: 0.01 }),
-      date: isoDate(req.body?.date),
-      status: oneOf(req.body?.status || "pendente", ["pendente", "pago"], "Status"),
-      category: optionalText(req.body?.category, "Outro", 50),
-      createdBy: req.user._id,
-      responsibleName: optionalText(req.body?.responsibleName, req.user.name, 80),
-    });
-    res.status(201).json({ transaction });
+    const input = transactionInput(req.body, accountId, req.user);
+    const recurrence = req.body?.recurrence === "monthly" ? "monthly" : "none";
+    const installmentCount = Math.max(1, Math.min(120, Math.trunc(Number(req.body?.installmentCount || 1))));
+    if (recurrence === "monthly" && installmentCount > 1) return res.status(400).json({ message: "Escolha conta fixa mensal ou parcelamento, não os dois." });
+    const seriesId = recurrence === "monthly" || installmentCount > 1 ? crypto.randomUUID() : undefined;
+    const documents = [];
+    if (recurrence === "monthly") {
+      for (let index = 0; index < 24; index += 1) {
+        documents.push({ ...input, spaceId: req.params.spaceId, date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence });
+      }
+    } else if (installmentCount > 1) {
+      const installmentAmounts = splitInstallmentAmounts(input.amount, installmentCount);
+      for (let index = 0; index < installmentCount; index += 1) {
+        documents.push({ ...input, spaceId: req.params.spaceId, amount: installmentAmounts[index], date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence: "none", installmentNumber: index + 1, installmentCount, totalAmount: input.amount });
+      }
+    } else {
+      documents.push({ ...input, spaceId: req.params.spaceId, recurrence: "none", installmentNumber: 1, installmentCount: 1, totalAmount: input.amount });
+    }
+    const transactions = await Transaction.insertMany(documents);
+    res.status(201).json({ transaction: transactions[0], transactions });
   } catch (error) {
     const invalidInput = error.status === 400 || error.name === "ValidationError";
     res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message : "Erro ao criar lançamento." });
@@ -524,21 +572,16 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
     const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId, req.user.name);
-    const transaction = await Transaction.findOneAndUpdate(
-      { _id: req.params.transactionId, spaceId: req.params.spaceId },
-      {
-        accountId,
-        type: oneOf(req.body?.type, ["receita", "despesa", "divida", "meta"], "Tipo"),
-        description: requiredText(req.body?.description, "Descrição", 160),
-        amount: moneyValue(req.body?.amount, { min: 0.01 }),
-        date: isoDate(req.body?.date),
-        status: oneOf(req.body?.status || "pendente", ["pendente", "pago"], "Status"),
-        category: optionalText(req.body?.category, "Outro", 50),
-        responsibleName: optionalText(req.body?.responsibleName, req.user.name, 80),
-      },
-      { new: true, runValidators: true }
-    );
-    if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
+    const existing = await Transaction.findOne({ _id: req.params.transactionId, spaceId: req.params.spaceId });
+    if (!existing) return res.status(404).json({ message: "Lançamento não encontrado." });
+    const input = transactionInput(req.body, accountId, req.user);
+    let transaction;
+    if (existing.recurrence === "monthly" && existing.seriesId) {
+      await Transaction.updateMany({ spaceId: req.params.spaceId, seriesId: existing.seriesId, date: { $gte: existing.date } }, { $set: { accountId, type: input.type, description: input.description, amount: input.amount, category: input.category, responsibleName: input.responsibleName } }, { runValidators: true });
+      transaction = await Transaction.findByIdAndUpdate(existing._id, { ...input, recurrence: "monthly", seriesId: existing.seriesId }, { new: true, runValidators: true });
+    } else {
+      transaction = await Transaction.findByIdAndUpdate(existing._id, input, { new: true, runValidators: true });
+    }
     res.json({ transaction });
   } catch (error) {
     const invalidInput = error.status === 400 || error.name === "ValidationError";
@@ -548,8 +591,10 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
 
 app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  const transaction = await Transaction.findOneAndDelete({ _id: req.params.transactionId, spaceId: req.params.spaceId });
+  const transaction = await Transaction.findOne({ _id: req.params.transactionId, spaceId: req.params.spaceId });
   if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
+  if (transaction.seriesId) await Transaction.deleteMany({ spaceId: req.params.spaceId, seriesId: transaction.seriesId });
+  else await Transaction.deleteOne({ _id: transaction._id });
   res.json({ ok: true });
 }));
 

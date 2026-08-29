@@ -7,5 +7,7 @@ export function createTransactionForm(type = "despesa", date = new Date().toISOS
     category: type === "receita" ? "Renda" : "Moradia",
     status: "pendente",
     accountId: "",
+    recurrence: "none",
+    installmentCount: "1",
   };
 }
