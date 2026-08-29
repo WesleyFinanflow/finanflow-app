@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, Camera, ChartPie, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
+import { getCoupleMenuState } from "./space-menu.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
 
 function getApiUrl() {
@@ -117,12 +118,15 @@ export default function App() {
   const [passwordResetToken, setPasswordResetToken] = useState(() => getPasswordResetFromUrl());
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const spaceRequestId = useRef(0);
+  const profileMenuRef = useRef(null);
 
   const firstName = user?.name?.split(" ")?.[0] || "Wesley";
   const individualSpace = spaces.find((space) => space.type === "individual");
   const coupleSpace = spaces.find((space) => space.type === "couple");
   const coupleReady = Boolean(coupleSpace && Number(coupleSpace.memberCount || 0) > 1);
+  const coupleMenuState = getCoupleMenuState(coupleSpace);
   const activeCoupleSpace = activeMode === "couple" && coupleReady ? coupleSpace : null;
 
   const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, currentMonthKey), [accounts, transactions, reserve]);
@@ -180,6 +184,22 @@ export default function App() {
     const timer = window.setTimeout(() => setMessage(""), 8000);
     return () => window.clearTimeout(timer);
   }, [message]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) setProfileMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [profileMenuOpen]);
 
   useEffect(() => {
     if (activeMenu !== "Casal" || !coupleSpace || coupleReady) return undefined;
@@ -532,10 +552,28 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="sidebar-profile">
-          <Avatar name={user.name} />
-          <div><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></div>
-          <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
+        <div className={`sidebar-profile-area ${profileMenuOpen ? "is-open" : ""}`} ref={profileMenuRef}>
+          {profileMenuOpen && (
+            <section className="profile-space-menu" role="menu" aria-label="Alternar espaço financeiro">
+              <div className="profile-menu-head"><Avatar name={user.name} /><span><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><small>Espaço atual</small></span></div>
+              <span className="profile-menu-label">Meus espaços</span>
+              <button type="button" className={`profile-space-option ${activeMode === "individual" ? "active" : ""}`} role="menuitemradio" aria-checked={activeMode === "individual"} onClick={() => { setProfileMenuOpen(false); goToIndividual(); }}>
+                <UserRound size={19} aria-hidden="true" /><span><strong>Individual</strong><small>Dados somente seus</small></span>{activeMode === "individual" && <Check size={18} aria-hidden="true" />}
+              </button>
+              <button type="button" className={`profile-space-option ${activeMode === "couple" ? "active" : ""}`} role="menuitemradio" aria-checked={activeMode === "couple"} disabled={!coupleMenuState.enabled} onClick={() => { if (!coupleMenuState.enabled) return; setProfileMenuOpen(false); goToCouple(); }}>
+                <HeartHandshake size={19} aria-hidden="true" /><span><strong>Casal</strong><small>{coupleMenuState.subtitle}</small></span>{activeMode === "couple" ? <Check size={18} aria-hidden="true" /> : !coupleMenuState.enabled ? <LockKeyhole size={16} aria-hidden="true" /> : null}
+              </button>
+              {!coupleMenuState.enabled && coupleSpace && <button type="button" className="profile-menu-invite" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Casal"); }}>Ver convite</button>}
+              <div className="profile-menu-divider" />
+              <button type="button" className="profile-menu-action" role="menuitem" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Configurações"); }}><Settings size={18} aria-hidden="true" />Configurações</button>
+              <button type="button" className="profile-menu-action logout" role="menuitem" onClick={() => { setProfileMenuOpen(false); logout(); }}><LogOut size={18} aria-hidden="true" />Sair da conta</button>
+            </section>
+          )}
+          <button type="button" className="sidebar-profile profile-menu-trigger" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
+            <Avatar name={user.name} />
+            <span className="profile-trigger-copy"><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></span>
+            <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
+          </button>
         </div>
 
         <div className="sidebar-footer">
