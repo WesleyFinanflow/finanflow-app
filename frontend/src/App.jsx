@@ -809,9 +809,9 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
             <article className={`transaction-row ${item.type}`} key={item._id}>
               <div className="transaction-main">
                 <strong>{item.description}</strong>
-                <span>{item.category} · {item.status}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
+                <span>{item.category} · {item.status === "pago" ? item.type === "receita" ? "recebido" : "pago" : "pendente"}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
               </div>
-              <div className="transaction-value"><em>{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="transaction-value"><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
               <div className="row-actions">
                 <button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button>
                 <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button>
