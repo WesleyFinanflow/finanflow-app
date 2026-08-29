@@ -104,7 +104,6 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [accountForm, setAccountForm] = useState({ name: "", balance: "", ownerName: "" });
   const [txForm, setTxForm] = useState(() => createTransactionForm());
   const [editingTransactionId, setEditingTransactionId] = useState("");
   const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
@@ -230,26 +229,6 @@ export default function App() {
     }
   }
 
-  async function addAccount(event) {
-    event.preventDefault();
-    if (!activeSpaceId) return setMessage("Espaço financeiro ainda não carregado.");
-    if (!accountForm.name.trim()) return setMessage("Informe o nome da conta.");
-    if (accountForm.name.trim().length > 80) return setMessage("O nome da conta deve ter até 80 caracteres.");
-    const balance = Number(accountForm.balance || 0);
-    if (!Number.isFinite(balance) || Math.abs(balance) > MAX_MONEY) return setMessage("Informe um saldo válido.");
-    setLoading(true);
-    try {
-      await api(`/api/spaces/${activeSpaceId}/accounts`, { method: "POST", body: JSON.stringify({ name: accountForm.name.trim(), balance, ownerName: accountForm.ownerName || (activeCoupleSpace ? "Casal" : firstName) }) });
-      setAccountForm({ name: "", balance: "", ownerName: "" });
-      await loadSpaceData(activeSpaceId);
-      setMessage("Conta adicionada.");
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function updateAccount(account) {
     if (!activeSpaceId) return setMessage("Espaço financeiro ainda não carregado.");
     if (!account.name.trim()) return setMessage("Informe o nome da conta.");
@@ -260,22 +239,7 @@ export default function App() {
     try {
       await api(`/api/spaces/${activeSpaceId}/accounts/${account._id}`, { method: "PUT", body: JSON.stringify({ name: account.name.trim(), ownerName: account.ownerName || firstName, balance }) });
       await loadSpaceData(activeSpaceId);
-      setMessage("Conta atualizada.");
-    } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function deleteAccount(accountId) {
-    if (!activeSpaceId) return setMessage("Selecione um espaço antes de excluir a conta.");
-    if (!window.confirm("Deseja excluir esta conta? Os lançamentos ligados a ela ficarão sem conta.")) return;
-    setLoading(true);
-    try {
-      await api(`/api/spaces/${activeSpaceId}/accounts/${accountId}`, { method: "DELETE" });
-      await loadSpaceData(activeSpaceId);
-      setMessage("Conta excluída.");
+      setMessage("Saldo inicial atualizado.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -323,7 +287,8 @@ export default function App() {
 
   function startTransaction(type) {
     setEditingTransactionId("");
-    setTxForm(createTransactionForm(type));
+    const form = createTransactionForm(type);
+    setTxForm(type === "meta" ? { ...form, status: "pago", category: "Reserva" } : form);
     setActiveMenu("Lançamentos");
   }
 
@@ -418,7 +383,7 @@ export default function App() {
 
   async function resetSpaceData() {
     if (!activeSpaceId) return;
-    const confirmed = window.confirm("Tem certeza que deseja zerar os dados deste espaço? Esta ação apagará contas e lançamentos deste espaço.");
+    const confirmed = window.confirm("Tem certeza que deseja zerar os dados deste espaço? Esta ação apagará os lançamentos e zerará o saldo inicial deste espaço.");
     if (!confirmed) return;
     setLoading(true);
     try {
@@ -443,7 +408,7 @@ export default function App() {
       const data = await api(`/api/spaces/${activeSpaceId}/settings`, { method: "PATCH", body: JSON.stringify({ reserve: normalizedReserve }) });
       setSpaces((current) => current.map((space) => space._id === data.space._id ? data.space : space));
       setReserve(Number(data.space.reserve ?? 0));
-      setMessage("Reserva protegida salva neste espaço.");
+      setMessage("Limite protegido salvo neste espaço.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -458,7 +423,6 @@ export default function App() {
     setTransactions([]);
     setActiveMode("individual");
     setActiveMenu("Início");
-    setAccountForm({ name: "", balance: "", ownerName: "" });
     setTxForm(createTransactionForm());
     setEditingTransactionId("");
     setBuyForm({ item: "", total: "", installments: "1" });
@@ -569,8 +533,8 @@ export default function App() {
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} />}
-        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} accountForm={accountForm} setAccountForm={setAccountForm} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} firstName={firstName} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} />}
+        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
+        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} startTransaction={startTransaction} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
@@ -739,7 +703,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
         <StatCard title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas cadastradas no espaço atual" tone="cyan" />
         <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
         <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
-        <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Reserva protegida: ${money(reserve)}`} tone="blue" />
+        <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Limite protegido: ${money(reserve)}`} tone="blue" />
       </section>
 
       <section className="dashboard-grid">
@@ -794,8 +758,8 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <label>Valor<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
           <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
           <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })}><option>Moradia</option><option>Alimentação</option><option>Transporte</option><option>Renda</option><option>Dívida</option><option>Reserva</option></select></label>
-          <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">Pago</option></select></label>
-          <label>Conta<select value={txForm.accountId || ""} onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}><option value="">Sem conta</option>{accounts.map((account) => <option key={account._id} value={account._id}>{account.name}</option>)}</select></label>
+          <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
+          <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{accounts[0]?.name || "Conta principal"}</strong><small>Este lançamento movimentará automaticamente esta conta quando for concluído.</small></span></div>
         </div>
         <div className="action-row">
           <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
@@ -830,69 +794,82 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   );
 }
 
-function Contas({ accounts, setAccounts, accountForm, setAccountForm, addAccount, updateAccount, deleteAccount, firstName, activeMode, loading }) {
-  const updateLocalAccount = (accountId, field, value) => setAccounts(accounts.map((item) => item._id === accountId ? { ...item, [field]: value } : item));
-  const ownerOptions = activeMode === "couple" ? [firstName, "Casal"] : [firstName, "Individual"];
+function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loading }) {
+  const account = accounts[0];
+  const updateInitialBalance = (value) => setAccounts(accounts.map((item, index) => index === 0 ? { ...item, balance: value } : item));
 
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <div>
-          <span className="eyebrow">Contas</span>
-          <h2>Saldos manuais</h2>
+    <section className="primary-account-layout">
+      <section className="panel primary-account-card">
+        <div className="panel-head">
+          <div><span className="eyebrow">Conta automática</span><h2>{activeMode === "couple" ? "Conta conjunta" : "Conta principal"}</h2></div>
+          <span className="automatic-badge"><span />Atualização automática</span>
         </div>
-      </div>
-      <div className="account-list">
-        {accounts.map((item) => (
-          <article className="account-row account-row-editable" key={item._id}>
-            <div className="account-edit-grid">
-              <label>Conta<input value={item.name} onChange={(e) => updateLocalAccount(item._id, "name", e.target.value)} required maxLength={80} /></label>
-              <label>Dono<select value={item.ownerName || ownerOptions[0]} onChange={(e) => updateLocalAccount(item._id, "ownerName", e.target.value)}>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-              <label>Saldo atual<input type="number" value={item.balance} onChange={(e) => updateLocalAccount(item._id, "balance", e.target.value)} min={-MAX_MONEY} max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
-            </div>
-            <em>{money(item.balance)}</em>
-            <div className="row-actions">
-              <button type="button" disabled={loading} onClick={() => updateAccount(item)}>{loading ? "Salvando..." : "Salvar"}</button>
-              <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteAccount(item._id)}>Excluir</button>
-            </div>
-          </article>
-        ))}
-        <form className="account-row account-row-editable" onSubmit={addAccount}>
-          <div className="account-edit-grid">
-            <label>Conta<input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Nome da conta" required maxLength={80} /></label>
-            <label>Dono<select value={accountForm.ownerName || ownerOptions[0]} onChange={(e) => setAccountForm({ ...accountForm, ownerName: e.target.value })}>{ownerOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Saldo atual<input type="number" value={accountForm.balance} onChange={(e) => setAccountForm({ ...accountForm, balance: e.target.value })} placeholder="Saldo" min={-MAX_MONEY} max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+        <div className="primary-balance">
+          <span>Saldo disponível agora</span>
+          <strong>{money(summary.balance)}</strong>
+          <small>Receitas recebidas entram; despesas, dívidas e valores separados saem automaticamente.</small>
+        </div>
+        {account && (
+          <div className="initial-balance-form">
+            <label>Saldo inicial<input type="number" value={account.balance} onChange={(event) => updateInitialBalance(event.target.value)} min={-MAX_MONEY} max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+            <button type="button" disabled={loading} onClick={() => updateAccount(account)}>{loading ? "Salvando..." : "Salvar saldo inicial"}</button>
           </div>
-          <em>{money(accountForm.balance)}</em>
-          <div className="row-actions"><button disabled={loading}>{loading ? "Adicionando..." : "Adicionar"}</button></div>
-        </form>
-      </div>
+        )}
+      </section>
+      <section className="panel account-flow-panel">
+        <div className="panel-head"><div><span className="eyebrow">Movimentação da conta</span><h2>Como o saldo foi formado</h2></div></div>
+        <div className="account-flow-list">
+          <div><span>Saldo inicial</span><strong>{money(summary.baseBalance)}</strong></div>
+          <div className="positive"><span>Receitas recebidas</span><strong>+ {money(summary.received)}</strong></div>
+          <div className="negative"><span>Despesas pagas</span><strong>− {money(summary.paidExpenses)}</strong></div>
+          <div className="negative"><span>Dívidas pagas</span><strong>− {money(summary.paidDebt)}</strong></div>
+          <div className="reserved"><span>Separado para objetivos</span><strong>− {money(summary.savedGoals)}</strong></div>
+          <div className="flow-total"><span>Saldo atual</span><strong>{money(summary.balance)}</strong></div>
+        </div>
+      </section>
     </section>
   );
 }
 
-function Planejamento({ summary, hasData, buyForm, setBuyForm }) {
+function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, startTransaction }) {
+  const goals = Array.from(transactions.reduce((map, item) => {
+    if (item.type !== "meta" || item.status !== "pago") return map;
+    const name = item.description?.trim() || "Objetivo";
+    map.set(name, (map.get(name) || 0) + Number(item.amount || 0));
+    return map;
+  }, new Map())).map(([name, amount]) => ({ name, amount }));
   return (
-    <section className="grid-two">
-      <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
-      <section className="panel">
+    <>
+      <section className="panel planning-wallet">
         <div className="panel-head">
-          <div>
-            <span className="eyebrow">Resumo do mês</span>
-            <h2>Para entender o que pode fazer</h2>
-          </div>
+          <div><span className="eyebrow">Dinheiro separado</span><h2>Reservas e objetivos</h2><p>Valores separados deixam a conta principal, mas continuam sendo seus.</p></div>
+          <button type="button" onClick={() => startTransaction("meta")}>Separar dinheiro</button>
         </div>
-        <div className="summary-list">
-          <DataRow label="Receitas pendentes" value={moneyOrWaiting(summary.income, hasData)} />
-          <DataRow label="Receitas já pagas" value={moneyOrWaiting(summary.received, hasData)} />
-          <DataRow label="Despesas pendentes" value={moneyOrWaiting(summary.expenses, hasData)} />
-          <DataRow label="Despesas já pagas" value={moneyOrWaiting(summary.paidExpenses, hasData)} />
-          <DataRow label="Dívidas pendentes" value={moneyOrWaiting(summary.debt, hasData)} />
-          <DataRow label="Metas / reserva pendentes" value={moneyOrWaiting(summary.goals, hasData)} />
-          <DataRow className="highlight-row" label="Saldo livre seguro" value={moneyOrWaiting(summary.free, hasData)} />
-        </div>
+        <div className="planning-total"><span>Total separado</span><strong>{money(summary.savedGoals)}</strong></div>
+        {goals.length ? <div className="goal-wallet-grid">{goals.map((goal) => <article key={goal.name}><span className="goal-icon"><ShieldCheck size={19} aria-hidden="true" /></span><div><strong>{goal.name}</strong><small>Objetivo protegido</small></div><em>{money(goal.amount)}</em></article>)}</div> : <div className="planning-empty"><ShieldCheck size={26} aria-hidden="true" /><span><strong>Nenhum valor separado ainda</strong><small>Crie uma reserva, um sonho ou outro objetivo.</small></span></div>}
       </section>
-    </section>
+      <section className="grid-two">
+        <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Resumo do mês</span>
+              <h2>Para entender o que pode fazer</h2>
+            </div>
+          </div>
+          <div className="summary-list">
+            <DataRow label="Receitas pendentes" value={moneyOrWaiting(summary.income, hasData)} />
+            <DataRow label="Receitas já recebidas" value={moneyOrWaiting(summary.received, hasData)} />
+            <DataRow label="Despesas pendentes" value={moneyOrWaiting(summary.expenses, hasData)} />
+            <DataRow label="Despesas já pagas" value={moneyOrWaiting(summary.paidExpenses, hasData)} />
+            <DataRow label="Dívidas pendentes" value={moneyOrWaiting(summary.debt, hasData)} />
+            <DataRow label="Objetivos pendentes" value={moneyOrWaiting(summary.goals, hasData)} />
+            <DataRow className="highlight-row" label="Saldo livre seguro" value={moneyOrWaiting(summary.free, hasData)} />
+          </div>
+        </section>
+      </section>
+    </>
   );
 }
 
@@ -920,12 +897,13 @@ function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpac
         <div className="panel-head">
           <div>
             <span className="eyebrow">Proteção</span>
-            <h2>Reserva mínima protegida</h2>
+            <h2>Limite mínimo protegido</h2>
           </div>
         </div>
         <div className="setting-control">
-          <label>Valor reservado<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
-          <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar reserva"}</button>
+          <p className="muted">Este valor é um limite de segurança. Para separar dinheiro de verdade, use Planejamento.</p>
+          <label>Valor mínimo que deve ficar livre<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
+          <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar proteção"}</button>
         </div>
       </section>
 
@@ -989,6 +967,7 @@ function MonthlyOverview({ transactions }) {
   });
   const byMonth = new Map(months.map((item) => [item.key, item]));
   transactions.forEach((item) => {
+    if (item.status !== "pago") return;
     const month = byMonth.get(String(item.date || "").slice(0, 7));
     if (!month) return;
     const amount = Number(item.amount || 0);
@@ -1054,7 +1033,7 @@ function RecentTransactions({ transactions, setActiveMenu }) {
             return (
               <article className={`recent-item ${item.type}`} key={item._id}>
                 <span className="recent-icon"><Icon size={18} aria-hidden="true" /></span>
-                <span className="recent-copy"><strong>{item.description}</strong><small>{item.category} · {item.status} · {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${item.date}T12:00:00`)).replace(".", "")}</small></span>
+                <span className="recent-copy"><strong>{item.description}</strong><small>{item.category} · {item.status === "pago" ? item.type === "receita" ? "recebido" : item.type === "meta" ? "separado" : "pago" : "pendente"} · {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${item.date}T12:00:00`)).replace(".", "")}</small></span>
                 <strong className="recent-value">{item.type === "receita" ? "+" : "−"}{money(item.amount)}</strong>
               </article>
             );

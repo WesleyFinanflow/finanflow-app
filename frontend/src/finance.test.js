@@ -17,16 +17,39 @@ test("calcula o saldo livre sem descontar lançamentos já pagos duas vezes", ()
   );
 
   assert.deepEqual(summary, {
-    balance: 2500,
+    baseBalance: 2500,
+    balance: 2900,
     income: 1000,
     received: 700,
     expenses: 400,
     paidExpenses: 300,
     debt: 200,
     goals: 100,
+    paidDebt: 0,
+    savedGoals: 0,
+    balanceDelta: 400,
     commitments: 700,
-    free: 2500,
+    free: 2900,
   });
+});
+
+test("movimenta automaticamente a conta principal com lançamentos pagos", () => {
+  const summary = calculateSummary(
+    [{ balance: 100 }],
+    [
+      { type: "receita", status: "pago", amount: 1825.06 },
+      { type: "receita", status: "pago", amount: 600 },
+      { type: "despesa", status: "pago", amount: 25 },
+      { type: "divida", status: "pago", amount: 250 },
+      { type: "meta", status: "pago", amount: 300 },
+      { type: "despesa", status: "pendente", amount: 90 },
+    ],
+    0
+  );
+  assert.equal(summary.balance, 1950.06);
+  assert.equal(summary.savedGoals, 300);
+  assert.equal(summary.expenses, 90);
+  assert.equal(summary.commitments, 90);
 });
 
 test("mantém reservas independentes por espaço", () => {

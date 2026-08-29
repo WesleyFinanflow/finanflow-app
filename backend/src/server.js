@@ -175,22 +175,41 @@ async function createInviteForSpace(spaceId, userId) {
   return Invite.create({ spaceId, code, createdBy: userId, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) });
 }
 
-async function normalizeAccountIdForSpace(accountId, spaceId) {
-  if (!accountId) return null;
-  const account = await Account.findOne({ _id: accountId, spaceId });
-  if (!account) {
-    const error = new Error("Conta inválida para este espaço.");
-    error.status = 400;
+async function ensurePrimaryAccount(spaceId, ownerName = "Individual") {
+  const space = await Space.findById(spaceId);
+  if (!space) {
+    const error = new Error("Espaço não encontrado.");
+    error.status = 404;
     throw error;
   }
-  return account._id;
+  const accounts = await Account.find({ spaceId }).sort({ createdAt: 1 });
+  const preferredName = space.type === "couple" ? "Conta conjunta" : "Conta principal";
+  let primary = accounts.find((account) => account.name === preferredName) || accounts[0];
+  if (!primary) {
+    primary = await Account.create({ spaceId, name: preferredName, ownerName: space.type === "couple" ? "Casal" : ownerName, balance: 0 });
+  }
+  const duplicateIds = accounts.filter((account) => String(account._id) !== String(primary._id)).map((account) => account._id);
+  if (duplicateIds.length) {
+    const consolidatedBalance = accounts.reduce((total, account) => total + Number(account.balance || 0), 0);
+    primary = await Account.findByIdAndUpdate(primary._id, { name: preferredName, balance: consolidatedBalance }, { new: true, runValidators: true });
+    await Transaction.updateMany({ spaceId, $or: [{ accountId: { $in: duplicateIds } }, { accountId: null }] }, { $set: { accountId: primary._id } });
+    await Account.deleteMany({ _id: { $in: duplicateIds }, spaceId });
+  } else {
+    if (primary.name !== preferredName) primary = await Account.findByIdAndUpdate(primary._id, { name: preferredName }, { new: true, runValidators: true });
+    await Transaction.updateMany({ spaceId, accountId: null }, { $set: { accountId: primary._id } });
+  }
+  return primary;
+}
+
+async function normalizeAccountIdForSpace(accountId, spaceId, ownerName) {
+  const primary = await ensurePrimaryAccount(spaceId, ownerName);
+  return primary._id;
 }
 
 async function createIndividualSpaceForUser(user) {
   const space = await Space.create({ name: `Individual de ${user.name}`, type: "individual", ownerId: user._id });
   await Member.create({ spaceId: space._id, userId: user._id, role: "owner" });
   await Account.create({ spaceId: space._id, name: "Conta principal", ownerName: user.name, balance: 0 });
-  await Account.create({ spaceId: space._id, name: "Dinheiro", ownerName: user.name, balance: 0 });
   return space;
 }
 
@@ -439,26 +458,24 @@ app.post("/api/invites/:code/accept", auth, async (req, res) => {
 
 app.get("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  res.json({ accounts: await Account.find({ spaceId: req.params.spaceId }).sort({ createdAt: 1 }) });
+  res.json({ accounts: [await ensurePrimaryAccount(req.params.spaceId, req.user.name)] });
 }));
 
 app.post("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  const account = await Account.create({
-    spaceId: req.params.spaceId,
-    name: requiredText(req.body?.name, "Conta", 80),
-    ownerName: optionalText(req.body?.ownerName, req.user.name, 80),
-    balance: moneyValue(req.body?.balance ?? 0, { label: "Saldo" }),
-  });
-  res.status(201).json({ account });
+  const account = await ensurePrimaryAccount(req.params.spaceId, req.user.name);
+  res.status(409).json({ message: "Este espaço já possui uma conta principal automática.", account });
 }));
 
 app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const primary = await ensurePrimaryAccount(req.params.spaceId, req.user.name);
+  if (String(primary._id) !== String(req.params.accountId)) return res.status(404).json({ message: "Conta principal não encontrada." });
+  const space = await Space.findById(req.params.spaceId);
   const account = await Account.findOneAndUpdate(
-    { _id: req.params.accountId, spaceId: req.params.spaceId },
+    { _id: primary._id, spaceId: req.params.spaceId },
     {
-      name: requiredText(req.body?.name, "Conta", 80),
+      name: space?.type === "couple" ? "Conta conjunta" : "Conta principal",
       ownerName: optionalText(req.body?.ownerName, req.user.name, 80),
       balance: moneyValue(req.body?.balance ?? 0, { label: "Saldo" }),
     },
@@ -470,10 +487,9 @@ app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (re
 
 app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-  const account = await Account.findOneAndDelete({ _id: req.params.accountId, spaceId: req.params.spaceId });
-  if (!account) return res.status(404).json({ message: "Conta não encontrada." });
-  await Transaction.updateMany({ spaceId: req.params.spaceId, accountId: req.params.accountId }, { $set: { accountId: null } });
-  res.json({ ok: true });
+  const account = await ensurePrimaryAccount(req.params.spaceId, req.user.name);
+  if (String(account._id) !== String(req.params.accountId)) return res.status(404).json({ message: "Conta não encontrada." });
+  res.status(409).json({ message: "A conta principal automática não pode ser excluída." });
 }));
 
 app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res) => {
@@ -484,7 +500,7 @@ app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res)
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId);
+    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId, req.user.name);
     const transaction = await Transaction.create({
       spaceId: req.params.spaceId,
       accountId,
@@ -507,7 +523,7 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
 app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
-    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId);
+    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId, req.user.name);
     const transaction = await Transaction.findOneAndUpdate(
       { _id: req.params.transactionId, spaceId: req.params.spaceId },
       {
@@ -546,7 +562,6 @@ app.delete("/api/spaces/:spaceId/reset", auth, asyncHandler(async (req, res) => 
     await Account.create({ spaceId: req.params.spaceId, name: "Conta conjunta", ownerName: "Casal", balance: 0 });
   } else {
     await Account.create({ spaceId: req.params.spaceId, name: "Conta principal", ownerName: req.user.name, balance: 0 });
-    await Account.create({ spaceId: req.params.spaceId, name: "Dinheiro", ownerName: req.user.name, balance: 0 });
   }
   res.json({ ok: true });
 }));

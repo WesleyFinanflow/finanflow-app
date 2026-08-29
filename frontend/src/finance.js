@@ -1,11 +1,13 @@
 export function calculateSummary(accounts = [], transactions = [], reserve = 0) {
-  const balance = accounts.reduce((total, account) => total + Number(account.balance || 0), 0);
+  const baseBalance = accounts.reduce((total, account) => total + Number(account.balance || 0), 0);
   const totals = transactions.reduce(
     (result, transaction) => {
       const amount = Number(transaction.amount || 0);
       if (transaction.status === "pago") {
-        if (transaction.type === "receita") result.received += amount;
-        if (transaction.type === "despesa") result.paidExpenses += amount;
+        if (transaction.type === "receita") { result.received += amount; result.balanceDelta += amount; }
+        if (transaction.type === "despesa") { result.paidExpenses += amount; result.balanceDelta -= amount; }
+        if (transaction.type === "divida") { result.paidDebt += amount; result.balanceDelta -= amount; }
+        if (transaction.type === "meta") { result.savedGoals += amount; result.balanceDelta -= amount; }
         return result;
       }
       if (transaction.type === "receita") result.income += amount;
@@ -14,10 +16,12 @@ export function calculateSummary(accounts = [], transactions = [], reserve = 0) 
       if (transaction.type === "meta") result.goals += amount;
       return result;
     },
-    { income: 0, received: 0, expenses: 0, paidExpenses: 0, debt: 0, goals: 0 }
+    { income: 0, received: 0, expenses: 0, paidExpenses: 0, debt: 0, goals: 0, paidDebt: 0, savedGoals: 0, balanceDelta: 0 }
   );
   const commitments = totals.expenses + totals.debt + totals.goals;
+  const balance = baseBalance + totals.balanceDelta;
   return {
+    baseBalance,
     balance,
     ...totals,
     commitments,
