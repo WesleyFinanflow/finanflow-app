@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, CalendarClock, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HandCoins, HeartHandshake, House, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, Camera, ChartPie, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
@@ -549,12 +549,12 @@ export default function App() {
         <div className="dashboard-toolbar" aria-label="Informações do painel">
           <span className="month-chip"><CalendarDays size={19} aria-hidden="true" /><span>{currentMonthLabel}</span></span>
         </div>
-        <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
+        <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} goToCouple={goToCouple} goToIndividual={goToIndividual} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
@@ -690,7 +690,7 @@ function PasswordInput({ id, label, value, onChange, visible, toggle, autoComple
   );
 }
 
-function Hero({ firstName, coupleSpace, summary, hasData }) {
+function Hero({ firstName, coupleSpace, summary, hasData, activeMenu }) {
   const isCouple = Boolean(coupleSpace);
   return (
     <section className="hero">
@@ -700,7 +700,9 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
         <span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span>
         <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}!`}</h1>
         <p>
-          {isCouple
+          {activeMenu === "Configurações"
+            ? <><span>Gerencie suas configurações e mantenha tudo</span><span>sob controle com segurança e tranquilidade.</span></>
+            : isCouple
             ? <><span>Você está no espaço do casal.</span><span>Organize as finanças compartilhadas com tranquilidade.</span></>
             : <><span>Você está no modo individual.</span><span>Gerencie suas finanças com foco e tranquilidade.</span></>}
         </p>
@@ -902,8 +904,16 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goa
   );
 }
 
-function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpace, coupleReady, setActiveMenu, goToCouple, goToIndividual, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp }) {
+function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
   const [confirmation, setConfirmation] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(() => localStorage.getItem("finanflow_profile_photo") || "");
+  const [pendingPhoto, setPendingPhoto] = useState("");
+  const [profileMessage, setProfileMessage] = useState("");
+  const [preferences, setPreferences] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("finanflow_preferences")) || { theme: "Claro", currency: "Real (R$)", dateFormat: "DD/MM/AAAA", notifications: true }; }
+    catch { return { theme: "Claro", currency: "Real (R$)", dateFormat: "DD/MM/AAAA", notifications: true }; }
+  });
+  const photoInputRef = useRef(null);
 
   async function confirmDestructiveAction() {
     const action = confirmation?.action;
@@ -911,117 +921,125 @@ function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpac
     if (action) await action();
   }
 
+  function selectPhoto(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 2_000_000) return setProfileMessage("Escolha uma imagem de até 2 MB.");
+    const reader = new FileReader();
+    reader.onload = () => { setPendingPhoto(String(reader.result)); setProfileMessage(""); };
+    reader.readAsDataURL(file);
+  }
+
+  function saveProfile() {
+    const nextPhoto = pendingPhoto || photoPreview;
+    if (nextPhoto) localStorage.setItem("finanflow_profile_photo", nextPhoto);
+    else localStorage.removeItem("finanflow_profile_photo");
+    setPhotoPreview(nextPhoto);
+    setPendingPhoto("");
+    setProfileMessage("Perfil salvo neste dispositivo.");
+  }
+
+  function savePreferences(next) {
+    setPreferences(next);
+    localStorage.setItem("finanflow_preferences", JSON.stringify(next));
+  }
+
+  function exportData() {
+    const payload = { exportedAt: new Date().toISOString(), space: activeMode, accounts, transactions, protectedAmount: reserve };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `finanflow-${today}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const visiblePhoto = pendingPhoto || photoPreview;
   return (
-    <section className="settings-stack">
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <span className="eyebrow">Configurações</span>
-            <h2>Dados individuais</h2>
+    <section className="settings-premium-grid">
+      <section className="settings-card settings-profile">
+        <SettingsTitle number="1" icon={UserRound} title="Perfil" />
+        <div className="settings-profile-layout">
+          <div className="profile-photo-actions">
+            <span className="settings-avatar">{visiblePhoto ? <img src={visiblePhoto} alt="Foto de perfil" /> : <Avatar name={firstName} size="large" />}</span>
+            <input ref={photoInputRef} className="visually-hidden" type="file" accept="image/*" onChange={selectPhoto} />
+            <button type="button" className="settings-outline" onClick={() => photoInputRef.current?.click()}><Camera size={16} />{visiblePhoto ? "Trocar foto" : "Adicionar foto"}</button>
+            {visiblePhoto && <button type="button" className="settings-remove" onClick={() => { setPendingPhoto(""); setPhotoPreview(""); setProfileMessage("Clique em Salvar perfil para confirmar."); }}><Trash2 size={16} />Remover foto</button>}
           </div>
-        </div>
-        <div className="profile-settings">
-          <Avatar name={firstName} size="large" />
-          <div className="field-grid">
+          <div className="profile-fields">
             <label>Seu nome<input value={firstName} readOnly /></label>
             <label>E-mail<input value={email || ""} readOnly /></label>
-            <label>Espaço ativo<input value={activeMode === "couple" ? "Casal" : "Individual"} readOnly /></label>
+            <p>Use uma foto sua para personalizar a conta. Nome e e-mail permanecem vinculados ao seu acesso.</p>
+            <button type="button" onClick={saveProfile}>Salvar perfil</button>
+            {profileMessage && <small className="settings-inline-message">{profileMessage}</small>}
           </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <span className="eyebrow">Proteção</span>
-            <h2>Limite mínimo protegido</h2>
-          </div>
-        </div>
-        <div className="setting-control">
-          <p className="muted">Este valor é um limite de segurança. Para separar dinheiro de verdade, use Planejamento.</p>
-          <label>Valor mínimo que deve ficar livre<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
-          <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar proteção"}</button>
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-head">
-          <div>
-            <span className="eyebrow">Modo casal</span>
-            <h2>{coupleReady ? "Espaço do casal ativo" : coupleSpace ? "Convite do casal pendente" : "Modo casal ainda não criado"}</h2>
-          </div>
-        </div>
-        <div className="mode-inline">
-          <div>
-            <strong>{coupleSpace ? coupleSpace.name : "Crie um convite para iniciar o modo casal"}</strong>
-            <span>{coupleReady ? "Os dados individuais e compartilhados continuam separados por espaço." : "O modo casal só libera lançamentos compartilhados depois que a outra pessoa aceitar."}</span>
-          </div>
-          <button onClick={coupleReady ? goToCouple : () => setActiveMenu("Casal")}>{coupleReady ? "Entrar no casal" : coupleSpace ? "Ver convite" : "Criar convite"}</button>
-          {activeMode === "couple" && <button className="ghost-button" onClick={goToIndividual}>Ir para individual</button>}
         </div>
       </section>
 
       <PasswordSettings logout={logout} />
 
-      {(installPrompt || isInstalled) && (
-        <section className="panel install-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Aplicativo</span>
-              <h2>{isInstalled ? "FinanFlow instalado" : "Instalar FinanFlow"}</h2>
-            </div>
-          </div>
-          <button type="button" disabled={isInstalled} onClick={installApp}>
-            <Download size={18} aria-hidden="true" />
-            {isInstalled ? "Aplicativo instalado" : "Instalar aplicativo"}
-          </button>
-        </section>
-      )}
-
-      <section className="panel danger-zone">
-        <div className="panel-head">
-          <div>
-            <span className="eyebrow">Segurança e conta</span>
-            <h2>Ações da conta</h2>
-          </div>
-        </div>
-        <div className="security-actions">
-          <button className="ghost-button" onClick={logout}>Sair da conta</button>
-          <button className="danger-button" disabled={loading} onClick={() => setConfirmation({
-            eyebrow: "Recomeçar este espaço",
-            title: "Zerar dados financeiros?",
-            description: "Todos os lançamentos e saldos cadastrados neste espaço serão apagados.",
-            note: "Seu acesso, configurações e outros espaços continuarão preservados.",
-            confirmLabel: "Zerar dados",
-            action: resetSpaceData,
-          })}>Zerar dados financeiros</button>
-          <button className="danger-button" disabled={loading} onClick={() => setConfirmation({
-            eyebrow: "Exclusão definitiva",
-            title: "Apagar sua conta?",
-            description: "Seus dados individuais serão removidos e você sairá dos espaços compartilhados.",
-            note: "Esta ação não pode ser desfeita.",
-            confirmLabel: "Apagar minha conta",
-            action: deleteUserAccount,
-          })}>Apagar conta</button>
+      <section className="settings-card settings-preferences">
+        <SettingsTitle number="3" icon={SlidersHorizontal} title="Preferências do aplicativo" />
+        <div className="preference-list">
+          <label><span>Tema</span><select value={preferences.theme} onChange={(e) => savePreferences({ ...preferences, theme: e.target.value })}><option>Claro</option></select></label>
+          <label><span>Moeda</span><select value={preferences.currency} onChange={(e) => savePreferences({ ...preferences, currency: e.target.value })}><option>Real (R$)</option></select></label>
+          <label><span>Formato de data</span><select value={preferences.dateFormat} onChange={(e) => savePreferences({ ...preferences, dateFormat: e.target.value })}><option>DD/MM/AAAA</option></select></label>
+          <label className="preference-toggle"><span><Bell size={17} />Notificações<small>Receber notificações importantes</small></span><input type="checkbox" checked={preferences.notifications} onChange={(e) => savePreferences({ ...preferences, notifications: e.target.checked })} /><i /></label>
         </div>
       </section>
-      {confirmation && (
-        <div className="modal-backdrop confirmation-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) setConfirmation(null); }}>
-          <section className="modal-card confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
-            <button className="modal-close" type="button" disabled={loading} onClick={() => setConfirmation(null)} aria-label="Fechar confirmação" title="Fechar"><X size={20} aria-hidden="true" /></button>
-            <span className="confirmation-icon" aria-hidden="true"><ReceiptText size={25} /></span>
-            <span className="eyebrow">{confirmation.eyebrow}</span>
-            <h2 id="confirmation-title">{confirmation.title}</h2>
-            <p id="confirmation-description">{confirmation.description}</p>
-            <div className="confirmation-note"><ShieldCheck size={18} aria-hidden="true" /><span>{confirmation.note}</span></div>
-            <div className="confirmation-actions">
-              <button type="button" className="ghost-button" disabled={loading} onClick={() => setConfirmation(null)}>Cancelar</button>
-              <button type="button" className="confirmation-danger" disabled={loading} onClick={confirmDestructiveAction}>{loading ? "Aguarde..." : confirmation.confirmLabel}</button>
-            </div>
-          </section>
+
+      <section className="settings-card settings-protection">
+        <SettingsTitle number="4" icon={ShieldCheck} title="Proteção financeira" />
+        <h3>Limite mínimo protegido</h3>
+        <p>Defina um valor mínimo que deve ficar livre para garantir sua segurança financeira.</p>
+        <label>Valor mínimo que deve ficar livre<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
+        <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar proteção"}</button>
+      </section>
+
+      <section className="settings-card settings-couple">
+        <SettingsTitle number="5" icon={HeartHandshake} title="Modo casal" />
+        <div className="couple-settings-box">
+          <span className="couple-settings-icon"><HeartHandshake size={25} /></span>
+          <div><h3>{coupleReady ? "Espaço do casal ativo" : coupleSpace ? "Convite do casal pendente" : "Modo casal ainda não criado"}</h3><p>{coupleReady ? "O espaço compartilhado está disponível para as duas pessoas." : "O modo casal só libera lançamentos compartilhados depois que a outra pessoa aceitar."}</p></div>
+          <div className="couple-settings-actions"><button type="button" onClick={() => setActiveMenu("Casal")}>{coupleReady ? "Entrar no casal" : coupleSpace ? "Ver convite" : "Criar convite"}</button>{coupleSpace && !coupleReady && <button type="button" className="settings-outline" onClick={() => setActiveMenu("Casal")}>Gerar novo link</button>}</div>
+          <small><LockKeyhole size={14} />Seus dados continuam privados até a aceitação do convite.</small>
         </div>
-      )}
+      </section>
+
+      <section className="settings-card settings-app-card">
+        <SettingsTitle number="6" icon={Download} title="Aplicativo" />
+        <div className="settings-app-content"><div><h3>{isInstalled ? "FinanFlow instalado" : "Instalar FinanFlow"}</h3><p>Tenha o FinanFlow sempre à mão e gerencie suas finanças de qualquer lugar.</p><button type="button" disabled={isInstalled || !installPrompt} onClick={installApp}><Download size={17} />{isInstalled ? "Aplicativo instalado" : "Instalar aplicativo"}</button></div><span className="phone-illustration" aria-hidden="true"><Smartphone size={70} /><i>≈</i></span></div>
+      </section>
+
+      <section className="settings-card settings-data-card">
+        <SettingsTitle number="7" icon={Database} title="Dados e conta" danger />
+        <div className="data-action-grid">
+          <button type="button" className="data-action" onClick={exportData}><FileDown size={24} /><span><strong>Exportar dados</strong><small>Baixe seus dados financeiros.</small></span></button>
+          <button type="button" className="data-action" onClick={logout}><LogOut size={24} /><span><strong>Sair da conta</strong><small>Encerre sua sessão neste dispositivo.</small></span></button>
+          <button type="button" className="data-action danger" disabled={loading} onClick={() => setConfirmation({ eyebrow: "Recomeçar este espaço", title: "Zerar dados financeiros?", description: "Todos os lançamentos e saldos cadastrados neste espaço serão apagados.", note: "Seu acesso, configurações e outros espaços continuarão preservados.", confirmLabel: "Zerar dados", action: resetSpaceData })}><Database size={24} /><span><strong>Zerar dados financeiros</strong><small>Remove lançamentos e saldos.</small></span></button>
+          <button type="button" className="data-action danger" disabled={loading} onClick={() => setConfirmation({ eyebrow: "Exclusão definitiva", title: "Apagar sua conta?", description: "Seus dados individuais serão removidos e você sairá dos espaços compartilhados.", note: "Esta ação não pode ser desfeita.", confirmLabel: "Apagar minha conta", action: deleteUserAccount })}><Trash2 size={24} /><span><strong>Apagar conta</strong><small>Ação irreversível.</small></span></button>
+        </div>
+      </section>
+
+      {confirmation && <ConfirmationModal confirmation={confirmation} loading={loading} close={() => setConfirmation(null)} confirm={confirmDestructiveAction} />}
     </section>
+  );
+}
+
+function SettingsTitle({ number, icon: Icon, title, danger = false }) {
+  return <div className={`settings-title ${danger ? "danger" : ""}`}><span><Icon size={20} /></span><h2>{number}. {title}</h2></div>;
+}
+
+function ConfirmationModal({ confirmation, loading, close, confirm }) {
+  return (
+    <div className="modal-backdrop confirmation-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !loading) close(); }}>
+      <section className="modal-card confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
+        <button className="modal-close" type="button" disabled={loading} onClick={close} aria-label="Fechar confirmação" title="Fechar"><X size={20} aria-hidden="true" /></button>
+        <span className="confirmation-icon" aria-hidden="true"><ReceiptText size={25} /></span><span className="eyebrow">{confirmation.eyebrow}</span><h2 id="confirmation-title">{confirmation.title}</h2><p id="confirmation-description">{confirmation.description}</p>
+        <div className="confirmation-note"><ShieldCheck size={18} aria-hidden="true" /><span>{confirmation.note}</span></div>
+        <div className="confirmation-actions"><button type="button" className="ghost-button" disabled={loading} onClick={close}>Cancelar</button><button type="button" className="confirmation-danger" disabled={loading} onClick={confirm}>{loading ? "Aguarde..." : confirmation.confirmLabel}</button></div>
+      </section>
+    </div>
   );
 }
 
@@ -1135,20 +1153,16 @@ function PasswordSettings({ logout }) {
   }
 
   return (
-    <section className="panel password-settings">
-      <div className="panel-head">
-        <div>
-          <span className="eyebrow">Acesso</span>
-          <h2>Alterar senha</h2>
-        </div>
-      </div>
+    <section className="settings-card settings-security password-settings">
+      <SettingsTitle number="2" icon={LockKeyhole} title="Segurança" />
       <form className="password-settings-form" onSubmit={submit}>
         <PasswordInput id="current-password" label="Senha atual" value={form.currentPassword} onChange={(value) => setForm({ ...form, currentPassword: value })} visible={visible} toggle={() => setVisible((current) => !current)} autoComplete="current-password" />
-        <label>Nova senha<input type={visible ? "text" : "password"} value={form.newPassword} onChange={(event) => setForm({ ...form, newPassword: event.target.value })} required minLength={6} maxLength={128} autoComplete="new-password" /></label>
-        <label>Confirmar nova senha<input type={visible ? "text" : "password"} value={form.confirmation} onChange={(event) => setForm({ ...form, confirmation: event.target.value })} required minLength={6} maxLength={128} autoComplete="new-password" /></label>
+        <PasswordInput id="new-password-settings" label="Nova senha" value={form.newPassword} onChange={(value) => setForm({ ...form, newPassword: value })} visible={visible} toggle={() => setVisible((current) => !current)} autoComplete="new-password" />
+        <PasswordInput id="confirm-password-settings" label="Confirmar nova senha" value={form.confirmation} onChange={(value) => setForm({ ...form, confirmation: value })} visible={visible} toggle={() => setVisible((current) => !current)} autoComplete="new-password" />
         <button disabled={loading}>{loading ? "Alterando..." : "Alterar senha"}</button>
       </form>
       {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
+      <div className="active-sessions"><span className="session-icon"><MonitorSmartphone size={23} /></span><div><strong>Sessões ativas</strong><small>Você está conectado em 1 dispositivo.</small></div><button type="button" className="settings-outline" onClick={logout}><LogOut size={17} />Sair de todos os dispositivos</button></div>
     </section>
   );
 }
