@@ -693,7 +693,7 @@ function PasswordInput({ id, label, value, onChange, visible, toggle, autoComple
 function Hero({ firstName, coupleSpace, summary, hasData, activeMenu }) {
   const isCouple = Boolean(coupleSpace);
   return (
-    <section className="hero">
+    <section className={`hero ${activeMenu === "Configurações" ? "settings-hero" : ""}`}>
       <div className="hero-copy">
         <Avatar name={firstName} size="large" />
         <div>
