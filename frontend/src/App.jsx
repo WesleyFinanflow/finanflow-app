@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HandCoins, HeartHandshake, House, Info, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, CalendarClock, CalendarDays, ChartPie, ChevronDown, CircleDollarSign, Download, Eye, EyeOff, Fuel, HandCoins, HeartHandshake, House, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, TrendingUp, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
@@ -551,7 +551,6 @@ export default function App() {
 
       <section className="main-content">
         <div className="dashboard-toolbar" aria-label="Informações do painel">
-          <span className="notification-mark"><Bell size={21} aria-hidden="true" /><i /></span>
           <span className="month-chip"><CalendarDays size={19} aria-hidden="true" /><span>{currentMonthLabel}</span></span>
         </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} />
@@ -703,7 +702,7 @@ function Hero({ firstName, coupleSpace, summary, hasData }) {
         <Avatar name={firstName} size="large" />
         <div>
         <span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span>
-        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}!`} <span className="hello-mark">👋</span></h1>
+        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}!`}</h1>
         <p>
           {isCouple
             ? <><span>Você está no espaço do casal.</span><span>Organize as finanças compartilhadas com tranquilidade.</span></>
@@ -1231,7 +1230,7 @@ function StatCard({ title, value, text, tone }) {
     <article className={`stat-card ${tone}`}>
       <span className="stat-icon"><Icon size={20} aria-hidden="true" /></span>
       <div className="stat-card-copy">
-        <span className="stat-card-label">{title}<Info size={12} aria-hidden="true" /></span>
+        <span className="stat-card-label">{title}</span>
         <strong>{value}</strong>
         <p>{text}</p>
       </div>
