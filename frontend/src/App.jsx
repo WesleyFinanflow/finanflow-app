@@ -578,8 +578,9 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          <button className="mode-button" onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
-            {activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"}
+          <button className="mode-button" aria-label={activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"} title={activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"} onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
+            <HeartHandshake size={18} aria-hidden="true" />
+            <span>{activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"}</span>
           </button>
         </div>
         </div>
