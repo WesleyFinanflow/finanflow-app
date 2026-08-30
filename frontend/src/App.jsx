@@ -552,6 +552,7 @@ export default function App() {
           ))}
         </nav>
 
+        <div className="sidebar-user-zone">
         <div className={`sidebar-profile-area ${profileMenuOpen ? "is-open" : ""}`} ref={profileMenuRef}>
           {profileMenuOpen && (
             <section className="profile-space-menu" role="menu" aria-label="Alternar espaço financeiro">
@@ -580,6 +581,7 @@ export default function App() {
           <button className="mode-button" onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
             {activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"}
           </button>
+        </div>
         </div>
       </aside>
 
