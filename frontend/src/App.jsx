@@ -1157,7 +1157,7 @@ function MonthlyOverview({ transactions, selectedMonthKey }) {
     <section className="panel monthly-overview">
       <div className="panel-head dashboard-panel-head">
         <div><span className="eyebrow">{periodLabels[period]}</span><h2>Evolução financeira</h2></div>
-        <label className="chart-period-select"><span className="sr-only">Período do gráfico</span><select value={period} onChange={(event) => setPeriod(event.target.value)} aria-label="Período do gráfico"><option value="1">Mês atual</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">1 ano</option></select><ChevronDown size={14} aria-hidden="true" /></label>
+        <label className="chart-period-select"><span>{period === "1" ? "Mês atual" : period === "12" ? "1 ano" : `${period} meses`}</span><ChevronDown size={14} aria-hidden="true" /><select value={period} onChange={(event) => setPeriod(event.target.value)} aria-label="Período do gráfico"><option value="1">Mês atual</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">1 ano</option></select></label>
       </div>
       {hasMovement ? (
         <div className="balance-chart">
