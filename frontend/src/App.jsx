@@ -67,9 +67,9 @@ function monthLabel(monthKey, style = "long") {
 }
 
 function monthOptions() {
-  return Array.from({ length: 85 }, (_, index) => {
-    const date = monthDate(currentMonthKey);
-    date.setMonth(date.getMonth() + 24 - index);
+  const currentYear = monthDate(currentMonthKey).getFullYear();
+  return Array.from({ length: 60 }, (_, index) => {
+    const date = new Date(currentYear, index, 1, 12);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
     return { key, label: monthLabel(key) };
   });
