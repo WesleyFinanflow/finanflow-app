@@ -597,7 +597,7 @@ export default function App() {
 
         <nav className="sidebar-nav">
           {menu.map(({ label, shortLabel, icon: Icon }) => (
-            <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label} title={label}>
+            <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label}>
               <Icon size={18} strokeWidth={2} aria-hidden="true" />
               <span className="nav-label-full">{label}</span>
               <span className="nav-label-short">{shortLabel}</span>
@@ -631,7 +631,7 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          <button className="mode-button" aria-label={activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"} title={activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"} onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
+          <button className="mode-button" aria-label={activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"} onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
             <HeartHandshake size={18} aria-hidden="true" />
             <span>{activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"}</span>
           </button>
