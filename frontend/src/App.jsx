@@ -75,6 +75,37 @@ function monthOptions() {
   });
 }
 
+function DashboardSelect({ value, onChange, options, label, icon: Icon, compact = false }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (event) => { if (!rootRef.current?.contains(event.target)) setOpen(false); };
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className={`dashboard-select ${compact ? "compact" : ""} ${open ? "is-open" : ""}`} ref={rootRef}>
+      <button type="button" className="dashboard-select-trigger" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        {Icon && <Icon size={compact ? 15 : 18} aria-hidden="true" />}
+        <span>{selected?.label}</span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && <div className="dashboard-select-menu" role="listbox" aria-label={label}>
+        {options.map((option) => <button type="button" role="option" aria-selected={option.value === value} className={option.value === value ? "selected" : ""} key={option.value} onClick={() => { onChange(option.value); setOpen(false); }}><span>{option.label}</span>{option.value === value && <Check size={15} aria-hidden="true" />}</button>)}
+      </div>}
+    </div>
+  );
+}
+
 function readStoredUser() {
   try {
     return JSON.parse(localStorage.getItem("finanflow_user") || "null");
@@ -610,7 +641,7 @@ export default function App() {
 
       <section className="main-content">
         <div className="dashboard-toolbar" aria-label="Informações do painel">
-          <label className="month-chip" title="Escolher mês exibido"><CalendarDays size={18} aria-hidden="true" /><span>{monthLabel(selectedMonthKey)}</span><ChevronDown size={15} aria-hidden="true" /><select aria-label="Mês exibido" value={selectedMonthKey} onChange={(event) => setSelectedMonthKey(event.target.value)}>{monthOptions().map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}</select></label>
+          <DashboardSelect label="Mês exibido" icon={CalendarDays} value={selectedMonthKey} onChange={setSelectedMonthKey} options={monthOptions().map((item) => ({ value: item.key, label: item.label }))} />
         </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} />}
@@ -1157,7 +1188,7 @@ function MonthlyOverview({ transactions, selectedMonthKey }) {
     <section className="panel monthly-overview">
       <div className="panel-head dashboard-panel-head">
         <div><span className="eyebrow">{periodLabels[period]}</span><h2>Evolução financeira</h2></div>
-        <label className="chart-period-select"><span>{period === "1" ? "Mês atual" : period === "12" ? "1 ano" : `${period} meses`}</span><ChevronDown size={14} aria-hidden="true" /><select value={period} onChange={(event) => setPeriod(event.target.value)} aria-label="Período do gráfico"><option value="1">Mês atual</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">1 ano</option></select></label>
+        <DashboardSelect compact label="Período do gráfico" value={period} onChange={setPeriod} options={[{ value: "1", label: "Mês atual" }, { value: "3", label: "3 meses" }, { value: "6", label: "6 meses" }, { value: "12", label: "1 ano" }]} />
       </div>
       {hasMovement ? (
         <div className="balance-chart">
