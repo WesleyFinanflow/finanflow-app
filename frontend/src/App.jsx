@@ -610,7 +610,7 @@ export default function App() {
 
       <section className="main-content">
         <div className="dashboard-toolbar" aria-label="Informações do painel">
-          <label className="month-chip" title="Escolher mês exibido"><CalendarDays size={19} aria-hidden="true" /><select aria-label="Mês exibido" value={selectedMonthKey} onChange={(event) => setSelectedMonthKey(event.target.value)}>{monthOptions().map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}</select><ChevronDown size={15} aria-hidden="true" /></label>
+          <label className="month-chip" title="Escolher mês exibido"><CalendarDays size={18} aria-hidden="true" /><span>{monthLabel(selectedMonthKey)}</span><ChevronDown size={15} aria-hidden="true" /><select aria-label="Mês exibido" value={selectedMonthKey} onChange={(event) => setSelectedMonthKey(event.target.value)}>{monthOptions().map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}</select></label>
         </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} />}
