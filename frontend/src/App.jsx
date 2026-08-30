@@ -4,6 +4,10 @@ import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
+import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
+import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
+import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
+import safeShieldIcon from "./assets/financial-icons/safe-shield.webp";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -1313,11 +1317,10 @@ function InviteAccept({ invite, loading, message, acceptInvite }) {
 }
 
 function StatCard({ title, value, text, tone }) {
-  const icons = { cyan: Wallet, green: ArrowDownLeft, yellow: ArrowUpRight, blue: ShieldCheck };
-  const Icon = icons[tone] || CircleDollarSign;
+  const icons = { cyan: balanceWalletIcon, green: incomeWalletIcon, yellow: commitmentsCalendarIcon, blue: safeShieldIcon };
   return (
     <article className={`stat-card ${tone}`}>
-      <span className="stat-icon"><Icon aria-hidden="true" /></span>
+      <span className="stat-icon"><img src={icons[tone] || balanceWalletIcon} alt="" aria-hidden="true" /></span>
       <div className="stat-card-copy">
         <span className="stat-card-label">{title}</span>
         <strong>{value}</strong>
