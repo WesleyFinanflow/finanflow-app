@@ -26,7 +26,6 @@ function getApiUrl() {
 const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
 const currentMonthKey = today.slice(0, 7);
-const currentMonthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date());
 const MAX_MONEY = 1_000_000_000_000;
 const menu = [
   { label: "Início", shortLabel: "Início", icon: House },
@@ -56,6 +55,24 @@ function money(value) {
 
 function moneyOrWaiting(value, hasData) {
   return hasData ? money(value) : "Aguardando dados";
+}
+
+function monthDate(monthKey) {
+  const [year, month] = String(monthKey || currentMonthKey).split("-").map(Number);
+  return new Date(year, Math.max(0, (month || 1) - 1), 1, 12);
+}
+
+function monthLabel(monthKey, style = "long") {
+  return new Intl.DateTimeFormat("pt-BR", { month: style, year: "numeric" }).format(monthDate(monthKey)).replace(".", "");
+}
+
+function monthOptions() {
+  return Array.from({ length: 85 }, (_, index) => {
+    const date = monthDate(currentMonthKey);
+    date.setMonth(date.getMonth() + 24 - index);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return { key, label: monthLabel(key) };
+  });
 }
 
 function readStoredUser() {
@@ -123,6 +140,7 @@ export default function App() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const spaceRequestId = useRef(0);
   const profileMenuRef = useRef(null);
 
@@ -133,7 +151,7 @@ export default function App() {
   const coupleMenuState = getCoupleMenuState(coupleSpace);
   const activeCoupleSpace = activeMode === "couple" && coupleReady ? coupleSpace : null;
 
-  const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, currentMonthKey), [accounts, transactions, reserve]);
+  const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, selectedMonthKey), [accounts, transactions, reserve, selectedMonthKey]);
 
   const hasData = summary.balance || summary.income || summary.commitments || transactions.length > 0;
 
@@ -592,11 +610,11 @@ export default function App() {
 
       <section className="main-content">
         <div className="dashboard-toolbar" aria-label="Informações do painel">
-          <span className="month-chip"><CalendarDays size={19} aria-hidden="true" /><span>{currentMonthLabel}</span></span>
+          <label className="month-chip" title="Escolher mês exibido"><CalendarDays size={19} aria-hidden="true" /><select aria-label="Mês exibido" value={selectedMonthKey} onChange={(event) => setSelectedMonthKey(event.target.value)}>{monthOptions().map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}</select><ChevronDown size={15} aria-hidden="true" /></label>
         </div>
         <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
-        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} />}
-        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} />}
+        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} />}
+        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
@@ -762,7 +780,7 @@ function Hero({ firstName, coupleSpace, summary, hasData, activeMenu }) {
   );
 }
 
-function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
+function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, selectedMonthKey }) {
   return (
     <>
       <section className="stats-grid">
@@ -773,8 +791,8 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
       </section>
 
       <section className="dashboard-grid">
-        <MonthlyOverview transactions={transactions} />
-        <RecentTransactions transactions={transactions} setActiveMenu={setActiveMenu} />
+        <MonthlyOverview transactions={transactions} selectedMonthKey={selectedMonthKey} />
+        <RecentTransactions transactions={transactions} setActiveMenu={setActiveMenu} selectedMonthKey={selectedMonthKey} />
       </section>
 
       <section className="quick-start panel">
@@ -797,20 +815,20 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions }) {
   );
 }
 
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen }) {
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey }) {
   const resetForm = () => {
     setEditingTransactionId("");
     setTxForm(createTransactionForm());
     setFormOpen(false);
   };
-  const monthTransactions = transactions.filter((item) => String(item.date || "").slice(0, 7) === currentMonthKey && item.type !== "meta");
+  const monthTransactions = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.type !== "meta");
   const categories = Array.from(new Set(["Moradia", "Alimentação", "Transporte", "Renda", "Saúde", "Educação", "Lazer", "Assinaturas", "Outro", ...transactions.map((item) => item.category).filter(Boolean)]));
   const isInstallment = !editingTransactionId && Number(txForm.installmentCount || 1) > 1;
 
   return (
     <section className={`transactions-layout ${formOpen ? "with-form" : ""}`}>
       <div className="transactions-toolbar">
-        <div><span className="eyebrow">Movimentações</span><h2>Extrato de {currentMonthLabel}</h2></div>
+        <div><span className="eyebrow">Movimentações</span><h2>Extrato de {monthLabel(selectedMonthKey)}</h2></div>
         {!formOpen && <button type="button" onClick={() => { setTxForm(createTransactionForm()); setEditingTransactionId(""); setFormOpen(true); }}>Novo lançamento</button>}
       </div>
       {formOpen && <form className="panel transaction-form-panel" onSubmit={addTransaction}>
@@ -1088,27 +1106,43 @@ function ConfirmationModal({ confirmation, loading, close, confirm }) {
   );
 }
 
-function MonthlyOverview({ transactions }) {
-  const months = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date();
-    date.setDate(1);
-    date.setMonth(date.getMonth() - (5 - index));
-    return { key: date.toISOString().slice(0, 7), label: new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", ""), value: 0 };
-  });
-  const byMonth = new Map(months.map((item) => [item.key, item]));
-  transactions.forEach((item) => {
-    if (item.status !== "pago") return;
-    const month = byMonth.get(String(item.date || "").slice(0, 7));
-    if (!month) return;
-    const amount = Number(item.amount || 0);
-    month.value += item.type === "receita" ? amount : -amount;
-  });
-  const hasMovement = months.some((item) => item.value !== 0);
-  const min = Math.min(0, ...months.map((item) => item.value));
-  const max = Math.max(0, ...months.map((item) => item.value));
+function MonthlyOverview({ transactions, selectedMonthKey }) {
+  const [period, setPeriod] = useState("6");
+  const periodCount = Number(period);
+  const selectedDate = monthDate(selectedMonthKey);
+  const points = periodCount === 1
+    ? Array.from({ length: 6 }, (_, index) => {
+        const lastDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate();
+        const day = Math.round(1 + (lastDay - 1) * (index / 5));
+        return { key: `${selectedMonthKey}-${String(day).padStart(2, "0")}`, label: String(day).padStart(2, "0"), value: 0, day };
+      })
+    : Array.from({ length: periodCount }, (_, index) => {
+        const date = monthDate(selectedMonthKey);
+        date.setMonth(date.getMonth() - (periodCount - 1 - index));
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        return { key, label: new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", ""), value: 0 };
+      });
+  if (periodCount === 1) {
+    transactions.filter((item) => item.status === "pago" && String(item.date || "").slice(0, 7) === selectedMonthKey).forEach((item) => {
+      const day = Number(String(item.date || "").slice(8, 10));
+      const amount = (item.type === "receita" ? 1 : -1) * Number(item.amount || 0);
+      points.forEach((point) => { if (day <= point.day) point.value += amount; });
+    });
+  } else {
+    const byMonth = new Map(points.map((item) => [item.key, item]));
+    transactions.forEach((item) => {
+      if (item.status !== "pago") return;
+      const month = byMonth.get(String(item.date || "").slice(0, 7));
+      if (!month) return;
+      month.value += (item.type === "receita" ? 1 : -1) * Number(item.amount || 0);
+    });
+  }
+  const hasMovement = points.some((item) => item.value !== 0);
+  const min = Math.min(0, ...points.map((item) => item.value));
+  const max = Math.max(0, ...points.map((item) => item.value));
   const range = Math.max(max - min, 1);
   const compactMoney = (value) => new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-  const chartPoints = months.map((item, index) => ({ x: 32 + index * 51.2, y: 112 - ((item.value - min) / range) * 88 }));
+  const chartPoints = points.map((item, index) => ({ x: 32 + index * (256 / Math.max(points.length - 1, 1)), y: 112 - ((item.value - min) / range) * 88 }));
   const linePath = chartPoints.reduce((path, point, index) => {
     if (index === 0) return `M ${point.x} ${point.y}`;
     if (index === chartPoints.length - 1) return `${path} Q ${chartPoints[index - 1].x} ${chartPoints[index - 1].y} ${point.x} ${point.y}`;
@@ -1116,18 +1150,19 @@ function MonthlyOverview({ transactions }) {
     return `${path} Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`;
   }, "");
   const areaPath = `${linePath} L 288 122 L 32 122 Z`;
-  const currentValue = months.at(-1)?.value || 0;
+  const currentValue = points.at(-1)?.value || 0;
+  const periodLabels = { 1: "Mês selecionado", 3: "Últimos 3 meses", 6: "Últimos 6 meses", 12: "Último ano" };
 
   return (
     <section className="panel monthly-overview">
       <div className="panel-head dashboard-panel-head">
-        <div><span className="eyebrow">Últimos seis meses</span><h2>Evolução financeira</h2></div>
-        <span className="summary-badge">Fluxo real</span>
+        <div><span className="eyebrow">{periodLabels[period]}</span><h2>Evolução financeira</h2></div>
+        <label className="chart-period-select"><span className="sr-only">Período do gráfico</span><select value={period} onChange={(event) => setPeriod(event.target.value)} aria-label="Período do gráfico"><option value="1">Mês atual</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">1 ano</option></select><ChevronDown size={14} aria-hidden="true" /></label>
       </div>
       {hasMovement ? (
         <div className="balance-chart">
           <span className="chart-current">{money(currentValue)}</span>
-          <svg viewBox="0 0 300 145" role="img" aria-label="Evolução financeira dos últimos seis meses">
+          <svg viewBox="0 0 300 145" role="img" aria-label={`Evolução financeira: ${periodLabels[period].toLowerCase()}`}>
             <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#36b979" stopOpacity=".28" /><stop offset="1" stopColor="#36b979" stopOpacity="0" /></linearGradient></defs>
             {[24, 68, 112].map((y) => <line key={y} x1="28" y1={y} x2="290" y2={y} className="chart-grid-line" />)}
             <text x="2" y="28" className="chart-value-label">{compactMoney(max)}</text>
@@ -1136,8 +1171,8 @@ function MonthlyOverview({ transactions }) {
             <line x1="28" y1="122" x2="290" y2="122" className="chart-axis" />
             <path d={areaPath} fill="url(#chartFill)" />
             <path d={linePath} className="chart-line" />
-            {chartPoints.map((point, index) => <circle key={months[index].key} cx={point.x} cy={point.y} r={index === chartPoints.length - 1 ? "4.6" : "3.4"} className={index === chartPoints.length - 1 ? "chart-point chart-point-current" : "chart-point"} />)}
-            {months.map((item, index) => <text key={item.key} x={32 + index * 51.2} y="139" textAnchor="middle" className="chart-month-label">{item.label}</text>)}
+            {chartPoints.map((point, index) => <circle key={points[index].key} cx={point.x} cy={point.y} r={index === chartPoints.length - 1 ? "4.6" : "3.4"} className={index === chartPoints.length - 1 ? "chart-point chart-point-current" : "chart-point"} />)}
+            {points.map((item, index) => <text key={item.key} x={32 + index * (256 / Math.max(points.length - 1, 1))} y="139" textAnchor="middle" className="chart-month-label">{item.label}</text>)}
           </svg>
         </div>
       ) : <Empty title="A evolução aparecerá aqui" text="Cadastre lançamentos para construir seu histórico financeiro real." />}
@@ -1145,8 +1180,8 @@ function MonthlyOverview({ transactions }) {
   );
 }
 
-function RecentTransactions({ transactions, setActiveMenu }) {
-  const recent = transactions.filter((item) => item.date <= today).slice(0, 5);
+function RecentTransactions({ transactions, setActiveMenu, selectedMonthKey }) {
+  const recent = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.date <= today).slice(0, 5);
   const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
   const categoryIcons = { renda: Banknote, alimentação: ShoppingCart, alimentacao: ShoppingCart, transporte: Fuel, assinaturas: Music2, lazer: Music2, restaurante: Utensils };
   return (
