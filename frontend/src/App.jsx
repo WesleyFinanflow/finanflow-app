@@ -623,7 +623,7 @@ export default function App() {
               <button type="button" className="profile-menu-action logout" role="menuitem" onClick={() => { setProfileMenuOpen(false); logout(); }}><LogOut size={18} aria-hidden="true" />Sair da conta</button>
             </section>
           )}
-          <button type="button" className="sidebar-profile profile-menu-trigger" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
+          <button type="button" className="sidebar-profile profile-menu-trigger" aria-label="Abrir menu do perfil" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
             <Avatar name={user.name} />
             <span className="profile-trigger-copy"><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></span>
             <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
