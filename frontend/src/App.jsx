@@ -750,7 +750,7 @@ function Hero({ firstName, coupleSpace, summary, hasData, activeMenu }) {
         </div>
       </div>
       <div className="balance-focus">
-        <div className="balance-label"><span>Saldo livre seguro</span><ShieldCheck size={22} aria-hidden="true" /></div>
+        <div className="balance-label"><span>Saldo livre seguro</span></div>
         <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
         <small>Protegido pela sua reserva financeira.</small>
       </div>
@@ -1313,17 +1313,30 @@ function InviteAccept({ invite, loading, message, acceptInvite }) {
 }
 
 function StatCard({ title, value, text, tone }) {
-  const icons = { cyan: Wallet, green: HandCoins, yellow: CalendarClock, blue: ShieldCheck };
-  const Icon = icons[tone] || CircleDollarSign;
   return (
     <article className={`stat-card ${tone}`}>
-      <span className="stat-icon"><Icon size={20} aria-hidden="true" /></span>
+      <span className="stat-icon"><FinancialIcon tone={tone} /></span>
       <div className="stat-card-copy">
         <span className="stat-card-label">{title}</span>
         <strong>{value}</strong>
         <p>{text}</p>
       </div>
     </article>
+  );
+}
+
+function FinancialIcon({ tone }) {
+  if (tone === "green") return (
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path className="icon-soft" d="M5 17.5c3.4-1.8 6.3-1.8 8.8.1l2.3 1.7h5.2c2.9 0 4.4 2.8 2.4 4.6l-7.1 4.4a5.3 5.3 0 0 1-4.9.2L5 25.4Z"/><path d="m5 17.5 7.1-3.7a4 4 0 0 1 4 .2l2.3 1.5c1.7 1.1.9 3.8-1.2 3.8h-4.6m11.1 4.6-7.1 4.4a5.3 5.3 0 0 1-4.9.2L5 25.4m0-7.9v7.9M21.5 5v5m-2.5-2.5h5M27 12v3m-1.5-1.5h3"/></svg>
+  );
+  if (tone === "yellow") return (
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path className="icon-soft" d="M5.5 8.5h17v18h-17z"/><path d="M8 4.5v6m12-6v6M5.5 12h17M5.5 8.5h17v18h-17z"/><circle cx="23" cy="22" r="6"/><path d="M23 18.8v3.5l2.3 1.4"/></svg>
+  );
+  if (tone === "blue") return (
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path className="icon-soft" d="m16 3.8 9 3.5v7.2c0 6.2-3.8 11.2-9 14-5.2-2.8-9-7.8-9-14V7.3Z"/><path d="m16 3.8 9 3.5v7.2c0 6.2-3.8 11.2-9 14-5.2-2.8-9-7.8-9-14V7.3Z"/><path d="m11.8 15.5 2.8 2.8 5.9-6.1M25.5 4.5v3m-1.5-1.5h3"/></svg>
+  );
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path className="icon-soft" d="M4.5 8.5h20v17h-20z"/><path d="M4.5 8.5h20v17h-20zM7 8.5V6h14.5M20 14h8v6h-8a3 3 0 0 1 0-6Z"/><circle cx="21.5" cy="17" r=".8"/><path d="M26 6v4m-2-2h4"/></svg>
   );
 }
 
