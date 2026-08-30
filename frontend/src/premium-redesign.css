@@ -364,7 +364,7 @@ html body #root .profile-space-menu button{width:100%;color:#174638!important;bo
 /* Desktop icon rail: more room for content, with accessible hover/focus labels. */
 @media(min-width:1101px){
   .finanflow-app{grid-template-columns:82px minmax(0,1fr)!important}
-  .sidebar{width:82px!important;min-width:82px!important;padding:18px 10px 14px!important;gap:12px!important;overflow:visible!important}
+  .sidebar{z-index:200!important;width:82px!important;min-width:82px!important;padding:18px 10px 14px!important;gap:12px!important;overflow:visible!important}
   .brand{justify-content:center!important;padding:0 0 17px!important}.brand-icon{width:48px!important;height:34px!important}.brand>div:last-child{display:none!important}
   .sidebar-nav{align-items:center;gap:6px!important}
   html body #root .sidebar .sidebar-nav button{position:relative;justify-content:center!important;width:52px!important;min-height:50px!important;padding:0!important;border-radius:14px!important}
