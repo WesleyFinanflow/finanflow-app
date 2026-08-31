@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, Bell, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, ReceiptText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Bell, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -32,6 +32,7 @@ const menu = [
   { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
   { label: "Contas", shortLabel: "Contas", icon: Wallet },
   { label: "Planejamento", shortLabel: "Planejar", icon: ChartPie },
+  { label: "Relatórios", shortLabel: "Relatórios", icon: BarChart3 },
 ];
 
 function getInviteFromUrl() {
@@ -657,6 +658,7 @@ export default function App() {
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
+        {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
@@ -1011,6 +1013,99 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goa
         </section>
       </section>
     </>
+  );
+}
+
+function Relatorios({ transactions, selectedMonthKey, activeMode }) {
+  const [periodMonths, setPeriodMonths] = useState(6);
+  const periodOptions = [{ value: "1", label: "Mês atual" }, { value: "3", label: "3 meses" }, { value: "6", label: "6 meses" }, { value: "12", label: "1 ano" }];
+  const monthNumber = (key) => { const [year, month] = String(key).split("-").map(Number); return (year * 12) + month - 1; };
+  const endMonth = monthNumber(selectedMonthKey);
+  const startMonth = endMonth - periodMonths + 1;
+  const previousStart = startMonth - periodMonths;
+  const inRange = (item, start, end) => { const value = monthNumber(String(item.date || "").slice(0, 7)); return value >= start && value <= end; };
+  const realized = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && inRange(item, startMonth, endMonth));
+  const previous = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && inRange(item, previousStart, startMonth - 1));
+  const pending = transactions.filter((item) => item.status !== "pago" && item.type !== "meta" && inRange(item, startMonth, endMonth));
+  const totals = (items) => items.reduce((result, item) => {
+    const amount = Number(item.amount || 0);
+    if (item.type === "receita") result.income += amount;
+    if (item.type === "despesa") result.expenses += amount;
+    if (item.type === "divida") result.debt += amount;
+    return result;
+  }, { income: 0, expenses: 0, debt: 0 });
+  const currentTotals = totals(realized);
+  const previousTotals = totals(previous);
+  const net = currentTotals.income - currentTotals.expenses - currentTotals.debt;
+  const previousNet = previousTotals.income - previousTotals.expenses - previousTotals.debt;
+  const change = previousNet === 0 ? null : ((net - previousNet) / Math.abs(previousNet)) * 100;
+  const categories = Array.from(realized.reduce((map, item) => {
+    if (item.type === "receita") return map;
+    const category = item.category || "Outro";
+    map.set(category, (map.get(category) || 0) + Number(item.amount || 0));
+    return map;
+  }, new Map())).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount);
+  const maxCategory = Math.max(1, ...categories.map((item) => item.amount));
+  const evolution = Array.from({ length: periodMonths }, (_, index) => {
+    const absolute = startMonth + index;
+    const year = Math.floor(absolute / 12);
+    const month = (absolute % 12) + 1;
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const values = totals(realized.filter((item) => String(item.date || "").slice(0, 7) === key));
+    return { key, label: monthLabel(key, "short"), income: values.income, outflow: values.expenses + values.debt, net: values.income - values.expenses - values.debt };
+  });
+  const maxEvolution = Math.max(1, ...evolution.flatMap((item) => [item.income, item.outflow]));
+  const largestExpenses = realized.filter((item) => item.type !== "receita").sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0)).slice(0, 5);
+  const people = Array.from(realized.reduce((map, item) => {
+    const name = String(item.responsibleName || "Casal").trim() || "Casal";
+    const current = map.get(name) || { name, income: 0, outflow: 0 };
+    if (item.type === "receita") current.income += Number(item.amount || 0); else current.outflow += Number(item.amount || 0);
+    map.set(name, current);
+    return map;
+  }, new Map()).values());
+  const periodLabel = periodMonths === 1 ? monthLabel(selectedMonthKey) : `${monthLabel(evolution[0].key, "short")} a ${monthLabel(selectedMonthKey, "short")}`;
+
+  function exportCsv() {
+    const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth) && item.type !== "meta").map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, Number(item.amount || 0).toFixed(2).replace(".", ",")])];
+    const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(";")).join("\r\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
+    link.download = `finanflow-relatorio-${selectedMonthKey}-${periodMonths}m.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  return (
+    <section className="reports-page">
+      <header className="reports-toolbar">
+        <div><span className="eyebrow">Análise financeira</span><h2>Relatórios</h2><p>{activeMode === "couple" ? "Visão compartilhada, com cada lançamento identificado." : "Uma visão clara das suas finanças pessoais."}</p></div>
+        <div className="reports-actions">
+          <DashboardSelect compact label="Período do relatório" value={String(periodMonths)} onChange={(value) => setPeriodMonths(Number(value))} options={periodOptions} />
+          <button type="button" className="report-action secondary" onClick={exportCsv}><FileDown size={16} />Planilha</button>
+          <button type="button" className="report-action" onClick={() => window.print()}><Printer size={16} />PDF</button>
+        </div>
+      </header>
+
+      <div className="report-period"><CalendarDays size={16} /><span>Período analisado</span><strong>{periodLabel}</strong></div>
+      <section className="report-summary-grid">
+        <article className="report-kpi income"><span>Receitas recebidas</span><strong>{money(currentTotals.income)}</strong><small>{realized.filter((item) => item.type === "receita").length} lançamentos</small></article>
+        <article className="report-kpi expense"><span>Despesas pagas</span><strong>{money(currentTotals.expenses)}</strong><small>{realized.filter((item) => item.type === "despesa").length} lançamentos</small></article>
+        <article className="report-kpi debt"><span>Dívidas pagas</span><strong>{money(currentTotals.debt)}</strong><small>{realized.filter((item) => item.type === "divida").length} lançamentos</small></article>
+        <article className={`report-kpi balance ${net < 0 ? "negative" : ""}`}><span>Resultado do período</span><strong>{money(net)}</strong><small>{change === null ? "Sem período anterior para comparar" : `${change >= 0 ? "+" : ""}${change.toFixed(1).replace(".", ",")}% sobre o período anterior`}</small></article>
+      </section>
+
+      {activeMode === "couple" && <section className="panel report-people"><div className="report-section-head"><div><span className="eyebrow">Modo casal</span><h2>Movimentações por pessoa</h2></div><small>Somas combinadas no resumo acima</small></div>{people.length ? <div className="report-people-grid">{people.map((person) => <article key={person.name}><span className="contributor-avatar">{person.name.slice(0, 1).toUpperCase()}</span><strong>{person.name.split(/\s+/)[0]}</strong><dl><div><dt>Receitas</dt><dd>{money(person.income)}</dd></div><div><dt>Saídas</dt><dd>{money(person.outflow)}</dd></div></dl></article>)}</div> : <Empty title="Ainda não há movimentações do casal" text="Os lançamentos de cada pessoa aparecerão separados aqui." />}</section>}
+
+      <section className="reports-grid">
+        <article className="panel report-evolution"><div className="report-section-head"><div><span className="eyebrow">Evolução</span><h2>Entradas e saídas</h2></div><small>Valores realizados</small></div>{realized.length ? <div className="report-bars">{evolution.map((item) => <div className="report-month" key={item.key}><div className="report-bar-pair"><i className="income" style={{ height: `${Math.max(4, (item.income / maxEvolution) * 100)}%` }} title={`Receitas: ${money(item.income)}`} /><i className="outflow" style={{ height: `${Math.max(4, (item.outflow / maxEvolution) * 100)}%` }} title={`Saídas: ${money(item.outflow)}`} /></div><strong>{item.label.split(" ")[0]}</strong><small className={item.net < 0 ? "negative" : ""}>{money(item.net)}</small></div>)}</div> : <Empty title="Sem dados para este período" text="Os gráficos serão formados conforme você registrar lançamentos." />}</article>
+
+        <article className="panel report-categories"><div className="report-section-head"><div><span className="eyebrow">Distribuição</span><h2>Gastos por categoria</h2></div><small>{money(currentTotals.expenses + currentTotals.debt)}</small></div>{categories.length ? <div className="category-report-list">{categories.slice(0, 7).map((item) => <div key={item.name}><span><strong>{item.name}</strong><em>{money(item.amount)}</em></span><i><b style={{ width: `${(item.amount / maxCategory) * 100}%` }} /></i></div>)}</div> : <Empty title="Nenhum gasto realizado" text="As categorias aparecerão aqui quando houver despesas pagas." />}</article>
+
+        <article className="panel report-largest"><div className="report-section-head"><div><span className="eyebrow">Destaques</span><h2>Maiores saídas</h2></div><small>Top 5 do período</small></div>{largestExpenses.length ? <div className="largest-expense-list">{largestExpenses.map((item, index) => <div key={item._id || `${item.date}-${index}`}><span className="expense-rank">{index + 1}</span><span><strong>{item.description}</strong><small>{activeMode === "couple" && `${item.responsibleName || "Casal"} · `}{item.category}</small></span><em>{money(item.amount)}</em></div>)}</div> : <Empty title="Nenhuma saída registrada" text="Despesas e dívidas pagas aparecerão nesta lista." />}</article>
+
+        <article className="panel report-comparison"><div className="report-section-head"><div><span className="eyebrow">Comparativo</span><h2>Período anterior</h2></div><small>{periodMonths} {periodMonths === 1 ? "mês" : "meses"}</small></div><div className="comparison-list"><DataRow label="Receitas anteriores" value={money(previousTotals.income)} /><DataRow label="Saídas anteriores" value={money(previousTotals.expenses + previousTotals.debt)} /><DataRow label="Resultado anterior" value={money(previousNet)} /><DataRow className="highlight-row" label="Pendências atuais" value={money(pending.reduce((sum, item) => sum + Number(item.amount || 0), 0))} /></div></article>
+      </section>
+    </section>
   );
 }
 
