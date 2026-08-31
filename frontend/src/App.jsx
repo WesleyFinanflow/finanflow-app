@@ -1248,8 +1248,8 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   );
 }
 
-function SettingsTitle({ number, icon: Icon, title, danger = false }) {
-  return <div className={`settings-title ${danger ? "danger" : ""}`}><span><Icon size={20} /></span><h2>{number}. {title}</h2></div>;
+function SettingsTitle({ icon: Icon, title, danger = false }) {
+  return <div className={`settings-title ${danger ? "danger" : ""}`}><span><Icon size={20} /></span><h2>{title}</h2></div>;
 }
 
 function ConfirmationModal({ confirmation, loading, close, confirm }) {
