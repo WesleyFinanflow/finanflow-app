@@ -8,6 +8,11 @@ import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
 import safeShieldIcon from "./assets/financial-icons/safe-shield.webp";
+import navHomeIcon from "./assets/navigation/home.png";
+import navTransactionsIcon from "./assets/navigation/transactions.png";
+import navAccountsIcon from "./assets/navigation/accounts.png";
+import navPlanningIcon from "./assets/navigation/planning.png";
+import navReportsIcon from "./assets/navigation/reports.png";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -28,11 +33,11 @@ const today = new Date().toISOString().slice(0, 10);
 const currentMonthKey = today.slice(0, 7);
 const MAX_MONEY = 1_000_000_000_000;
 const menu = [
-  { label: "Início", shortLabel: "Início", icon: House },
-  { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
-  { label: "Contas", shortLabel: "Contas", icon: Wallet },
-  { label: "Planejamento", shortLabel: "Planejar", icon: ChartPie },
-  { label: "Relatórios", shortLabel: "Relatórios", icon: BarChart3 },
+  { label: "Início", shortLabel: "Início", icon: House, iconImage: navHomeIcon },
+  { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight, iconImage: navTransactionsIcon },
+  { label: "Contas", shortLabel: "Contas", icon: Wallet, iconImage: navAccountsIcon },
+  { label: "Planejamento", shortLabel: "Planejar", icon: ChartPie, iconImage: navPlanningIcon },
+  { label: "Relatórios", shortLabel: "Relatórios", icon: BarChart3, iconImage: navReportsIcon },
 ];
 
 function getInviteFromUrl() {
@@ -599,9 +604,9 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          {menu.map(({ label, shortLabel, icon: Icon }) => (
+          {menu.map(({ label, shortLabel, icon: Icon, iconImage }) => (
             <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label}>
-              <Icon size={18} strokeWidth={2} aria-hidden="true" />
+              {iconImage ? <img className="premium-nav-icon" src={iconImage} alt="" aria-hidden="true" /> : <Icon size={18} strokeWidth={2} aria-hidden="true" />}
               <span className="nav-label-full">{label}</span>
               <span className="nav-label-short">{shortLabel}</span>
             </button>
