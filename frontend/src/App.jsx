@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Bell, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -1120,10 +1120,6 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   const [pendingPhoto, setPendingPhoto] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [profileName, setProfileName] = useState(user?.name || firstName);
-  const [preferences, setPreferences] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("finanflow_preferences")) || { theme: "Claro", currency: "Real (R$)", dateFormat: "DD/MM/AAAA", notifications: true }; }
-    catch { return { theme: "Claro", currency: "Real (R$)", dateFormat: "DD/MM/AAAA", notifications: true }; }
-  });
   const photoInputRef = useRef(null);
 
   async function confirmDestructiveAction() {
@@ -1161,11 +1157,6 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
     }
   }
 
-  function savePreferences(next) {
-    setPreferences(next);
-    localStorage.setItem("finanflow_preferences", JSON.stringify(next));
-  }
-
   function exportData() {
     const payload = { exportedAt: new Date().toISOString(), space: activeMode, accounts, transactions, protectedAmount: reserve };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
@@ -1199,16 +1190,6 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
       </section>
 
       <PasswordSettings logout={logout} />
-
-      <section className="settings-card settings-preferences">
-        <SettingsTitle number="3" icon={SlidersHorizontal} title="Preferências do aplicativo" />
-        <div className="preference-list">
-          <label><span>Tema</span><select value={preferences.theme} onChange={(e) => savePreferences({ ...preferences, theme: e.target.value })}><option>Claro</option></select></label>
-          <label><span>Moeda</span><select value={preferences.currency} onChange={(e) => savePreferences({ ...preferences, currency: e.target.value })}><option>Real (R$)</option></select></label>
-          <label><span>Formato de data</span><select value={preferences.dateFormat} onChange={(e) => savePreferences({ ...preferences, dateFormat: e.target.value })}><option>DD/MM/AAAA</option></select></label>
-          <label className="preference-toggle"><span><Bell size={17} />Notificações<small>Receber notificações importantes</small></span><input type="checkbox" checked={preferences.notifications} onChange={(e) => savePreferences({ ...preferences, notifications: e.target.checked })} /><i /></label>
-        </div>
-      </section>
 
       <section className="settings-card settings-protection">
         <SettingsTitle number="4" icon={ShieldCheck} title="Proteção financeira" />
