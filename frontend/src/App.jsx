@@ -32,8 +32,6 @@ const menu = [
   { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
   { label: "Contas", shortLabel: "Contas", icon: Wallet },
   { label: "Planejamento", shortLabel: "Planejar", icon: ChartPie },
-  { label: "Casal", shortLabel: "Casal", icon: HeartHandshake },
-  { label: "Configurações", shortLabel: "Ajustes", icon: Settings },
 ];
 
 function getInviteFromUrl() {
