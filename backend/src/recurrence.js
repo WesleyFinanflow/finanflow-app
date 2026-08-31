@@ -11,3 +11,8 @@ export function splitInstallmentAmounts(totalAmount, count) {
   const remainder = totalCents - (baseCents * count);
   return Array.from({ length: count }, (_, index) => (baseCents + (index < remainder ? 1 : 0)) / 100);
 }
+
+export function repeatInstallmentAmount(amount, count) {
+  const normalizedAmount = Number(Number(amount).toFixed(2));
+  return Array.from({ length: count }, () => normalizedAmount);
+}

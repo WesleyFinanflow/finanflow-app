@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
-import { addMonthsToIsoDate, splitInstallmentAmounts } from "./recurrence.js";
+import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
 
 dotenv.config();
 
@@ -726,9 +726,11 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
         documents.push({ ...input, spaceId: req.params.spaceId, date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence });
       }
     } else if (installmentCount > 1) {
-      const installmentAmounts = splitInstallmentAmounts(input.amount, installmentCount);
+      const totalAmount = Number((input.amount * installmentCount).toFixed(2));
+      if (totalAmount > 1000000000000) return res.status(400).json({ message: "O valor total do parcelamento ultrapassa o limite permitido." });
+      const installmentAmounts = repeatInstallmentAmount(input.amount, installmentCount);
       for (let index = 0; index < installmentCount; index += 1) {
-        documents.push({ ...input, spaceId: req.params.spaceId, amount: installmentAmounts[index], date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence: "none", installmentNumber: index + 1, installmentCount, totalAmount: input.amount });
+        documents.push({ ...input, spaceId: req.params.spaceId, amount: installmentAmounts[index], date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence: "none", installmentNumber: index + 1, installmentCount, totalAmount });
       }
     } else {
       documents.push({ ...input, spaceId: req.params.spaceId, recurrence: "none", installmentNumber: 1, installmentCount: 1, totalAmount: input.amount });

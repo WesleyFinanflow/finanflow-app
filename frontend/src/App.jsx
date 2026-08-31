@@ -339,6 +339,7 @@ export default function App() {
     if (txForm.description.trim().length > 160) return setMessage("A descrição deve ter até 160 caracteres.");
     const amount = Number(txForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
+    if (Number(txForm.installmentCount || 1) > 1 && amount * Number(txForm.installmentCount) > MAX_MONEY) return setMessage("O valor total do parcelamento ultrapassa o limite permitido.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
     if (!txForm.category.trim()) return setMessage("Selecione uma categoria.");
     const requestId = txForm.requestId || crypto.randomUUID();
@@ -919,13 +920,13 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
         <div className="field-grid">
           <label>Tipo<select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, category: e.target.value === "receita" ? "Salário" : "" })}><option value="receita">Receita</option><option value="despesa">Despesa</option><option value="divida">Dívida</option></select></label>
           <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} /></label>
-          <label>{isInstallment ? "Valor total da compra" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+          <label>{isInstallment ? "Valor de cada parcela" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
           <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
           <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select></label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
           {!editingTransactionId && <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez</option><option value="monthly">Conta fixa todo mês</option></select></label>}
           {!editingTransactionId && txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "À vista" : `${count} parcelas`}</option>)}</select></label>}
-          {isInstallment && !editingTransactionId && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de aproximadamente {money(Number(txForm.amount || 0) / Number(txForm.installmentCount || 1))}</strong><small>As parcelas serão lançadas automaticamente nos próximos meses.</small></span></div>}
+          {isInstallment && !editingTransactionId && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. As parcelas serão lançadas nos próximos meses.</small></span></div>}
           <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{accounts[0]?.name || "Conta principal"}</strong><small>Este lançamento movimentará automaticamente esta conta quando for concluído.</small></span></div>
         </div>
         <div className="action-row">
