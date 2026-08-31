@@ -8,7 +8,7 @@ test("atalho de receita abre o tipo e a categoria corretos", () => {
     description: "",
     amount: "",
     date: "2026-06-20",
-    category: "Renda",
+    category: "Salário",
     status: "pendente",
     accountId: "",
     recurrence: "none",
@@ -19,5 +19,5 @@ test("atalho de receita abre o tipo e a categoria corretos", () => {
 test("novo lançamento continua iniciando como despesa", () => {
   const form = createTransactionForm("despesa", "2026-06-20");
   assert.equal(form.type, "despesa");
-  assert.equal(form.category, "Moradia");
+  assert.equal(form.category, "");
 });

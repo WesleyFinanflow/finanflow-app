@@ -32,6 +32,11 @@ const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
 const currentMonthKey = today.slice(0, 7);
 const MAX_MONEY = 1_000_000_000_000;
+const transactionCategories = {
+  receita: ["Salário", "Renda extra", "Benefícios", "Investimentos", "Reembolso", "Presente", "Outras receitas"],
+  despesa: ["Alimentação", "Moradia", "Transporte", "Saúde", "Educação", "Lazer", "Assinaturas", "Compras", "Serviços", "Impostos", "Pets", "Família", "Outras despesas"],
+  divida: ["Cartão de crédito", "Empréstimo", "Financiamento", "Moradia", "Veículo", "Impostos", "Educação", "Saúde", "Outras dívidas"],
+};
 const menu = [
   { label: "Início", shortLabel: "Início", icon: House, iconImage: navHomeIcon },
   { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight, iconImage: navTransactionsIcon },
@@ -335,6 +340,7 @@ export default function App() {
     const amount = Number(txForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
+    if (!txForm.category.trim()) return setMessage("Selecione uma categoria.");
     const requestId = txForm.requestId || crypto.randomUUID();
     if (!editingTransactionId && !txForm.requestId) setTxForm((current) => ({ ...current, requestId }));
     const payload = { ...txForm, requestId: editingTransactionId ? undefined : requestId, description: txForm.description.trim(), category: txForm.category.trim() || "Outro", amount, installmentCount: Number(txForm.installmentCount || 1), accountId: txForm.accountId || null, responsibleName: firstName };
@@ -893,7 +899,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
     setFormOpen(false);
   };
   const monthTransactions = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.type !== "meta");
-  const categories = Array.from(new Set(["Moradia", "Alimentação", "Transporte", "Renda", "Saúde", "Educação", "Lazer", "Assinaturas", "Outro", ...transactions.map((item) => item.category).filter(Boolean)]));
+  const categories = Array.from(new Set([...(transactionCategories[txForm.type] || transactionCategories.despesa), ...transactions.filter((item) => item.type === txForm.type).map((item) => item.category).filter(Boolean)]));
   const isInstallment = !editingTransactionId && Number(txForm.installmentCount || 1) > 1;
 
   return (
@@ -911,11 +917,11 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <button type="button" className="icon-close" aria-label="Fechar formulário" onClick={resetForm}><X size={18} /></button>
         </div>
         <div className="field-grid">
-          <label>Tipo<select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, category: e.target.value === "receita" ? "Renda" : txForm.category })}><option value="receita">Receita</option><option value="despesa">Despesa</option><option value="divida">Dívida</option></select></label>
+          <label>Tipo<select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, category: e.target.value === "receita" ? "Salário" : "" })}><option value="receita">Receita</option><option value="despesa">Despesa</option><option value="divida">Dívida</option></select></label>
           <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} /></label>
           <label>{isInstallment ? "Valor total da compra" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
           <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
-          <label>Categoria<input list="finanflow-categories" value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} placeholder="Digite ou escolha" maxLength={50} /><datalist id="finanflow-categories">{categories.map((category) => <option value={category} key={category} />)}</datalist></label>
+          <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select></label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
           {!editingTransactionId && <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez</option><option value="monthly">Conta fixa todo mês</option></select></label>}
           {!editingTransactionId && txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "À vista" : `${count} parcelas`}</option>)}</select></label>}
