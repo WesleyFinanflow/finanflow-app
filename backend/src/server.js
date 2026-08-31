@@ -354,11 +354,13 @@ app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: req.u
 
 app.patch("/api/me/profile", auth, async (req, res) => {
   try {
+    const name = requiredText(req.body?.name ?? req.user.name, "Nome", 80);
     const profilePhoto = String(req.body?.profilePhoto || "");
     if (profilePhoto && (!/^data:image\/(?:jpeg|png|webp);base64,/i.test(profilePhoto) || profilePhoto.length > 120000)) {
       return res.status(400).json({ message: "A foto de perfil não é válida ou ficou muito grande." });
     }
-    const user = await User.findByIdAndUpdate(req.user._id, { profilePhoto }, { new: true, runValidators: true }).select("name email profilePhoto");
+    const user = await User.findByIdAndUpdate(req.user._id, { name, profilePhoto }, { new: true, runValidators: true }).select("name email profilePhoto");
+    await Transaction.updateMany({ createdBy: user._id }, { responsibleName: name.split(/\s+/)[0] });
     res.json({ user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" }, message: "Perfil atualizado." });
   } catch {
     res.status(500).json({ message: "Erro ao salvar o perfil." });

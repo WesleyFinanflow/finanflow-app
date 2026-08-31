@@ -1014,6 +1014,7 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || localStorage.getItem("finanflow_profile_photo") || "");
   const [pendingPhoto, setPendingPhoto] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
+  const [profileName, setProfileName] = useState(user?.name || firstName);
   const [preferences, setPreferences] = useState(() => {
     try { return JSON.parse(localStorage.getItem("finanflow_preferences")) || { theme: "Claro", currency: "Real (R$)", dateFormat: "DD/MM/AAAA", notifications: true }; }
     catch { return { theme: "Claro", currency: "Real (R$)", dateFormat: "DD/MM/AAAA", notifications: true }; }
@@ -1043,7 +1044,7 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
     const nextPhoto = pendingPhoto || photoPreview;
     setProfileMessage("Salvando...");
     try {
-      const data = await api("/api/me/profile", { method: "PATCH", body: JSON.stringify({ profilePhoto: nextPhoto }) });
+      const data = await api("/api/me/profile", { method: "PATCH", body: JSON.stringify({ name: profileName.trim(), profilePhoto: nextPhoto }) });
       localStorage.removeItem("finanflow_profile_photo");
       localStorage.setItem("finanflow_user", JSON.stringify(data.user));
       setUser(data.user);
@@ -1083,7 +1084,7 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
             {visiblePhoto && <button type="button" className="settings-remove" onClick={() => { setPendingPhoto(""); setPhotoPreview(""); setProfileMessage("Clique em Salvar perfil para confirmar."); }}><Trash2 size={16} />Remover foto</button>}
           </div>
           <div className="profile-fields">
-            <label>Seu nome<input value={firstName} readOnly /></label>
+            <label>Seu nome<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
             <label>E-mail<input value={email || ""} readOnly /></label>
             <p>Use uma foto sua para personalizar a conta. Nome e e-mail permanecem vinculados ao seu acesso.</p>
             <button type="button" onClick={saveProfile}>Salvar perfil</button>
