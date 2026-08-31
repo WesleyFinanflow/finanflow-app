@@ -92,9 +92,11 @@ const transactionSchema = new mongoose.Schema(
     totalAmount: { type: Number, min: 0.01, max: 1000000000000 },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     responsibleName: { type: String, default: "Individual", maxlength: 80 },
+    requestId: { type: String, maxlength: 80 },
   },
   { timestamps: true }
 );
+transactionSchema.index({ spaceId: 1, requestId: 1 }, { unique: true, sparse: true });
 
 const inviteSchema = new mongoose.Schema(
   {
@@ -107,12 +109,44 @@ const inviteSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const auditLogSchema = new mongoose.Schema(
+  {
+    spaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Space", required: true, index: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    userName: { type: String, required: true, maxlength: 80 },
+    action: { type: String, enum: ["create", "update", "delete", "restore", "reset", "settings"], required: true },
+    entityType: { type: String, enum: ["transaction", "account", "space"], required: true },
+    entityId: { type: String, default: "", maxlength: 80 },
+    summary: { type: String, required: true, maxlength: 180 },
+    before: { type: mongoose.Schema.Types.Mixed },
+    after: { type: mongoose.Schema.Types.Mixed },
+    restoredAt: { type: Date },
+  },
+  { timestamps: true }
+);
+auditLogSchema.index({ spaceId: 1, createdAt: -1 });
+
+const backupSnapshotSchema = new mongoose.Schema(
+  {
+    spaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Space", required: true, index: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    reason: { type: String, required: true, maxlength: 80 },
+    space: { type: mongoose.Schema.Types.Mixed },
+    accounts: [{ type: mongoose.Schema.Types.Mixed }],
+    transactions: [{ type: mongoose.Schema.Types.Mixed }],
+    expiresAt: { type: Date, required: true, index: { expires: 0 } },
+  },
+  { timestamps: true }
+);
+
 const User = mongoose.model("User", userSchema);
 const Space = mongoose.model("Space", spaceSchema);
 const Member = mongoose.model("Member", memberSchema);
 const Account = mongoose.model("Account", accountSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 const Invite = mongoose.model("Invite", inviteSchema);
+const AuditLog = mongoose.model("AuditLog", auditLogSchema);
+const BackupSnapshot = mongoose.model("BackupSnapshot", backupSnapshotSchema);
 
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
@@ -181,6 +215,42 @@ async function serializeSpaceForUser(member) {
     role: item.role,
   }));
   return { ...space, role: member.role, memberCount: members.length, members };
+}
+
+function plainDocument(value) {
+  if (!value) return value;
+  return typeof value.toObject === "function" ? value.toObject() : value;
+}
+
+async function recordAudit({ spaceId, user, action, entityType, entityId = "", summary, before, after }) {
+  return AuditLog.create({
+    spaceId,
+    userId: user._id,
+    userName: String(user.name || "Usuário").split(/\s+/)[0],
+    action,
+    entityType,
+    entityId: String(entityId || ""),
+    summary,
+    before: before ? plainDocument(before) : undefined,
+    after: after ? plainDocument(after) : undefined,
+  });
+}
+
+async function createSpaceSnapshot(spaceId, user, reason) {
+  const [space, accounts, transactions] = await Promise.all([
+    Space.findById(spaceId).lean(),
+    Account.find({ spaceId }).lean(),
+    Transaction.find({ spaceId }).lean(),
+  ]);
+  return BackupSnapshot.create({
+    spaceId,
+    createdBy: user._id,
+    reason,
+    space,
+    accounts,
+    transactions,
+    expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+  });
 }
 
 async function createInviteForSpace(spaceId, userId) {
@@ -429,8 +499,10 @@ app.patch("/api/spaces/:spaceId/settings", auth, async (req, res) => {
     if (!Number.isFinite(reserve) || reserve < 0 || reserve > 1000000000000) {
       return res.status(400).json({ message: "Informe uma reserva válida." });
     }
+    const before = await Space.findById(req.params.spaceId);
     const space = await Space.findByIdAndUpdate(req.params.spaceId, { reserve }, { new: true, runValidators: true });
     if (!space) return res.status(404).json({ message: "Espaço não encontrado." });
+    await recordAudit({ spaceId: space._id, user: req.user, action: "settings", entityType: "space", entityId: space._id, summary: "Proteção financeira atualizada", before, after: space });
     const membership = await Member.findOne({ userId: req.user._id, spaceId: space._id });
     res.json({ space: await serializeSpaceForUser({ spaceId: space, role: membership.role }) });
   } catch (error) {
@@ -545,6 +617,7 @@ app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (re
     { new: true, runValidators: true }
   );
   if (!account) return res.status(404).json({ message: "Conta não encontrada." });
+  await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "update", entityType: "account", entityId: account._id, summary: "Saldo inicial atualizado", before: primary, after: account });
   res.json({ account });
 }));
 
@@ -564,6 +637,11 @@ app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res)
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+    const requestId = optionalText(req.body?.requestId, "", 80);
+    if (requestId) {
+      const duplicate = await Transaction.findOne({ spaceId: req.params.spaceId, requestId });
+      if (duplicate) return res.json({ transaction: duplicate, transactions: [duplicate], duplicate: true });
+    }
     const accountId = await normalizeAccountIdForSpace(req.body?.accountId, req.params.spaceId, req.user.name);
     const input = transactionInput(req.body, accountId, req.user);
     const recurrence = req.body?.recurrence === "monthly" ? "monthly" : "none";
@@ -583,9 +661,15 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
     } else {
       documents.push({ ...input, spaceId: req.params.spaceId, recurrence: "none", installmentNumber: 1, installmentCount: 1, totalAmount: input.amount });
     }
+    if (requestId) documents[0].requestId = requestId;
     const transactions = await Transaction.insertMany(documents);
+    await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "create", entityType: "transaction", entityId: transactions[0]._id, summary: `Lançamento criado: ${input.description}`, after: transactions });
     res.status(201).json({ transaction: transactions[0], transactions });
   } catch (error) {
+    if (error?.code === 11000 && req.body?.requestId) {
+      const duplicate = await Transaction.findOne({ spaceId: req.params.spaceId, requestId: req.body.requestId });
+      if (duplicate) return res.json({ transaction: duplicate, transactions: [duplicate], duplicate: true });
+    }
     const invalidInput = error.status === 400 || error.name === "ValidationError";
     res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message : "Erro ao criar lançamento." });
   }
@@ -605,6 +689,7 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
     } else {
       transaction = await Transaction.findByIdAndUpdate(existing._id, input, { new: true, runValidators: true });
     }
+    await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `Lançamento atualizado: ${transaction.description}`, before: existing, after: transaction });
     res.json({ transaction });
   } catch (error) {
     const invalidInput = error.status === 400 || error.name === "ValidationError";
@@ -616,14 +701,42 @@ app.delete("/api/spaces/:spaceId/transactions/:transactionId", auth, asyncHandle
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const transaction = await Transaction.findOne({ _id: req.params.transactionId, spaceId: req.params.spaceId });
   if (!transaction) return res.status(404).json({ message: "Lançamento não encontrado." });
+  const removed = transaction.seriesId
+    ? await Transaction.find({ spaceId: req.params.spaceId, seriesId: transaction.seriesId })
+    : [transaction];
   if (transaction.seriesId) await Transaction.deleteMany({ spaceId: req.params.spaceId, seriesId: transaction.seriesId });
   else await Transaction.deleteOne({ _id: transaction._id });
+  await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "delete", entityType: "transaction", entityId: transaction._id, summary: `Lançamento excluído: ${transaction.description}`, before: removed });
   res.json({ ok: true });
+}));
+
+app.get("/api/spaces/:spaceId/history", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const history = await AuditLog.find({ spaceId: req.params.spaceId }).sort({ createdAt: -1 }).limit(50).lean();
+  res.json({ history: history.map(({ before, after, ...item }) => ({ ...item, canRestore: item.action === "delete" && item.entityType === "transaction" && !item.restoredAt })) });
+}));
+
+app.post("/api/spaces/:spaceId/history/:auditId/restore", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const audit = await AuditLog.findOne({ _id: req.params.auditId, spaceId: req.params.spaceId, action: "delete", entityType: "transaction", restoredAt: { $exists: false } });
+  if (!audit) return res.status(404).json({ message: "Este lançamento não está mais disponível para restauração." });
+  const snapshots = Array.isArray(audit.before) ? audit.before : [audit.before];
+  const restored = [];
+  for (const snapshot of snapshots.filter(Boolean)) {
+    const document = plainDocument(snapshot);
+    const exists = document?._id && await Transaction.exists({ _id: document._id });
+    if (!exists) restored.push(await Transaction.create({ ...document, spaceId: req.params.spaceId }));
+  }
+  audit.restoredAt = new Date();
+  await audit.save();
+  await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "restore", entityType: "transaction", entityId: audit.entityId, summary: `Lançamento restaurado: ${audit.summary.replace("Lançamento excluído: ", "")}`, after: restored });
+  res.json({ restored });
 }));
 
 app.delete("/api/spaces/:spaceId/reset", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const space = await Space.findById(req.params.spaceId);
+  const snapshot = await createSpaceSnapshot(req.params.spaceId, req.user, "before_reset");
   await Transaction.deleteMany({ spaceId: req.params.spaceId });
   await Account.deleteMany({ spaceId: req.params.spaceId });
   if (space?.type === "couple") {
@@ -631,6 +744,7 @@ app.delete("/api/spaces/:spaceId/reset", auth, asyncHandler(async (req, res) => 
   } else {
     await Account.create({ spaceId: req.params.spaceId, name: "Conta principal", ownerName: req.user.name, balance: 0 });
   }
+  await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "reset", entityType: "space", entityId: req.params.spaceId, summary: "Dados financeiros zerados com cópia de segurança", after: { backupId: snapshot._id } });
   res.json({ ok: true });
 }));
 

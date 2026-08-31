@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculatePurchase, calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -335,7 +335,9 @@ export default function App() {
     const amount = Number(txForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
-    const payload = { ...txForm, description: txForm.description.trim(), category: txForm.category.trim() || "Outro", amount, installmentCount: Number(txForm.installmentCount || 1), accountId: txForm.accountId || null, responsibleName: firstName };
+    const requestId = txForm.requestId || crypto.randomUUID();
+    if (!editingTransactionId && !txForm.requestId) setTxForm((current) => ({ ...current, requestId }));
+    const payload = { ...txForm, requestId: editingTransactionId ? undefined : requestId, description: txForm.description.trim(), category: txForm.category.trim() || "Outro", amount, installmentCount: Number(txForm.installmentCount || 1), accountId: txForm.accountId || null, responsibleName: firstName };
     const path = editingTransactionId ? `/api/spaces/${activeSpaceId}/transactions/${editingTransactionId}` : `/api/spaces/${activeSpaceId}/transactions`;
     setLoading(true);
     try {
@@ -664,7 +666,7 @@ export default function App() {
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
@@ -1114,13 +1116,38 @@ function Relatorios({ transactions, selectedMonthKey, activeMode }) {
   );
 }
 
-function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
+function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, activeSpaceId, refreshSpaceData, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
   const [confirmation, setConfirmation] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || localStorage.getItem("finanflow_profile_photo") || "");
   const [pendingPhoto, setPendingPhoto] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [profileName, setProfileName] = useState(user?.name || firstName);
+  const [history, setHistory] = useState([]);
+  const [historyMessage, setHistoryMessage] = useState("");
   const photoInputRef = useRef(null);
+
+  async function loadHistory() {
+    if (!activeSpaceId) return;
+    try {
+      const data = await api(`/api/spaces/${activeSpaceId}/history`);
+      setHistory(data.history || []);
+    } catch (error) {
+      setHistoryMessage(error.message);
+    }
+  }
+
+  useEffect(() => { loadHistory(); }, [activeSpaceId]);
+
+  async function restoreHistoryItem(item) {
+    setHistoryMessage("Restaurando...");
+    try {
+      await api(`/api/spaces/${activeSpaceId}/history/${item._id}/restore`, { method: "POST" });
+      await Promise.all([loadHistory(), refreshSpaceData()]);
+      setHistoryMessage("Lançamento restaurado com sucesso.");
+    } catch (error) {
+      setHistoryMessage(error.message);
+    }
+  }
 
   async function confirmDestructiveAction() {
     const action = confirmation?.action;
@@ -1212,6 +1239,16 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
       <section className="settings-card settings-app-card">
         <SettingsTitle number="6" icon={Download} title="Aplicativo" />
         <div className="settings-app-content"><div><h3>{isInstalled ? "FinanFlow instalado" : "Instalar FinanFlow"}</h3><p>Tenha o FinanFlow sempre à mão e gerencie suas finanças de qualquer lugar.</p><button type="button" disabled={isInstalled || !installPrompt} onClick={installApp}><Download size={17} />{isInstalled ? "Aplicativo instalado" : "Instalar aplicativo"}</button></div><span className="phone-illustration" aria-hidden="true"><Smartphone size={70} /><i>≈</i></span></div>
+      </section>
+
+      <section className="settings-card settings-history-card">
+        <SettingsTitle icon={History} title="Histórico e recuperação" />
+        <p>Veja quem alterou os dados. Lançamentos apagados podem ser recuperados por aqui.</p>
+        <div className="settings-history-list">
+          {history.slice(0, 10).map((item) => <div className="settings-history-item" key={item._id}><span><strong>{item.summary}</strong><small>{item.userName} • {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.createdAt))}</small></span>{item.canRestore && <button type="button" className="settings-outline" onClick={() => restoreHistoryItem(item)}><RotateCcw size={15} />Restaurar</button>}</div>)}
+          {!history.length && <small>Nenhuma alteração registrada ainda.</small>}
+        </div>
+        {historyMessage && <small className="settings-inline-message">{historyMessage}</small>}
       </section>
 
       <section className="settings-card settings-data-card">
