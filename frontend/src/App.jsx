@@ -8,11 +8,11 @@ import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
 import safeShieldIcon from "./assets/financial-icons/safe-shield.webp";
-import navHomeIcon from "./assets/navigation/home.png";
-import navTransactionsIcon from "./assets/navigation/transactions.png";
-import navAccountsIcon from "./assets/navigation/accounts.png";
-import navPlanningIcon from "./assets/navigation/planning.png";
-import navReportsIcon from "./assets/navigation/reports.png";
+import navHomeIcon from "./assets/navigation/home.webp";
+import navTransactionsIcon from "./assets/navigation/transactions.webp";
+import navAccountsIcon from "./assets/navigation/accounts.webp";
+import navPlanningIcon from "./assets/navigation/planning.webp";
+import navReportsIcon from "./assets/navigation/reports.webp";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -584,6 +584,22 @@ export default function App() {
     }} />;
   }
 
+  async function leaveCoupleSpace() {
+    if (!coupleSpace?._id) return;
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${coupleSpace._id}/members/me`, { method: "DELETE" });
+      setCoupleInvite(null);
+      await loadSpaces("individual");
+      setActiveMenu("Início");
+      setMessage("Você saiu do espaço do casal. Seus dados individuais continuam preservados.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!user) {
     return <AuthScreen pendingInvite={pendingInvite} authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} loading={loading} message={message} setMessage={setMessage} />;
   }
@@ -666,7 +682,7 @@ export default function App() {
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
@@ -1116,7 +1132,7 @@ function Relatorios({ transactions, selectedMonthKey, activeMode }) {
   );
 }
 
-function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, activeSpaceId, refreshSpaceData, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
+function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, activeSpaceId, refreshSpaceData, leaveCoupleSpace, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
   const [confirmation, setConfirmation] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || localStorage.getItem("finanflow_profile_photo") || "");
   const [pendingPhoto, setPendingPhoto] = useState("");
@@ -1231,7 +1247,7 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
         <div className="couple-settings-box">
           <span className="couple-settings-icon"><HeartHandshake size={25} /></span>
           <div><h3>{coupleReady ? "Espaço do casal ativo" : coupleSpace ? "Convite do casal pendente" : "Modo casal ainda não criado"}</h3><p>{coupleReady ? "O espaço compartilhado está disponível para as duas pessoas." : "O modo casal só libera lançamentos compartilhados depois que a outra pessoa aceitar."}</p></div>
-          <div className="couple-settings-actions"><button type="button" onClick={() => setActiveMenu("Casal")}>{coupleReady ? "Entrar no casal" : coupleSpace ? "Ver convite" : "Criar convite"}</button>{coupleSpace && !coupleReady && <button type="button" className="settings-outline" onClick={() => setActiveMenu("Casal")}>Gerar novo link</button>}</div>
+          <div className="couple-settings-actions"><button type="button" onClick={() => setActiveMenu("Casal")}>{coupleReady ? "Entrar no casal" : coupleSpace ? "Ver convite" : "Criar convite"}</button>{coupleSpace && <button type="button" className="settings-remove" onClick={() => setConfirmation({ eyebrow: "Espaço compartilhado", title: "Sair do modo casal?", description: "Você perderá o acesso aos dados compartilhados, mas seus dados individuais continuarão preservados.", note: "Os lançamentos do casal permanecerão com a outra pessoa. Se o convite ainda estiver pendente, o espaço vazio será removido.", confirmLabel: "Sair do casal", action: leaveCoupleSpace })}><LogOut size={16} />Sair do casal</button>}</div>
           <small><LockKeyhole size={14} />Seus dados continuam privados até a aceitação do convite.</small>
         </div>
       </section>

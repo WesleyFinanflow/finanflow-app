@@ -22,6 +22,41 @@ const CORS_ORIGINS = String(process.env.CORS_ORIGIN || "http://localhost:5173")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use((_req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Resource-Policy": "same-site",
+  });
+  next();
+});
+
+const requestBuckets = new Map();
+function rateLimit({ windowMs, max }) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = `${req.ip}:${req.path}`;
+    const bucket = requestBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) requestBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    else {
+      bucket.count += 1;
+      if (bucket.count > max) {
+        res.set("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
+        return res.status(429).json({ message: "Muitas tentativas. Aguarde alguns minutos e tente novamente." });
+      }
+    }
+    if (requestBuckets.size > 5000) for (const [bucketKey, value] of requestBuckets) if (value.resetAt <= now) requestBuckets.delete(bucketKey);
+    next();
+  };
+}
+
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5 });
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin || CORS_ORIGINS.includes(origin)) return callback(null, true);
@@ -41,6 +76,8 @@ const userSchema = new mongoose.Schema(
     passwordVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
+    failedLoginAttempts: { type: Number, default: 0, select: false },
+    loginLockedUntil: { type: Date, select: false },
   },
   { timestamps: true }
 );
@@ -335,7 +372,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, app: "FinanFlow API", database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" });
 });
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", registerLimiter, async (req, res) => {
   try {
     const { name: rawName, email: rawEmail, password } = req.body || {};
     const name = requiredText(rawName, "Nome", 80);
@@ -354,7 +391,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/forgot-password", async (req, res) => {
+app.post("/api/auth/forgot-password", authLimiter, async (req, res) => {
   const genericMessage = "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha.";
   try {
     if (!RESEND_API_KEY || !EMAIL_FROM) {
@@ -383,7 +420,7 @@ app.post("/api/auth/forgot-password", async (req, res) => {
   }
 });
 
-app.post("/api/auth/reset-password", async (req, res) => {
+app.post("/api/auth/reset-password", authLimiter, async (req, res) => {
   try {
     const token = requiredText(req.body?.token, "Token", 100);
     const password = validatePassword(req.body?.password, "A nova senha");
@@ -405,14 +442,26 @@ app.post("/api/auth/reset-password", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authLimiter, async (req, res) => {
   try {
     const { email: rawEmail, password } = req.body || {};
     const email = emailAddress(rawEmail);
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("+failedLoginAttempts +loginLockedUntil");
     if (!user) return res.status(401).json({ message: "E-mail ou senha inválidos." });
+    if (user.loginLockedUntil && user.loginLockedUntil > new Date()) return res.status(429).json({ message: "Acesso temporariamente bloqueado. Tente novamente em 15 minutos." });
     const valid = await bcrypt.compare(password || "", user.passwordHash);
-    if (!valid) return res.status(401).json({ message: "E-mail ou senha inválidos." });
+    if (!valid) {
+      user.failedLoginAttempts = Number(user.failedLoginAttempts || 0) + 1;
+      if (user.failedLoginAttempts >= 5) {
+        user.loginLockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        user.failedLoginAttempts = 0;
+      }
+      await user.save();
+      return res.status(401).json({ message: "E-mail ou senha inválidos." });
+    }
+    user.failedLoginAttempts = 0;
+    user.loginLockedUntil = undefined;
+    await user.save();
     res.json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" } });
   } catch (error) {
     if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
@@ -590,6 +639,29 @@ app.post("/api/invites/:code/accept", auth, async (req, res) => {
     res.status(500).json({ message: "Erro ao aceitar convite." });
   }
 });
+
+app.delete("/api/spaces/:spaceId/members/me", auth, asyncHandler(async (req, res) => {
+  const membership = await Member.findOne({ userId: req.user._id, spaceId: req.params.spaceId }).populate("spaceId");
+  if (!membership?.spaceId || membership.spaceId.type !== "couple") return res.status(404).json({ message: "Espaço do casal não encontrado." });
+  const space = membership.spaceId;
+  const otherMember = await Member.findOne({ spaceId: space._id, userId: { $ne: req.user._id } });
+  await recordAudit({ spaceId: space._id, user: req.user, action: "settings", entityType: "space", entityId: space._id, summary: `${req.user.name.split(/\s+/)[0]} saiu do espaço do casal`, before: membership });
+  await Member.deleteOne({ _id: membership._id });
+  if (otherMember) {
+    if (String(space.ownerId) === String(req.user._id)) {
+      await Space.updateOne({ _id: space._id }, { ownerId: otherMember.userId });
+      await Member.updateOne({ _id: otherMember._id }, { role: "owner" });
+    }
+  } else {
+    await Promise.all([
+      Invite.deleteMany({ spaceId: space._id }),
+      Transaction.deleteMany({ spaceId: space._id }),
+      Account.deleteMany({ spaceId: space._id }),
+      Space.deleteOne({ _id: space._id }),
+    ]);
+  }
+  res.json({ ok: true });
+}));
 
 app.get("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
