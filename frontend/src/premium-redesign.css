@@ -403,6 +403,7 @@ html body #root .profile-space-menu button{width:100%;color:#174638!important;bo
 @media(min-width:1101px){.premium-nav-icon{width:34px;height:34px}.sidebar-nav button.active .premium-nav-icon{transform:scale(1.1)}}
 @media(max-width:720px){.premium-nav-icon{width:28px;height:28px;margin-bottom:5px}.sidebar-nav button.active .premium-nav-icon{transform:translateY(-1px) scale(1.08)}html body #root .sidebar .sidebar-nav button{min-height:54px!important;padding-top:4px!important;padding-bottom:4px!important}}
 @media(max-width:720px){html{scroll-padding-bottom:170px}html body #root .main-content{padding-bottom:calc(170px + env(safe-area-inset-bottom))!important}.main-content>section:last-child,.main-content>div:last-child{margin-bottom:12px}}
+@media(max-width:720px){.main-content>.transactions-layout{margin-top:18px}.transactions-toolbar{padding-top:4px!important}}
 @media print{.sidebar,.dashboard-toolbar,.hero,.reports-actions{display:none!important}.finanflow-app{display:block!important}.main-content{width:100%!important;max-width:none!important;padding:0!important}.reports-page{gap:10px}.reports-grid{grid-template-columns:repeat(2,1fr)}.panel,.report-kpi{break-inside:avoid;box-shadow:none!important}.report-bars{height:170px}}
 
 @media(max-width:720px){
