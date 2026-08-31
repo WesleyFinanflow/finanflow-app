@@ -628,7 +628,14 @@ export default function App() {
             </section>
           )}
           <button type="button" className="sidebar-profile profile-menu-trigger" aria-label="Abrir menu do perfil" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
-            <Avatar name={user.name} photo={user.profilePhoto} />
+            {activeCoupleSpace?.members?.length ? (
+              <span className="sidebar-couple-avatars" aria-label="Perfis do casal">
+                {activeCoupleSpace.members.slice(0, 2).map((member) => {
+                  const isCurrentUser = String(member.id) === String(user?.id || user?._id);
+                  return <Avatar key={member.id || member.name} name={member.firstName || member.name} photo={isCurrentUser ? (user.profilePhoto || member.profilePhoto) : member.profilePhoto} />;
+                })}
+              </span>
+            ) : <Avatar name={user.name} photo={user.profilePhoto} />}
             <span className="profile-trigger-copy"><strong>{firstName}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></span>
             <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
           </button>
