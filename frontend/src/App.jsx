@@ -446,14 +446,18 @@ export default function App() {
       setActiveMenu("Casal");
       return;
     }
-    setActiveMode("couple");
-    setActiveSpaceId(coupleSpace._id);
-    setReserve(Number(coupleSpace.reserve ?? 300));
-    setAccounts([]);
-    setTransactions([]);
-    setActiveMenu("Início");
     try {
-      await loadSpaceData(coupleSpace._id);
+      const data = await api("/api/spaces");
+      const loaded = data.spaces || [];
+      const refreshedCouple = loaded.find((space) => space.type === "couple") || coupleSpace;
+      setSpaces(loaded);
+      setActiveMode("couple");
+      setActiveSpaceId(refreshedCouple._id);
+      setReserve(Number(refreshedCouple.reserve ?? 300));
+      setAccounts([]);
+      setTransactions([]);
+      setActiveMenu("Início");
+      await loadSpaceData(refreshedCouple._id);
     } catch (error) {
       setMessage(error.message);
     }
@@ -609,7 +613,7 @@ export default function App() {
         <div className={`sidebar-profile-area ${profileMenuOpen ? "is-open" : ""}`} ref={profileMenuRef}>
           {profileMenuOpen && (
             <section className="profile-space-menu" role="menu" aria-label="Alternar espaço financeiro">
-              <div className="profile-menu-head"><Avatar name={user.name} /><span><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><small>Espaço atual</small></span></div>
+              <div className="profile-menu-head"><Avatar name={user.name} photo={user.profilePhoto} /><span><strong>{firstName}</strong><small>Espaço atual</small></span></div>
               <span className="profile-menu-label">Meus espaços</span>
               <button type="button" className={`profile-space-option ${activeMode === "individual" ? "active" : ""}`} role="menuitemradio" aria-checked={activeMode === "individual"} onClick={() => { setProfileMenuOpen(false); goToIndividual(); }}>
                 <UserRound size={19} aria-hidden="true" /><span><strong>Individual</strong><small>Dados somente seus</small></span>{activeMode === "individual" && <Check size={18} aria-hidden="true" />}
@@ -624,8 +628,8 @@ export default function App() {
             </section>
           )}
           <button type="button" className="sidebar-profile profile-menu-trigger" aria-label="Abrir menu do perfil" aria-haspopup="menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>
-            <Avatar name={user.name} />
-            <span className="profile-trigger-copy"><strong>{String(user.name || "Wesley").trim().split(/\s+/).slice(0, 2).join(" ")}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></span>
+            <Avatar name={user.name} photo={user.profilePhoto} />
+            <span className="profile-trigger-copy"><strong>{firstName}</strong><span>{activeCoupleSpace ? "Modo casal" : "Modo individual"}</span></span>
             <ChevronDown className="profile-chevron" size={16} aria-hidden="true" />
           </button>
         </div>
@@ -643,12 +647,12 @@ export default function App() {
         <div className="dashboard-toolbar" aria-label="Informações do painel">
           <DashboardSelect label="Mês exibido" icon={CalendarDays} value={selectedMonthKey} onChange={setSelectedMonthKey} options={monthOptions().map((item) => ({ value: item.key, label: item.label }))} />
         </div>
-        <Hero firstName={firstName} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
-        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} />}
-        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} />}
+        <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
+        {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
+        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
-        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
+        {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
@@ -784,15 +788,19 @@ function PasswordInput({ id, label, value, onChange, visible, toggle, autoComple
   );
 }
 
-function Hero({ firstName, coupleSpace, summary, hasData, activeMenu }) {
+function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu }) {
   const isCouple = Boolean(coupleSpace);
+  const coupleMembers = (coupleSpace?.members?.slice(0, 2) || []).map((member) => String(member.id) === String(user?.id || user?._id) ? { ...member, profilePhoto: user?.profilePhoto || member.profilePhoto } : member);
+  const coupleName = coupleMembers.length
+    ? coupleMembers.map((member) => member.firstName || String(member.name || "Pessoa").split(/\s+/)[0]).join(" e ")
+    : String(coupleSpace?.name || "Casal").split("&").map((name) => name.trim().split(/\s+/)[0]).join(" e ");
   return (
     <section className={`hero ${activeMenu === "Configurações" ? "settings-hero" : ""}`}>
       <div className="hero-copy">
-        <Avatar name={firstName} size="large" />
+        {isCouple && coupleMembers.length ? <span className="couple-avatars" aria-label={`Participantes: ${coupleName}`}>{coupleMembers.map((member) => <Avatar key={member.id || member.name} name={member.firstName || member.name} photo={member.profilePhoto} size="large" />)}</span> : <Avatar name={firstName} photo={user?.profilePhoto} size="large" />}
         <div>
         <span className="eyebrow">{isCouple ? "Controle financeiro compartilhado" : "Controle financeiro individual"}</span>
-        <h1>{isCouple ? coupleSpace.name : `Olá, ${firstName}!`}</h1>
+        <h1>{isCouple ? coupleName : `Olá, ${firstName}!`}</h1>
         <p>
           {activeMenu === "Configurações"
             ? <><span>Gerencie suas configurações e mantenha tudo</span><span>sob controle com segurança e tranquilidade.</span></>
@@ -811,7 +819,7 @@ function Hero({ firstName, coupleSpace, summary, hasData, activeMenu }) {
   );
 }
 
-function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, selectedMonthKey }) {
+function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, selectedMonthKey, activeMode }) {
   return (
     <>
       <section className="stats-grid">
@@ -821,9 +829,11 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
         <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Limite protegido: ${money(reserve)}`} tone="blue" />
       </section>
 
+      {activeMode === "couple" && <CoupleContributions transactions={transactions} selectedMonthKey={selectedMonthKey} />}
+
       <section className="dashboard-grid">
         <MonthlyOverview transactions={transactions} selectedMonthKey={selectedMonthKey} />
-        <RecentTransactions transactions={transactions} setActiveMenu={setActiveMenu} selectedMonthKey={selectedMonthKey} />
+        <RecentTransactions transactions={transactions} setActiveMenu={setActiveMenu} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />
       </section>
 
       <section className="quick-start panel">
@@ -846,7 +856,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
   );
 }
 
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey }) {
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, activeMode }) {
   const resetForm = () => {
     setEditingTransactionId("");
     setTxForm(createTransactionForm());
@@ -900,6 +910,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
             <article className={`transaction-row ${item.type}`} key={item._id}>
               <div className="transaction-main">
                 <strong>{item.description}</strong>
+                {activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}
                 <span>{item.category} · {item.status === "pago" ? item.type === "receita" ? "recebido" : "pago" : "pendente"}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
               </div>
               <div className="transaction-value"><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
@@ -998,9 +1009,9 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goa
   );
 }
 
-function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
+function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
   const [confirmation, setConfirmation] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(() => localStorage.getItem("finanflow_profile_photo") || "");
+  const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || localStorage.getItem("finanflow_profile_photo") || "");
   const [pendingPhoto, setPendingPhoto] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [preferences, setPreferences] = useState(() => {
@@ -1015,22 +1026,33 @@ function Config({ reserve, setReserve, saveReserve, firstName, email, coupleSpac
     if (action) await action();
   }
 
-  function selectPhoto(event) {
+  async function selectPhoto(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/") || file.size > 2_000_000) return setProfileMessage("Escolha uma imagem de até 2 MB.");
-    const reader = new FileReader();
-    reader.onload = () => { setPendingPhoto(String(reader.result)); setProfileMessage(""); };
-    reader.readAsDataURL(file);
+    try {
+      const nextPhoto = await resizeProfilePhoto(file);
+      setPendingPhoto(nextPhoto);
+      setProfileMessage("");
+    } catch {
+      setProfileMessage("Não foi possível preparar esta imagem.");
+    }
   }
 
-  function saveProfile() {
+  async function saveProfile() {
     const nextPhoto = pendingPhoto || photoPreview;
-    if (nextPhoto) localStorage.setItem("finanflow_profile_photo", nextPhoto);
-    else localStorage.removeItem("finanflow_profile_photo");
-    setPhotoPreview(nextPhoto);
-    setPendingPhoto("");
-    setProfileMessage("Perfil salvo neste dispositivo.");
+    setProfileMessage("Salvando...");
+    try {
+      const data = await api("/api/me/profile", { method: "PATCH", body: JSON.stringify({ profilePhoto: nextPhoto }) });
+      localStorage.removeItem("finanflow_profile_photo");
+      localStorage.setItem("finanflow_user", JSON.stringify(data.user));
+      setUser(data.user);
+      setPhotoPreview(data.user.profilePhoto || "");
+      setPendingPhoto("");
+      setProfileMessage("Perfil salvo e compartilhado com seu espaço do casal.");
+    } catch (error) {
+      setProfileMessage(error.message);
+    }
   }
 
   function savePreferences(next) {
@@ -1211,7 +1233,41 @@ function MonthlyOverview({ transactions, selectedMonthKey }) {
   );
 }
 
-function RecentTransactions({ transactions, setActiveMenu, selectedMonthKey }) {
+function CoupleContributions({ transactions, selectedMonthKey }) {
+  const contributors = Array.from(transactions
+    .filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.type !== "meta")
+    .reduce((map, item) => {
+      const name = String(item.responsibleName || "Casal").trim() || "Casal";
+      const current = map.get(name) || { name, income: 0, outflow: 0, count: 0 };
+      current.count += 1;
+      if (item.type === "receita") current.income += Number(item.amount || 0);
+      else current.outflow += Number(item.amount || 0);
+      map.set(name, current);
+      return map;
+    }, new Map()).values());
+
+  if (!contributors.length) return null;
+
+  return (
+    <section className="couple-contributions" aria-label="Movimentações por pessoa no modo casal">
+      <div className="couple-contributions-head">
+        <div><span className="eyebrow">Espaço compartilhado</span><h2>Movimentações por pessoa</h2></div>
+        <small>Os totais acima representam o casal</small>
+      </div>
+      <div className="couple-contribution-list">
+        {contributors.map((person) => (
+          <article key={person.name}>
+            <span className="contributor-avatar"><UserRound size={17} aria-hidden="true" /></span>
+            <div><strong>{person.name}</strong><small>{person.count} {person.count === 1 ? "lançamento" : "lançamentos"} neste mês</small></div>
+            <dl><div><dt>Entradas</dt><dd>+{money(person.income)}</dd></div><div><dt>Saídas</dt><dd>−{money(person.outflow)}</dd></div></dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecentTransactions({ transactions, setActiveMenu, selectedMonthKey, activeMode }) {
   const recent = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.date <= today).slice(0, 5);
   const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
   const categoryIcons = { renda: Banknote, alimentação: ShoppingCart, alimentacao: ShoppingCart, transporte: Fuel, assinaturas: Music2, lazer: Music2, restaurante: Utensils };
@@ -1229,7 +1285,7 @@ function RecentTransactions({ transactions, setActiveMenu, selectedMonthKey }) {
             return (
               <article className={`recent-item ${item.type}`} key={item._id}>
                 <span className="recent-icon"><Icon size={18} aria-hidden="true" /></span>
-                <span className="recent-copy"><strong>{item.description}</strong><small>{item.category} · {item.status === "pago" ? item.type === "receita" ? "recebido" : item.type === "meta" ? "separado" : "pago" : "pendente"} · {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${item.date}T12:00:00`)).replace(".", "")}</small></span>
+                <span className="recent-copy"><strong>{item.description}</strong><small>{activeMode === "couple" && <b>{item.responsibleName || "Casal"} · </b>}{item.category} · {item.status === "pago" ? item.type === "receita" ? "recebido" : item.type === "meta" ? "separado" : "pago" : "pendente"} · {new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(`${item.date}T12:00:00`)).replace(".", "")}</small></span>
                 <strong className="recent-value">{item.type === "receita" ? "+" : "−"}{money(item.amount)}</strong>
               </article>
             );
@@ -1396,12 +1452,37 @@ function StatCard({ title, value, text, tone }) {
   );
 }
 
-function Avatar({ name, size = "small" }) {
+function resizeProfilePhoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = reject;
+      image.onload = () => {
+        const size = 180;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext("2d");
+        const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+        const sourceX = (image.naturalWidth - sourceSize) / 2;
+        const sourceY = (image.naturalHeight - sourceSize) / 2;
+        context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", .78));
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function Avatar({ name, photo = "", size = "small" }) {
   const initials = String(name || "F").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   const isWesley = /^wesley\b/i.test(String(name || "").trim());
   return (
     <span className={`user-avatar ${size}`} aria-hidden="true">
-      {isWesley ? <img src={wesleyAvatar} alt="" /> : initials || "F"}
+      {photo ? <img src={photo} alt="" /> : isWesley ? <img src={wesleyAvatar} alt="" /> : initials || "F"}
     </span>
   );
 }

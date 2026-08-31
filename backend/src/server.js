@@ -29,12 +29,13 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "200kb" }));
 
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 80 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 },
+    profilePhoto: { type: String, default: "", maxlength: 120000 },
     passwordHash: { type: String, required: true },
     passwordChangedAt: { type: Date },
     passwordVersion: { type: Number, default: 0 },
@@ -171,8 +172,15 @@ async function userCanAccessSpace(userId, spaceId) {
 
 async function serializeSpaceForUser(member) {
   const space = member.spaceId.toObject();
-  const memberCount = await Member.countDocuments({ spaceId: space._id });
-  return { ...space, role: member.role, memberCount };
+  const memberships = await Member.find({ spaceId: space._id }).populate("userId", "name profilePhoto").sort({ createdAt: 1 });
+  const members = memberships.filter((item) => item.userId).map((item) => ({
+    id: item.userId._id,
+    name: item.userId.name,
+    firstName: String(item.userId.name || "Pessoa").trim().split(/\s+/)[0],
+    profilePhoto: item.userId.profilePhoto || "",
+    role: item.role,
+  }));
+  return { ...space, role: member.role, memberCount: members.length, members };
 }
 
 async function createInviteForSpace(spaceId, userId) {
@@ -268,7 +276,7 @@ app.post("/api/auth/register", async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ name, email, passwordHash });
     await createIndividualSpaceForUser(user);
-    res.status(201).json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email } });
+    res.status(201).json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" } });
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
     if (error?.code === 11000) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
@@ -335,7 +343,7 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     const valid = await bcrypt.compare(password || "", user.passwordHash);
     if (!valid) return res.status(401).json({ message: "E-mail ou senha inválidos." });
-    res.json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email } });
+    res.json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" } });
   } catch (error) {
     if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     res.status(500).json({ message: "Erro ao fazer login." });
@@ -343,6 +351,19 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: req.user })));
+
+app.patch("/api/me/profile", auth, async (req, res) => {
+  try {
+    const profilePhoto = String(req.body?.profilePhoto || "");
+    if (profilePhoto && (!/^data:image\/(?:jpeg|png|webp);base64,/i.test(profilePhoto) || profilePhoto.length > 120000)) {
+      return res.status(400).json({ message: "A foto de perfil não é válida ou ficou muito grande." });
+    }
+    const user = await User.findByIdAndUpdate(req.user._id, { profilePhoto }, { new: true, runValidators: true }).select("name email profilePhoto");
+    res.json({ user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" }, message: "Perfil atualizado." });
+  } catch {
+    res.status(500).json({ message: "Erro ao salvar o perfil." });
+  }
+});
 
 app.patch("/api/me/password", auth, async (req, res) => {
   try {
