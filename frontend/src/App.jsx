@@ -76,12 +76,19 @@ function monthLabel(monthKey, style = "long") {
   return new Intl.DateTimeFormat("pt-BR", { month: style, year: "numeric" }).format(monthDate(monthKey)).replace(".", "");
 }
 
+function compactMonthLabel(monthKey) {
+  const date = monthDate(monthKey);
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)}/${date.getFullYear()}`;
+}
+
 function monthOptions() {
-  const currentYear = monthDate(currentMonthKey).getFullYear();
-  return Array.from({ length: 60 }, (_, index) => {
-    const date = new Date(currentYear, index, 1, 12);
+  const offsets = [0, ...Array.from({ length: 11 }, (_, index) => -(index + 1)), ...Array.from({ length: 12 }, (_, index) => index + 1)];
+  return offsets.map((offset) => {
+    const date = monthDate(currentMonthKey);
+    date.setMonth(date.getMonth() + offset);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    return { key, label: monthLabel(key) };
+    return { key, label: compactMonthLabel(key) };
   });
 }
 
@@ -911,7 +918,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   return (
     <section className={`transactions-layout ${formOpen ? "with-form" : ""}`}>
       <div className="transactions-toolbar">
-        <div><span className="eyebrow">Movimentações</span><h2>Extrato de {monthLabel(selectedMonthKey)}</h2></div>
+        <div><span className="eyebrow">Movimentações</span><h2>Extrato de {compactMonthLabel(selectedMonthKey)}</h2></div>
         {!formOpen && <button type="button" onClick={() => { setTxForm(createTransactionForm()); setEditingTransactionId(""); setFormOpen(true); }}>Novo lançamento</button>}
       </div>
       {formOpen && <form className="panel transaction-form-panel" onSubmit={addTransaction}>
