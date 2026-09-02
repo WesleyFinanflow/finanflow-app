@@ -1328,7 +1328,7 @@ function MonthlyOverview({ transactions, selectedMonthKey }) {
         return { key, label: new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", ""), value: 0 };
       });
   if (periodCount === 1) {
-    transactions.filter((item) => item.status === "pago" && String(item.date || "").slice(0, 7) === selectedMonthKey).forEach((item) => {
+    transactions.filter((item) => item.type !== "meta" && String(item.date || "").slice(0, 7) === selectedMonthKey).forEach((item) => {
       const day = Number(String(item.date || "").slice(8, 10));
       const amount = (item.type === "receita" ? 1 : -1) * Number(item.amount || 0);
       points.forEach((point) => { if (day <= point.day) point.value += amount; });
@@ -1336,7 +1336,7 @@ function MonthlyOverview({ transactions, selectedMonthKey }) {
   } else {
     const byMonth = new Map(points.map((item) => [item.key, item]));
     transactions.forEach((item) => {
-      if (item.status !== "pago") return;
+      if (item.type === "meta") return;
       const month = byMonth.get(String(item.date || "").slice(0, 7));
       if (!month) return;
       month.value += (item.type === "receita" ? 1 : -1) * Number(item.amount || 0);
@@ -1420,7 +1420,10 @@ function CoupleContributions({ transactions, selectedMonthKey }) {
 }
 
 function RecentTransactions({ transactions, setActiveMenu, selectedMonthKey, activeMode }) {
-  const recent = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.date <= today).slice(0, 5);
+  const recent = transactions
+    .filter((item) => item.type !== "meta" && String(item.date || "").slice(0, 7) === selectedMonthKey)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")) || String(right.date || "").localeCompare(String(left.date || "")))
+    .slice(0, 5);
   const icons = { receita: ArrowDownLeft, despesa: ArrowUpRight, divida: ReceiptText, meta: TrendingUp };
   const categoryIcons = { renda: Banknote, alimentação: ShoppingCart, alimentacao: ShoppingCart, transporte: Fuel, assinaturas: Music2, lazer: Music2, restaurante: Utensils };
   return (
