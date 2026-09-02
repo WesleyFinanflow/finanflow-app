@@ -83,7 +83,7 @@ function compactMonthLabel(monthKey) {
 }
 
 function monthOptions() {
-  const offsets = [0, ...Array.from({ length: 11 }, (_, index) => -(index + 1)), ...Array.from({ length: 12 }, (_, index) => index + 1)];
+  const offsets = [0, -1, ...Array.from({ length: 12 }, (_, index) => index + 1)];
   return offsets.map((offset) => {
     const date = monthDate(currentMonthKey);
     date.setMonth(date.getMonth() + offset);
