@@ -692,12 +692,9 @@ export default function App() {
       </aside>
 
       <section className="main-content">
-        <div className="dashboard-toolbar" aria-label="Informações do painel">
-          <DashboardSelect label="Mês exibido" icon={CalendarDays} value={selectedMonthKey} onChange={setSelectedMonthKey} options={monthOptions().map((item) => ({ value: item.key, label: item.label }))} />
-        </div>
         <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
-        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
+        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
@@ -905,7 +902,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
   );
 }
 
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, activeMode }) {
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, setSelectedMonthKey, activeMode }) {
   const resetForm = () => {
     setEditingTransactionId("");
     setTxForm(createTransactionForm());
@@ -918,7 +915,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   return (
     <section className={`transactions-layout ${formOpen ? "with-form" : ""}`}>
       <div className="transactions-toolbar">
-        <div><span className="eyebrow">Movimentações</span><h2>Extrato de {compactMonthLabel(selectedMonthKey)}</h2></div>
+        <div className="transactions-period"><span className="eyebrow">Movimentações</span><DashboardSelect compact label="Mês do extrato" icon={CalendarDays} value={selectedMonthKey} onChange={setSelectedMonthKey} options={monthOptions().map((item) => ({ value: item.key, label: item.label }))} /></div>
         {!formOpen && <button type="button" onClick={() => { setTxForm(createTransactionForm()); setEditingTransactionId(""); setFormOpen(true); }}>Novo lançamento</button>}
       </div>
       {formOpen && <form className="panel transaction-form-panel" onSubmit={addTransaction}>
