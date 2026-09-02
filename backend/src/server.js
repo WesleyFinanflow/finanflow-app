@@ -784,14 +784,37 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
     if (String(existing.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou o lançamento pode editá-lo." });
     const accountId = await normalizeAccountIdForSpace(req.body?.accountId, existing.spaceId, req.user.name);
     const input = transactionInput(req.body, accountId, req.user);
-    let transaction;
-    if (existing.recurrence === "monthly" && existing.seriesId) {
-      await Transaction.updateMany({ spaceId: existing.spaceId, seriesId: existing.seriesId, date: { $gte: existing.date } }, { $set: { accountId, type: input.type, description: input.description, amount: input.amount, category: input.category, responsibleName: input.responsibleName } }, { runValidators: true });
-      transaction = await Transaction.findByIdAndUpdate(existing._id, { ...input, recurrence: "monthly", seriesId: existing.seriesId }, { new: true, runValidators: true });
+    const recurrence = req.body?.recurrence === "monthly" ? "monthly" : "none";
+    const installmentCount = Math.max(1, Math.min(120, Math.trunc(Number(req.body?.installmentCount || 1))));
+    if (recurrence === "monthly" && installmentCount > 1) return res.status(400).json({ message: "Escolha conta fixa mensal ou parcelamento, não os dois." });
+    const previous = existing.seriesId
+      ? await Transaction.find({ spaceId: existing.spaceId, seriesId: existing.seriesId }).sort({ date: 1 })
+      : [existing];
+    const grouped = recurrence === "monthly" || installmentCount > 1;
+    const seriesId = grouped ? (existing.seriesId || crypto.randomUUID()) : undefined;
+    const documents = [];
+    if (recurrence === "monthly") {
+      for (let index = 0; index < 24; index += 1) {
+        documents.push({ ...input, spaceId: existing.spaceId, date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence: "monthly" });
+      }
+    } else if (installmentCount > 1) {
+      const totalAmount = Number((input.amount * installmentCount).toFixed(2));
+      if (totalAmount > 1000000000000) return res.status(400).json({ message: "O valor total do parcelamento ultrapassa o limite permitido." });
+      const amounts = repeatInstallmentAmount(input.amount, installmentCount);
+      for (let index = 0; index < installmentCount; index += 1) {
+        documents.push({ ...input, spaceId: existing.spaceId, amount: amounts[index], date: addMonthsToIsoDate(input.date, index), status: index === 0 ? input.status : "pendente", seriesId, recurrence: "none", installmentNumber: index + 1, installmentCount, totalAmount });
+      }
     } else {
-      transaction = await Transaction.findByIdAndUpdate(existing._id, input, { new: true, runValidators: true });
+      documents.push({ ...input, spaceId: existing.spaceId, recurrence: "none", installmentNumber: 1, installmentCount: 1, totalAmount: input.amount });
     }
-    await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `Lançamento atualizado: ${transaction.description}`, before: existing, after: transaction });
+    if (existing.seriesId) await Transaction.deleteMany({ spaceId: existing.spaceId, seriesId: existing.seriesId, _id: { $ne: existing._id } });
+    const first = documents.shift();
+    const obsoleteFields = recurrence === "monthly"
+      ? { installmentNumber: 1, installmentCount: 1, totalAmount: 1 }
+      : grouped ? {} : { seriesId: 1 };
+    const transaction = await Transaction.findByIdAndUpdate(existing._id, { $set: first, $unset: obsoleteFields }, { new: true, runValidators: true });
+    if (documents.length) await Transaction.insertMany(documents);
+    await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `Lançamento atualizado: ${transaction.description}`, before: previous, after: [transaction, ...documents] });
     res.json({ transaction });
   } catch (error) {
     const invalidInput = error.status === 400 || error.name === "ValidationError";

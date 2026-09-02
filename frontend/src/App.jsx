@@ -906,7 +906,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   };
   const monthTransactions = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.type !== "meta");
   const categories = Array.from(new Set([...(transactionCategories[txForm.type] || transactionCategories.despesa), ...transactions.filter((item) => item.type === txForm.type).map((item) => item.category).filter(Boolean)]));
-  const isInstallment = !editingTransactionId && Number(txForm.installmentCount || 1) > 1;
+  const isInstallment = txForm.recurrence !== "monthly" && Number(txForm.installmentCount || 1) > 1;
 
   return (
     <section className={`transactions-layout ${formOpen ? "with-form" : ""}`}>
@@ -929,9 +929,9 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
           <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select></label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
-          {!editingTransactionId && <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez</option><option value="monthly">Conta fixa todo mês</option></select></label>}
-          {!editingTransactionId && txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "À vista" : `${count} parcelas`}</option>)}</select></label>}
-          {isInstallment && !editingTransactionId && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. As parcelas serão lançadas nos próximos meses.</small></span></div>}
+          <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez ou parcelado</option><option value="monthly">Conta fixa todo mês</option></select></label>
+          {txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "Somente uma vez" : `${count} parcelas`}</option>)}</select></label>}
+          {isInstallment && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. Ao salvar, as parcelas serão atualizadas nos próximos meses.</small></span></div>}
           <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{accounts[0]?.name || "Conta principal"}</strong><small>Este lançamento movimentará automaticamente esta conta quando for concluído.</small></span></div>
         </div>
         <div className="action-row">
