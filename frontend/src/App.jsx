@@ -32,6 +32,7 @@ const API_URL = getApiUrl();
 const today = new Date().toISOString().slice(0, 10);
 const currentMonthKey = today.slice(0, 7);
 const MAX_MONEY = 1_000_000_000_000;
+const ACTIVE_MODE_KEY = "finanflow_active_mode";
 const transactionCategories = {
   receita: ["Salário", "Renda extra", "Benefícios", "Investimentos", "Reembolso", "Presente", "Outras receitas"],
   despesa: ["Alimentação", "Moradia", "Transporte", "Saúde", "Educação", "Lazer", "Assinaturas", "Compras", "Serviços", "Impostos", "Pets", "Família", "Outras despesas"],
@@ -160,7 +161,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [activeMenu, setActiveMenu] = useState("Início");
-  const [activeMode, setActiveMode] = useState("individual");
+  const [activeMode, setActiveMode] = useState(() => localStorage.getItem(ACTIVE_MODE_KEY) === "couple" ? "couple" : "individual");
   const [spaces, setSpaces] = useState([]);
   const [activeSpaceId, setActiveSpaceId] = useState("");
   const [accounts, setAccounts] = useState([]);
@@ -193,7 +194,7 @@ export default function App() {
 
   const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, selectedMonthKey), [accounts, transactions, reserve, selectedMonthKey]);
 
-  const hasData = summary.balance || summary.income || summary.commitments || transactions.length > 0;
+  const hasData = accounts.length > 0 || transactions.length > 0;
 
   async function loadSpaceData(spaceId) {
     if (!spaceId) return;
@@ -204,7 +205,7 @@ export default function App() {
     setTransactions(txData.transactions || []);
   }
 
-  async function loadSpaces(mode = "individual") {
+  async function loadSpaces(mode = localStorage.getItem(ACTIVE_MODE_KEY) === "couple" ? "couple" : "individual") {
     const data = await api("/api/spaces");
     const loaded = data.spaces || [];
     setSpaces(loaded);
@@ -214,6 +215,7 @@ export default function App() {
     const selectedSpace = mode === "couple" && readyCouple ? couple : individual || loaded[0] || null;
     const selected = selectedSpace?._id || "";
     setActiveMode(mode === "couple" && readyCouple ? "couple" : "individual");
+    localStorage.setItem(ACTIVE_MODE_KEY, mode === "couple" && readyCouple ? "couple" : "individual");
     setActiveSpaceId(selected);
     setReserve(Number(selectedSpace?.reserve ?? 300));
     if (selected) await loadSpaceData(selected);
@@ -465,6 +467,7 @@ export default function App() {
       const refreshedCouple = loaded.find((space) => space.type === "couple") || coupleSpace;
       setSpaces(loaded);
       setActiveMode("couple");
+      localStorage.setItem(ACTIVE_MODE_KEY, "couple");
       setActiveSpaceId(refreshedCouple._id);
       setReserve(Number(refreshedCouple.reserve ?? 300));
       setAccounts([]);
@@ -479,6 +482,7 @@ export default function App() {
   async function goToIndividual() {
     const selected = individualSpace?._id || spaces.find((space) => space.type !== "couple")?._id || "";
     setActiveMode("individual");
+    localStorage.setItem(ACTIVE_MODE_KEY, "individual");
     setActiveSpaceId(selected);
     setReserve(Number(individualSpace?.reserve ?? 300));
     setAccounts([]);
@@ -532,6 +536,7 @@ export default function App() {
     setAccounts([]);
     setTransactions([]);
     setActiveMode("individual");
+    localStorage.removeItem(ACTIVE_MODE_KEY);
     setActiveMenu("Início");
     setTxForm(createTransactionForm());
     setTransactionFormOpen(false);
