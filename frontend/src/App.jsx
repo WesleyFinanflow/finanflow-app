@@ -761,7 +761,7 @@ export default function App() {
   if(platformConfig?.maintenanceMode&&!user.isAdmin)return <main className="maintenance-page"><ShieldCheck size={48}/><span className="eyebrow">Manutenção programada</span><h1>FinanFlow está em manutenção</h1><p>{platformConfig.maintenanceMessage}</p><button onClick={()=>window.location.reload()}>Verificar novamente</button></main>;
 
   if (window.location.pathname === "/admin") {
-    return <AdminApp api={api} user={user} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} />;
+    return <AdminApp api={api} user={user} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} onLogout={logout} />;
   }
 
   if (pendingInvite) {
