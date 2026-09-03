@@ -180,6 +180,7 @@ export default function App() {
   const [transactionFormOpen, setTransactionFormOpen] = useState(false);
   const [goalForm, setGoalForm] = useState({ description: "", amount: "" });
   const [editingGoalId, setEditingGoalId] = useState("");
+  const [goalToDelete, setGoalToDelete] = useState(null);
   const [editingTransactionId, setEditingTransactionId] = useState("");
   const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
   const [reserve, setReserve] = useState(300);
@@ -430,13 +431,19 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function deleteGoal(goal) {
-    if (!window.confirm(`Excluir a meta "${goal.description}" e devolver ${money(goal.amount)} ao saldo?`)) return;
+  function deleteGoal(goal) {
+    setGoalToDelete(goal);
+  }
+
+  async function confirmDeleteGoal() {
+    const goal = goalToDelete;
+    if (!goal) return;
     setLoading(true);
     try {
       await api(`/api/spaces/${activeSpaceId}/transactions/${goal._id}`, { method: "DELETE" });
       if (editingGoalId === goal._id) { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }
       await loadSpaceData(activeSpaceId);
+      setGoalToDelete(null);
       setMessage("Meta excluída e valor devolvido ao saldo.");
     } catch (error) {
       setMessage(error.message);
@@ -768,6 +775,7 @@ export default function App() {
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
+        {goalToDelete && <ConfirmationModal confirmation={{ eyebrow: "Dinheiro separado", title: `Excluir “${goalToDelete.description}”?`, description: `${money(goalToDelete.amount)} serão retirados desta meta e voltarão ao seu saldo disponível.`, note: "Os demais objetivos e lançamentos não serão alterados.", confirmLabel: "Excluir meta" }} loading={loading} close={() => setGoalToDelete(null)} confirm={confirmDeleteGoal} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
     </main>
