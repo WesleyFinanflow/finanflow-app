@@ -189,6 +189,7 @@ export default function App() {
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
+  const [dueReminderOpen, setDueReminderOpen] = useState(true);
   const spaceRequestId = useRef(0);
   const profileMenuRef = useRef(null);
 
@@ -200,6 +201,9 @@ export default function App() {
   const activeCoupleSpace = activeMode === "couple" && coupleReady ? coupleSpace : null;
 
   const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, selectedMonthKey), [accounts, transactions, reserve, selectedMonthKey]);
+  const dueTransactions = useMemo(() => transactions
+    .filter((item) => item.type !== "meta" && item.status === "pendente" && item.date <= today && String(item.createdBy || "") === String(user?.id || user?._id || ""))
+    .sort((left, right) => String(left.date).localeCompare(String(right.date))), [transactions, user]);
 
   const hasData = accounts.length > 0 || transactions.length > 0;
 
@@ -399,6 +403,20 @@ export default function App() {
       setGoalForm({ description: "", amount: "" });
       await loadSpaceData(activeSpaceId);
       setMessage("Dinheiro separado para o planejamento.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function markTransactionPaid(transaction) {
+    if (!activeSpaceId) return;
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/transactions/${transaction._id}/status`, { method: "PATCH", body: JSON.stringify({ status: "pago" }) });
+      await loadSpaceData(activeSpaceId);
+      setMessage(transaction.type === "receita" ? "Recebimento confirmado." : "Pagamento confirmado.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -700,6 +718,7 @@ export default function App() {
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
+        {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} loading={loading} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
     </main>
@@ -781,6 +800,21 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
         </div>
       )}
     </main>
+  );
+}
+
+function DueReminder({ transactions, open, setOpen, markPaid, loading }) {
+  const overdue = transactions.filter((item) => item.date < today).length;
+  if (!open) return <button type="button" className="due-reminder-fab" onClick={() => setOpen(true)} aria-label={`Ver ${transactions.length} pagamentos pendentes`}><CalendarClock size={21} /><strong>{transactions.length}</strong></button>;
+  return (
+    <aside className="due-reminder" aria-label="Lembretes de vencimento">
+      <div className="due-reminder-head"><span><CalendarClock size={21} /><span><strong>{overdue ? `${overdue} ${overdue === 1 ? "conta atrasada" : "contas atrasadas"}` : "Vencimentos de hoje"}</strong><small>Confirme o que já foi pago ou recebido.</small></span></span><button type="button" onClick={() => setOpen(false)} aria-label="Lembrar depois"><X size={17} /></button></div>
+      <div className="due-reminder-list">
+        {transactions.slice(0, 5).map((item) => <article key={item._id}><span><strong>{item.description}</strong><small>{item.date < today ? `Venceu em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}` : "Vence hoje"}</small></span><em className={item.type === "receita" ? "income" : ""}>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em><button type="button" disabled={loading} onClick={() => markPaid(item)}>{item.type === "receita" ? "Marcar recebido" : "Marcar pago"}</button></article>)}
+      </div>
+      {transactions.length > 5 && <small className="due-reminder-more">Mais {transactions.length - 5} pendências no extrato.</small>}
+      <button type="button" className="due-reminder-later" onClick={() => setOpen(false)}>Continuar pendente e lembrar depois</button>
+    </aside>
   );
 }
 

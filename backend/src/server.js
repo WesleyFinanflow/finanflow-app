@@ -775,6 +775,18 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   }
 });
 
+app.patch("/api/spaces/:spaceId/transactions/:transactionId/status", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const viewIds = await spaceViewIds(req.params.spaceId);
+  const existing = await Transaction.findOne({ _id: req.params.transactionId, spaceId: { $in: viewIds } });
+  if (!existing) return res.status(404).json({ message: "Lançamento não encontrado." });
+  if (String(existing.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou o lançamento pode confirmar o pagamento." });
+  const status = oneOf(req.body?.status, ["pendente", "pago"], "Status");
+  const transaction = await Transaction.findByIdAndUpdate(existing._id, { status }, { new: true, runValidators: true });
+  await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `${transaction.description}: ${status === "pago" ? transaction.type === "receita" ? "recebido" : "pago" : "pendente"}`, before: existing, after: transaction });
+  res.json({ transaction });
+}));
+
 app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
