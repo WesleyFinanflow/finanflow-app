@@ -130,6 +130,7 @@ const transactionSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     responsibleName: { type: String, default: "Individual", maxlength: 80 },
     requestId: { type: String, maxlength: 80 },
+    reminderDate: { type: String },
   },
   { timestamps: true }
 );
@@ -782,8 +783,21 @@ app.patch("/api/spaces/:spaceId/transactions/:transactionId/status", auth, async
   if (!existing) return res.status(404).json({ message: "Lançamento não encontrado." });
   if (String(existing.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou o lançamento pode confirmar o pagamento." });
   const status = oneOf(req.body?.status, ["pendente", "pago"], "Status");
-  const transaction = await Transaction.findByIdAndUpdate(existing._id, { status }, { new: true, runValidators: true });
+  const transaction = await Transaction.findByIdAndUpdate(existing._id, { $set: { status }, ...(status === "pago" ? { $unset: { reminderDate: 1 } } : {}) }, { new: true, runValidators: true });
   await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `${transaction.description}: ${status === "pago" ? transaction.type === "receita" ? "recebido" : "pago" : "pendente"}`, before: existing, after: transaction });
+  res.json({ transaction });
+}));
+
+app.patch("/api/spaces/:spaceId/transactions/:transactionId/reminder", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const viewIds = await spaceViewIds(req.params.spaceId);
+  const existing = await Transaction.findOne({ _id: req.params.transactionId, spaceId: { $in: viewIds } });
+  if (!existing) return res.status(404).json({ message: "Lançamento não encontrado." });
+  if (String(existing.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou o lançamento pode reagendar o lembrete." });
+  if (existing.status !== "pendente") return res.status(409).json({ message: "Este lançamento já foi concluído." });
+  const reminderDate = isoDate(req.body?.reminderDate, "Nova data do lembrete");
+  const transaction = await Transaction.findByIdAndUpdate(existing._id, { reminderDate }, { new: true, runValidators: true });
+  await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `Lembrete reagendado: ${transaction.description}`, before: existing, after: transaction });
   res.json({ transaction });
 }));
 
@@ -822,8 +836,8 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
     if (existing.seriesId) await Transaction.deleteMany({ spaceId: existing.spaceId, seriesId: existing.seriesId, _id: { $ne: existing._id } });
     const first = documents.shift();
     const obsoleteFields = recurrence === "monthly"
-      ? { installmentNumber: 1, installmentCount: 1, totalAmount: 1 }
-      : grouped ? {} : { seriesId: 1 };
+      ? { installmentNumber: 1, installmentCount: 1, totalAmount: 1, reminderDate: 1 }
+      : grouped ? { reminderDate: 1 } : { seriesId: 1, reminderDate: 1 };
     const transaction = await Transaction.findByIdAndUpdate(existing._id, { $set: first, $unset: obsoleteFields }, { new: true, runValidators: true });
     if (documents.length) await Transaction.insertMany(documents);
     await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `Lançamento atualizado: ${transaction.description}`, before: previous, after: [transaction, ...documents] });

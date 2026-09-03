@@ -204,9 +204,9 @@ export default function App() {
 
   const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, selectedMonthKey), [accounts, transactions, reserve, selectedMonthKey]);
   const dueTransactions = useMemo(() => transactions
-    .filter((item) => item.type !== "meta" && item.status === "pendente" && item.date <= today)
+    .filter((item) => item.type !== "meta" && item.status === "pendente" && String(item.reminderDate || item.date) <= today)
     .filter((item) => activeMode === "couple" || String(item.createdBy || "") === String(user?.id || user?._id || ""))
-    .sort((left, right) => String(left.date).localeCompare(String(right.date))), [transactions, user, activeMode]);
+    .sort((left, right) => String(left.reminderDate || left.date).localeCompare(String(right.reminderDate || right.date))), [transactions, user, activeMode]);
 
   const hasData = accounts.length > 0 || transactions.length > 0;
 
@@ -427,6 +427,20 @@ export default function App() {
       await api(`/api/spaces/${activeSpaceId}/transactions/${transaction._id}/status`, { method: "PATCH", body: JSON.stringify({ status: "pago" }) });
       await loadSpaceData(activeSpaceId);
       setMessage(transaction.type === "receita" ? "Recebimento confirmado." : "Pagamento confirmado.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function snoozeTransaction(transaction, reminderDate) {
+    if (!activeSpaceId) return;
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/transactions/${transaction._id}/reminder`, { method: "PATCH", body: JSON.stringify({ reminderDate }) });
+      await loadSpaceData(activeSpaceId);
+      setMessage(`Lembrete reagendado para ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${reminderDate}T12:00:00`))}.`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -728,7 +742,7 @@ export default function App() {
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
-        {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
+        {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
     </main>
@@ -813,7 +827,10 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
   );
 }
 
-function DueReminder({ transactions, open, setOpen, markPaid, loading, currentUserId, activeMode }) {
+function DueReminder({ transactions, open, setOpen, markPaid, snooze, loading, currentUserId, activeMode }) {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const [snoozeItem, setSnoozeItem] = useState(null);
+  const [snoozeDate, setSnoozeDate] = useState(tomorrow);
   const overdue = transactions.filter((item) => item.date < today).length;
   if (!open) return <button type="button" className="due-reminder-fab" onClick={() => setOpen(true)} aria-label={`Ver ${transactions.length} pagamentos pendentes`}><CalendarClock size={21} /><strong>{transactions.length}</strong></button>;
   return (
@@ -823,11 +840,12 @@ function DueReminder({ transactions, open, setOpen, markPaid, loading, currentUs
         {transactions.slice(0, 5).map((item) => {
           const isOwner = String(item.createdBy || "") === String(currentUserId || "");
           const responsible = String(item.responsibleName || "Responsável").trim().split(/\s+/)[0];
-          return <article key={item._id}><span><strong>{item.description}</strong><small>{activeMode === "couple" && <b>{responsible} · </b>}{item.date < today ? `Venceu em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}` : "Vence hoje"}</small></span><em className={item.type === "receita" ? "income" : ""}>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{isOwner ? <button type="button" disabled={loading} onClick={() => markPaid(item)}>{item.type === "receita" ? "Marcar recebido" : "Marcar pago"}</button> : <button type="button" className="waiting-owner" disabled>Aguardando confirmação de {responsible}</button>}</article>;
+          return <article key={item._id}><span><strong>{item.description}</strong><small>{activeMode === "couple" && <b>{responsible} · </b>}{item.date < today ? `Venceu em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}` : "Vence hoje"}</small></span><em className={item.type === "receita" ? "income" : ""}>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{isOwner ? <div className="due-reminder-actions"><button type="button" disabled={loading} onClick={() => markPaid(item)}>{item.type === "receita" ? "Marcar recebido" : "Marcar pago"}</button><button type="button" className="pending-action" disabled={loading} onClick={() => { setSnoozeItem(item); setSnoozeDate(tomorrow); }}>Continuar pendente</button></div> : <button type="button" className="waiting-owner" disabled>Aguardando confirmação de {responsible}</button>}</article>;
         })}
       </div>
       {transactions.length > 5 && <small className="due-reminder-more">Mais {transactions.length - 5} pendências no extrato.</small>}
-      <button type="button" className="due-reminder-later" onClick={() => setOpen(false)}>Continuar pendente e lembrar depois</button>
+      <button type="button" className="due-reminder-later" onClick={() => setOpen(false)}>Fechar lembrete</button>
+      {snoozeItem && <div className="reminder-date-backdrop"><form className="reminder-date-modal" onSubmit={async (event) => { event.preventDefault(); await snooze(snoozeItem, snoozeDate); setSnoozeItem(null); }}><CalendarClock size={25} /><span className="eyebrow">Continuar pendente</span><h3>Quando deseja receber o lembrete novamente?</h3><p>{snoozeItem.description} continuará pendente.</p><label>Nova data do lembrete<input type="date" min={tomorrow} value={snoozeDate} onChange={(event) => setSnoozeDate(event.target.value)} required /></label><div><button type="button" className="ghost-button" onClick={() => setSnoozeItem(null)}>Cancelar</button><button disabled={loading}>{loading ? "Salvando..." : "Agendar lembrete"}</button></div></form></div>}
     </aside>
   );
 }
