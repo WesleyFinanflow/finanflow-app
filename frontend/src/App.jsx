@@ -182,6 +182,7 @@ export default function App() {
   const [editingGoalId, setEditingGoalId] = useState("");
   const [goalToDelete, setGoalToDelete] = useState(null);
   const [editingTransactionId, setEditingTransactionId] = useState("");
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [buyForm, setBuyForm] = useState({ item: "", total: "", monthlyLimit: "" });
   const [purchasePlans, setPurchasePlans] = useState([]);
   const [reserve, setReserve] = useState(300);
@@ -516,14 +517,19 @@ export default function App() {
     }
   }
 
-  async function deleteTransaction(transaction) {
+  function deleteTransaction(transaction) {
     if (!activeSpaceId) return setMessage("Selecione um espaço antes de excluir o lançamento.");
-    const grouped = transaction.seriesId && (transaction.recurrence === "monthly" || Number(transaction.installmentCount || 1) > 1);
-    if (!window.confirm(grouped ? "Deseja excluir toda esta série, incluindo os próximos meses?" : "Deseja excluir este lançamento?")) return;
+    setTransactionToDelete(transaction);
+  }
+
+  async function confirmDeleteTransaction() {
+    const transaction = transactionToDelete;
+    if (!transaction) return;
     setLoading(true);
     try {
       await api(`/api/spaces/${activeSpaceId}/transactions/${transaction._id}`, { method: "DELETE" });
       await loadSpaceData(activeSpaceId);
+      setTransactionToDelete(null);
       setMessage("Lançamento excluído.");
     } catch (error) {
       setMessage(error.message);
@@ -811,6 +817,7 @@ export default function App() {
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
+        {transactionToDelete && <ConfirmationModal confirmation={{ eyebrow: "Excluir lançamento", title: `Excluir “${transactionToDelete.description}”?`, description: `${transactionToDelete.type === "receita" ? "A receita de" : "O valor de"} ${money(transactionToDelete.amount)} será removido do seu histórico.`, note: transactionToDelete.seriesId && transactionToDelete.recurrence === "monthly" ? "Esta é uma conta fixa. Todas as repetições, inclusive as dos próximos meses, também serão excluídas." : transactionToDelete.seriesId && Number(transactionToDelete.installmentCount || 1) > 1 ? `Este lançamento faz parte de um parcelamento. Todas as ${transactionToDelete.installmentCount} parcelas serão excluídas.` : "Somente este lançamento será excluído. Essa ação ficará registrada no histórico de segurança.", confirmLabel: "Excluir lançamento" }} loading={loading} close={() => setTransactionToDelete(null)} confirm={confirmDeleteTransaction} />}
         {goalToDelete && <ConfirmationModal confirmation={{ eyebrow: "Dinheiro separado", title: `Excluir “${goalToDelete.description}”?`, description: `${money(goalToDelete.amount)} serão retirados desta meta e voltarão ao seu saldo disponível.`, note: "Os demais objetivos e lançamentos não serão alterados.", confirmLabel: "Excluir meta" }} loading={loading} close={() => setGoalToDelete(null)} confirm={confirmDeleteGoal} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
