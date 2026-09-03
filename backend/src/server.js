@@ -85,6 +85,9 @@ const userSchema = new mongoose.Schema(
     termsAcceptedAt: { type: Date },
     privacyAcceptedAt: { type: Date },
     legalVersion: { type: String, maxlength: 20 },
+    accessStatus: { type: String, enum: ["active", "trial", "blocked"], default: "active" },
+    trialEndsAt: { type: Date },
+    blockedAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -248,6 +251,8 @@ async function auth(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
+    const deniedMessage = accessDenied(user);
+    if (deniedMessage) return res.status(403).json({ message: deniedMessage });
     if (Number(decoded.passwordVersion || 0) !== Number(user.passwordVersion || 0)) {
       return res.status(401).json({ message: "Sua senha foi alterada. Entre novamente." });
     }
@@ -263,7 +268,14 @@ async function userCanAccessSpace(userId, spaceId) {
 }
 
 function publicUser(user) {
-  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", isAdmin: ADMIN_EMAILS.has(String(user.email).toLowerCase()) };
+  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", isAdmin: ADMIN_EMAILS.has(String(user.email).toLowerCase()), accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null };
+}
+
+function accessDenied(user) {
+  if (ADMIN_EMAILS.has(String(user?.email || "").toLowerCase())) return "";
+  if (user?.accessStatus === "blocked") return "Seu acesso foi bloqueado. Entre em contato com o suporte.";
+  if (user?.accessStatus === "trial" && user.trialEndsAt && user.trialEndsAt <= new Date()) return "Seu período de teste terminou. Entre em contato com o suporte para continuar.";
+  return "";
 }
 
 function adminOnly(req, res, next) {
@@ -501,6 +513,8 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     const email = emailAddress(rawEmail);
     const user = await User.findOne({ email }).select("+failedLoginAttempts +loginLockedUntil");
     if (!user) return res.status(401).json({ message: "E-mail ou senha inválidos." });
+    const deniedMessage = accessDenied(user);
+    if (deniedMessage) return res.status(403).json({ message: deniedMessage });
     if (user.loginLockedUntil && user.loginLockedUntil > new Date()) return res.status(429).json({ message: "Acesso temporariamente bloqueado. Tente novamente em 15 minutos." });
     const valid = await bcrypt.compare(password || "", user.passwordHash);
     if (!valid) {
@@ -978,8 +992,30 @@ app.get("/api/admin/overview", auth, adminOnly, asyncHandler(async (_req, res) =
 }));
 
 app.get("/api/admin/users", auth, adminOnly, asyncHandler(async (_req, res) => {
-  const users = await User.find().select("name email createdAt legalVersion termsAcceptedAt").sort({ createdAt: -1 }).limit(50).lean();
-  res.json({ users });
+  const users = await User.find().select("name email createdAt legalVersion termsAcceptedAt accessStatus trialEndsAt blockedAt").sort({ createdAt: -1 }).limit(200).lean();
+  const memberships = await Member.aggregate([{ $match: { userId: { $in: users.map((user) => user._id) } } }, { $group: { _id: "$userId", spaces: { $sum: 1 } } }]);
+  const spaceCounts = new Map(memberships.map((item) => [String(item._id), item.spaces]));
+  res.json({ users: users.map((user) => ({ ...user, accessStatus: user.accessStatus || "active", spaces: spaceCounts.get(String(user._id)) || 0, isAdmin: ADMIN_EMAILS.has(String(user.email).toLowerCase()) })) });
+}));
+
+app.patch("/api/admin/users/:userId/access", auth, adminOnly, asyncHandler(async (req, res) => {
+  const target = await User.findById(req.params.userId);
+  if (!target) return res.status(404).json({ message: "Usuário não encontrado." });
+  const action = oneOf(req.body?.action, ["trial", "activate", "block", "unblock"], "Ação");
+  if (ADMIN_EMAILS.has(String(target.email).toLowerCase()) && action === "block") return res.status(400).json({ message: "O administrador principal não pode bloquear a própria conta." });
+  if (action === "trial") {
+    const months = Number(req.body?.months);
+    if (![1, 2, 3].includes(months)) throw new InputError("Escolha um teste de 1, 2 ou 3 meses.");
+    const trialEndsAt = new Date();
+    trialEndsAt.setMonth(trialEndsAt.getMonth() + months);
+    target.accessStatus = "trial"; target.trialEndsAt = trialEndsAt; target.blockedAt = undefined;
+  } else if (action === "block") {
+    target.accessStatus = "blocked"; target.blockedAt = new Date(); target.passwordVersion = Number(target.passwordVersion || 0) + 1;
+  } else {
+    target.accessStatus = "active"; target.trialEndsAt = undefined; target.blockedAt = undefined;
+  }
+  await target.save();
+  res.json({ message: action === "trial" ? "Período de teste aplicado." : action === "block" ? "Usuário bloqueado e sessões encerradas." : "Acesso liberado." });
 }));
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));

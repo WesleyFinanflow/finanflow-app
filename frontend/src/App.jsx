@@ -250,6 +250,14 @@ export default function App() {
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
 
   useEffect(() => {
+    if (!user) return;
+    api("/api/me").then((data) => {
+      localStorage.setItem("finanflow_user", JSON.stringify(data.user));
+      setUser(data.user);
+    }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const handleUnauthorized = () => {
       localStorage.removeItem("finanflow_token");
       localStorage.removeItem("finanflow_user");
@@ -784,6 +792,7 @@ export default function App() {
               </button>
               {!coupleMenuState.enabled && coupleSpace && <button type="button" className="profile-menu-invite" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Casal"); }}>Ver convite</button>}
               <div className="profile-menu-divider" />
+              {user.isAdmin && <button type="button" className="profile-menu-action admin-link" role="menuitem" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Administração"); }}><Server size={18} aria-hidden="true" />Administração</button>}
               <button type="button" className="profile-menu-action" role="menuitem" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Configurações"); }}><Settings size={18} aria-hidden="true" />Configurações</button>
               <button type="button" className="profile-menu-action logout" role="menuitem" onClick={() => { setProfileMenuOpen(false); logout(); }}><LogOut size={18} aria-hidden="true" />Sair da conta</button>
             </section>
@@ -812,13 +821,14 @@ export default function App() {
       </aside>
 
       <section className="main-content">
-        <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />
+        {activeMenu !== "Administração" && <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />}
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
+        {activeMenu === "Administração" && user.isAdmin && <AdminPanel />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
         {transactionToDelete && <ConfirmationModal confirmation={{ eyebrow: "Excluir lançamento", title: `Excluir “${transactionToDelete.description}”?`, description: `${transactionToDelete.type === "receita" ? "A receita de" : "O valor de"} ${money(transactionToDelete.amount)} será removido do seu histórico.`, note: transactionToDelete.seriesId && transactionToDelete.recurrence === "monthly" ? "Esta é uma conta fixa. Todas as repetições, inclusive as dos próximos meses, também serão excluídas." : transactionToDelete.seriesId && Number(transactionToDelete.installmentCount || 1) > 1 ? `Este lançamento faz parte de um parcelamento. Todas as ${transactionToDelete.installmentCount} parcelas serão excluídas.` : "Somente este lançamento será excluído. Essa ação ficará registrada no histórico de segurança.", confirmLabel: "Excluir lançamento" }} loading={loading} close={() => setTransactionToDelete(null)} confirm={confirmDeleteTransaction} />}
@@ -1325,6 +1335,55 @@ function Relatorios({ transactions, selectedMonthKey, activeMode }) {
   );
 }
 
+function AdminPanel() {
+  const [overview, setOverview] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState("");
+  const [message, setMessage] = useState("");
+  const [workingId, setWorkingId] = useState("");
+  const [pendingAction, setPendingAction] = useState(null);
+
+  async function loadAdmin() {
+    try {
+      const [overviewData, usersData] = await Promise.all([api("/api/admin/overview"), api("/api/admin/users")]);
+      setOverview(overviewData); setUsers(usersData.users || []); setMessage("");
+    } catch (error) { setMessage(error.message); }
+  }
+  useEffect(() => { loadAdmin(); }, []);
+
+  async function changeAccess() {
+    if (!pendingAction) return;
+    const { user, action, months } = pendingAction;
+    setWorkingId(user._id); setMessage(""); setPendingAction(null);
+    try {
+      const data = await api(`/api/admin/users/${user._id}/access`, { method: "PATCH", body: JSON.stringify({ action, months }) });
+      setMessage(data.message); await loadAdmin();
+    } catch (error) { setMessage(error.message); } finally { setWorkingId(""); }
+  }
+
+  const visibleUsers = users.filter((item) => `${item.name} ${item.email}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const statusLabel = (user) => user.isAdmin ? "Administrador" : user.accessStatus === "blocked" ? "Bloqueado" : user.accessStatus === "trial" ? "Teste grátis" : "Ativo";
+  return <section className="admin-page">
+    <header className="admin-header"><div><span className="eyebrow">Central de controle</span><h1>Administração</h1><p>Gerencie clientes, testes e acessos usando dados reais do FinanFlow.</p></div><button type="button" className="settings-outline" onClick={loadAdmin}><RotateCcw size={17} />Atualizar</button></header>
+    {overview && <div className="admin-metrics admin-overview">
+      <span><strong>{overview.users}</strong><small>Usuários</small></span><span><strong>{overview.newUsers}</strong><small>Novos em 7 dias</small></span><span><strong>{overview.spaces}</strong><small>Espaços</small></span><span><strong>{overview.transactions}</strong><small>Lançamentos</small></span><span><strong>{overview.pendingInvites}</strong><small>Convites ativos</small></span><span className={overview.database === "online" ? "is-online" : "is-offline"}><strong>{overview.database}</strong><small>Banco de dados</small></span>
+    </div>}
+    <article className="panel admin-users-panel"><div className="admin-users-head"><div><span className="eyebrow">Clientes cadastrados</span><h2>Usuários e acessos</h2></div><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome ou e-mail" /></div>
+      {message && <div className="status-box" role="status">{message}</div>}
+      <div className="admin-user-list">{visibleUsers.map((item) => <section className="admin-user-card" key={item._id}>
+        <div className="admin-user-identity"><Avatar name={item.name} /><span><strong>{item.name}</strong><small>{item.email}</small><em>Cadastro: {new Intl.DateTimeFormat("pt-BR").format(new Date(item.createdAt))} · {item.spaces} espaço(s)</em></span></div>
+        <div className="admin-access-info"><span className={`admin-status status-${item.isAdmin ? "admin" : item.accessStatus}`}>{statusLabel(item)}</span>{item.accessStatus === "trial" && item.trialEndsAt && <small>Até {new Intl.DateTimeFormat("pt-BR").format(new Date(item.trialEndsAt))}</small>}</div>
+        <div className="admin-user-actions">
+          {[1,2,3].map((months) => <button type="button" disabled={workingId === item._id || item.isAdmin} key={months} onClick={() => setPendingAction({ user:item, action:"trial", months, title:`Dar ${months} ${months === 1 ? "mês" : "meses"} grátis?`, description:`O acesso de ${item.name} ficará liberado em modo de teste pelo período escolhido.`, confirmLabel:"Confirmar teste" })}>{months} {months === 1 ? "mês" : "meses"}</button>)}
+          {item.accessStatus === "blocked" ? <button type="button" className="admin-release" disabled={workingId === item._id} onClick={() => setPendingAction({ user:item, action:"unblock", title:"Desbloquear usuário?", description:`${item.name} poderá entrar no aplicativo novamente.`, confirmLabel:"Desbloquear" })}>Desbloquear</button> : <button type="button" className="admin-block" disabled={workingId === item._id || item.isAdmin} onClick={() => setPendingAction({ user:item, action:"block", title:"Bloquear usuário?", description:`${item.name} perderá o acesso e as sessões abertas serão encerradas. Os dados serão preservados.`, confirmLabel:"Bloquear" })}>Bloquear</button>}
+          {!item.isAdmin && item.accessStatus !== "active" && <button type="button" className="admin-release" disabled={workingId === item._id} onClick={() => setPendingAction({ user:item, action:"activate", title:"Liberar acesso sem prazo?", description:`O acesso de ${item.name} ficará ativo sem data de vencimento.`, confirmLabel:"Liberar acesso" })}>Ativar</button>}
+        </div>
+      </section>)}{!visibleUsers.length && <Empty title="Nenhum usuário encontrado" text="Tente outro nome ou e-mail." />}</div>
+    </article>
+    {pendingAction && <ConfirmationModal confirmation={{ eyebrow:"Gerenciamento de acesso", title:pendingAction.title, description:pendingAction.description, note:"A alteração será aplicada imediatamente e ficará protegida pelo acesso administrativo.", confirmLabel:pendingAction.confirmLabel }} loading={Boolean(workingId)} close={() => setPendingAction(null)} confirm={changeAccess} />}
+  </section>;
+}
+
 function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, activeSpaceId, refreshSpaceData, leaveCoupleSpace, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
   const [confirmation, setConfirmation] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || localStorage.getItem("finanflow_profile_photo") || "");
@@ -1333,8 +1392,6 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   const [profileName, setProfileName] = useState(user?.name || firstName);
   const [history, setHistory] = useState([]);
   const [historyMessage, setHistoryMessage] = useState("");
-  const [adminOverview, setAdminOverview] = useState(null);
-  const [adminMessage, setAdminMessage] = useState("");
   const photoInputRef = useRef(null);
 
   async function loadHistory() {
@@ -1349,11 +1406,6 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
 
   useEffect(() => { loadHistory(); }, [activeSpaceId]);
 
-  useEffect(() => {
-    api("/api/admin/overview")
-      .then((data) => { setAdminOverview(data); setAdminMessage(""); })
-      .catch((error) => { setAdminOverview(null); if (!/não autorizado/i.test(error.message)) setAdminMessage(error.message); });
-  }, [user?.id, user?._id]);
 
   async function restoreHistoryItem(item) {
     setHistoryMessage("Restaurando...");
@@ -1477,19 +1529,6 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
           <button type="button" className="data-action danger" disabled={loading} onClick={() => setConfirmation({ eyebrow: "Exclusão definitiva", title: "Apagar sua conta?", description: "Seus dados individuais serão removidos e você sairá dos espaços compartilhados.", note: "Esta ação não pode ser desfeita.", confirmLabel: "Apagar minha conta", action: deleteUserAccount })}><Trash2 size={24} /><span><strong>Apagar conta</strong><small>Ação irreversível.</small></span></button>
         </div>
       </section>
-
-      {adminOverview && <section className="settings-card settings-admin-card">
-        <SettingsTitle icon={Server} title="Administração" />
-        <p>Visão operacional sem acesso a senhas ou valores financeiros dos usuários.</p>
-        {adminOverview ? <div className="admin-metrics">
-          <span><strong>{adminOverview.users}</strong><small>Usuários</small></span>
-          <span><strong>{adminOverview.newUsers}</strong><small>Novos em 7 dias</small></span>
-          <span><strong>{adminOverview.spaces}</strong><small>Espaços</small></span>
-          <span><strong>{adminOverview.transactions}</strong><small>Lançamentos</small></span>
-          <span><strong>{adminOverview.pendingInvites}</strong><small>Convites ativos</small></span>
-          <span className={adminOverview.database === "online" ? "is-online" : "is-offline"}><strong>{adminOverview.database}</strong><small>Banco de dados</small></span>
-        </div> : <small>{adminMessage || "Carregando indicadores..."}</small>}
-      </section>}
 
       {confirmation && <ConfirmationModal confirmation={confirmation} loading={loading} close={() => setConfirmation(null)} confirm={confirmDestructiveAction} />}
     </section>
