@@ -199,6 +199,7 @@ export default function App() {
   const [hideValues, setHideValues] = useState(() => localStorage.getItem(HIDE_VALUES_KEY) === "true");
   const [platformConfig,setPlatformConfig]=useState(null);
   const [platformFeatures,setPlatformFeatures]=useState({});
+  const [announcements,setAnnouncements]=useState([]);
   const spaceRequestId = useRef(0);
   const profileMenuRef = useRef(null);
 
@@ -253,7 +254,7 @@ export default function App() {
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
 
   useEffect(()=>{api("/api/platform/config").then(setPlatformConfig).catch(()=>undefined);},[]);
-  useEffect(()=>{if(user)api("/api/platform/features").then(data=>setPlatformFeatures(data.features||{})).catch(()=>undefined);},[user?.id]);
+  useEffect(()=>{if(user)Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -834,6 +835,7 @@ export default function App() {
 
       <section className="main-content">
         {platformConfig?.globalNoticeEnabled&&platformConfig.globalNotice&&<div className="platform-notice"><Megaphone size={17}/>{platformConfig.globalNotice}</div>}
+        {announcements.slice(0,2).map(notice=><div className="platform-notice" key={notice._id}><Megaphone size={17}/><span><strong>{notice.title}</strong> — {notice.message}</span></div>)}
         <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
