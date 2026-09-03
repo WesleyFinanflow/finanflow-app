@@ -69,7 +69,7 @@ body {
 .mode-button,
 .primary-btn,
 .mini-form button,
-button:not(.ghost-button):not(.danger-button):not(.inline-danger) {
+button:not(.ghost-button):not(.danger-button):not(.inline-danger):not(.admin-plain) {
   background: linear-gradient(135deg, #10b981, #059669) !important;
   color: #ffffff !important;
   border-color: rgba(16, 185, 129, 0.28) !important;
@@ -78,7 +78,7 @@ button:not(.ghost-button):not(.danger-button):not(.inline-danger) {
 .mode-button:hover,
 .primary-btn:hover,
 .mini-form button:hover,
-button:not(.ghost-button):not(.danger-button):not(.inline-danger):hover {
+button:not(.ghost-button):not(.danger-button):not(.inline-danger):not(.admin-plain):hover {
   background: linear-gradient(135deg, #059669, #047857) !important;
   color: #ffffff !important;
 }
