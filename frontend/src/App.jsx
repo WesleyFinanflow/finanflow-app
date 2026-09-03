@@ -204,8 +204,9 @@ export default function App() {
 
   const summary = useMemo(() => calculateSummary(accounts, transactions, reserve, selectedMonthKey), [accounts, transactions, reserve, selectedMonthKey]);
   const dueTransactions = useMemo(() => transactions
-    .filter((item) => item.type !== "meta" && item.status === "pendente" && item.date <= today && String(item.createdBy || "") === String(user?.id || user?._id || ""))
-    .sort((left, right) => String(left.date).localeCompare(String(right.date))), [transactions, user]);
+    .filter((item) => item.type !== "meta" && item.status === "pendente" && item.date <= today)
+    .filter((item) => activeMode === "couple" || String(item.createdBy || "") === String(user?.id || user?._id || ""))
+    .sort((left, right) => String(left.date).localeCompare(String(right.date))), [transactions, user, activeMode]);
 
   const hasData = accounts.length > 0 || transactions.length > 0;
 
@@ -727,7 +728,7 @@ export default function App() {
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
-        {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} loading={loading} />}
+        {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
         {message && <div className="floating-message" role="status" aria-live="polite">{message}</div>}
       </section>
     </main>
@@ -812,14 +813,18 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
   );
 }
 
-function DueReminder({ transactions, open, setOpen, markPaid, loading }) {
+function DueReminder({ transactions, open, setOpen, markPaid, loading, currentUserId, activeMode }) {
   const overdue = transactions.filter((item) => item.date < today).length;
   if (!open) return <button type="button" className="due-reminder-fab" onClick={() => setOpen(true)} aria-label={`Ver ${transactions.length} pagamentos pendentes`}><CalendarClock size={21} /><strong>{transactions.length}</strong></button>;
   return (
     <aside className="due-reminder" aria-label="Lembretes de vencimento">
       <div className="due-reminder-head"><span><CalendarClock size={21} /><span><strong>{overdue ? `${overdue} ${overdue === 1 ? "conta atrasada" : "contas atrasadas"}` : "Vencimentos de hoje"}</strong><small>Confirme o que já foi pago ou recebido.</small></span></span><button type="button" onClick={() => setOpen(false)} aria-label="Lembrar depois"><X size={17} /></button></div>
       <div className="due-reminder-list">
-        {transactions.slice(0, 5).map((item) => <article key={item._id}><span><strong>{item.description}</strong><small>{item.date < today ? `Venceu em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}` : "Vence hoje"}</small></span><em className={item.type === "receita" ? "income" : ""}>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em><button type="button" disabled={loading} onClick={() => markPaid(item)}>{item.type === "receita" ? "Marcar recebido" : "Marcar pago"}</button></article>)}
+        {transactions.slice(0, 5).map((item) => {
+          const isOwner = String(item.createdBy || "") === String(currentUserId || "");
+          const responsible = String(item.responsibleName || "Responsável").trim().split(/\s+/)[0];
+          return <article key={item._id}><span><strong>{item.description}</strong><small>{activeMode === "couple" && <b>{responsible} · </b>}{item.date < today ? `Venceu em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}` : "Vence hoje"}</small></span><em className={item.type === "receita" ? "income" : ""}>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{isOwner ? <button type="button" disabled={loading} onClick={() => markPaid(item)}>{item.type === "receita" ? "Marcar recebido" : "Marcar pago"}</button> : <button type="button" className="waiting-owner" disabled>Aguardando confirmação de {responsible}</button>}</article>;
+        })}
       </div>
       {transactions.length > 5 && <small className="due-reminder-more">Mais {transactions.length - 5} pendências no extrato.</small>}
       <button type="button" className="due-reminder-later" onClick={() => setOpen(false)}>Continuar pendente e lembrar depois</button>
