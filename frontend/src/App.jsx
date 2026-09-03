@@ -179,6 +179,7 @@ export default function App() {
   const [txForm, setTxForm] = useState(() => createTransactionForm());
   const [transactionFormOpen, setTransactionFormOpen] = useState(false);
   const [goalForm, setGoalForm] = useState({ description: "", amount: "" });
+  const [editingGoalId, setEditingGoalId] = useState("");
   const [editingTransactionId, setEditingTransactionId] = useState("");
   const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
   const [reserve, setReserve] = useState(300);
@@ -409,10 +410,34 @@ export default function App() {
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
     setLoading(true);
     try {
-      await api(`/api/spaces/${activeSpaceId}/transactions`, { method: "POST", body: JSON.stringify({ type: "meta", description, amount, date: today, category: "Planejamento", status: "pago", recurrence: "none", installmentCount: 1, responsibleName: firstName }) });
+      const existing = editingGoalId ? transactions.find((item) => item._id === editingGoalId) : null;
+      const path = existing ? `/api/spaces/${activeSpaceId}/transactions/${existing._id}` : `/api/spaces/${activeSpaceId}/transactions`;
+      await api(path, { method: existing ? "PUT" : "POST", body: JSON.stringify({ type: "meta", description, amount, date: existing?.date || today, category: "Planejamento", status: "pago", recurrence: "none", installmentCount: 1, accountId: existing?.accountId || null, responsibleName: firstName }) });
       setGoalForm({ description: "", amount: "" });
+      setEditingGoalId("");
       await loadSpaceData(activeSpaceId);
-      setMessage("Dinheiro separado para o planejamento.");
+      setMessage(existing ? "Meta atualizada." : "Dinheiro separado para o planejamento.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function editGoal(goal) {
+    setEditingGoalId(goal._id);
+    setGoalForm({ description: goal.description || "", amount: String(goal.amount || "") });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function deleteGoal(goal) {
+    if (!window.confirm(`Excluir a meta "${goal.description}" e devolver ${money(goal.amount)} ao saldo?`)) return;
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/transactions/${goal._id}`, { method: "DELETE" });
+      if (editingGoalId === goal._id) { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }
+      await loadSpaceData(activeSpaceId);
+      setMessage("Meta excluída e valor devolvido ao saldo.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -738,7 +763,7 @@ export default function App() {
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} loading={loading} />}
+        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
@@ -1076,13 +1101,8 @@ function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loa
   );
 }
 
-function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goalForm, setGoalForm, saveGoal, loading }) {
-  const goals = Array.from(transactions.reduce((map, item) => {
-    if (item.type !== "meta" || item.status !== "pago") return map;
-    const name = item.description?.trim() || "Objetivo";
-    map.set(name, (map.get(name) || 0) + Number(item.amount || 0));
-    return map;
-  }, new Map())).map(([name, amount]) => ({ name, amount }));
+function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId }) {
+  const goals = transactions.filter((item) => item.type === "meta" && item.status === "pago");
   return (
     <>
       <section className="panel planning-wallet">
@@ -1092,10 +1112,15 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goa
         <form className="goal-form" onSubmit={saveGoal}>
           <label>Nome da meta<input value={goalForm.description} onChange={(event) => setGoalForm({ ...goalForm, description: event.target.value })} placeholder="Ex: reserva, viagem, casa" maxLength={160} required /></label>
           <label>Valor a separar<input type="number" value={goalForm.amount} onChange={(event) => setGoalForm({ ...goalForm, amount: event.target.value })} placeholder="0,00" min="0.01" max={MAX_MONEY} step="0.01" required /></label>
-          <button disabled={loading}>{loading ? "Separando..." : "Separar dinheiro"}</button>
+          <button disabled={loading}>{loading ? "Salvando..." : editingGoalId ? "Salvar alteração" : "Separar dinheiro"}</button>
+          {editingGoalId && <button type="button" className="ghost-button goal-cancel-edit" onClick={cancelGoalEdit}>Cancelar edição</button>}
         </form>
         <div className="planning-total"><span>Total separado</span><strong>{money(summary.savedGoals)}</strong></div>
-        {goals.length ? <div className="goal-wallet-grid">{goals.map((goal) => <article key={goal.name}><span className="goal-icon"><ShieldCheck size={19} aria-hidden="true" /></span><div><strong>{goal.name}</strong><small>Objetivo protegido</small></div><em>{money(goal.amount)}</em></article>)}</div> : <div className="planning-empty"><ShieldCheck size={26} aria-hidden="true" /><span><strong>Nenhum valor separado ainda</strong><small>Crie uma reserva, um sonho ou outro objetivo.</small></span></div>}
+        {goals.length ? <div className="goal-wallet-grid">{goals.map((goal) => {
+          const isOwner = String(goal.createdBy || "") === String(currentUserId || "");
+          const responsible = String(goal.responsibleName || "Responsável").trim().split(/\s+/)[0];
+          return <article key={goal._id}><span className="goal-icon"><ShieldCheck size={19} aria-hidden="true" /></span><div><strong>{goal.description || "Objetivo"}</strong><small>{activeMode === "couple" ? `${responsible} · ` : ""}Objetivo protegido</small></div><em>{money(goal.amount)}</em>{isOwner && <span className="goal-actions"><button type="button" className="ghost-button" disabled={loading} onClick={() => editGoal(goal)}>Editar</button><button type="button" className="danger-button" disabled={loading} onClick={() => deleteGoal(goal)}>Excluir</button></span>}</article>;
+        })}</div> : <div className="planning-empty"><ShieldCheck size={26} aria-hidden="true" /><span><strong>Nenhum valor separado ainda</strong><small>Crie uma reserva, um sonho ou outro objetivo.</small></span></div>}
       </section>
       <section className="grid-two">
         <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
