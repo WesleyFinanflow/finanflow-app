@@ -1026,37 +1026,6 @@ app.use((error, _req, res, _next) => {
   res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message || "Dados inválidos." : "Erro interno da API." });
 });
 
-async function cleanupTestUsersWhenAuthorized() {
-  if (process.env.CLEANUP_EXACT_TEST_USERS !== "Wesley,Célia") return;
-  const candidates = (await User.find().select("name email")).filter((user) => {
-    const exactName = String(user.name || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    return ["wesley", "celia"].includes(exactName) || String(user.email || "").toLowerCase() === "parceiro.teste.20260830@finanflow.local";
-  });
-  for (const user of candidates) {
-    const memberships = await Member.find({ userId: user._id }).populate("spaceId");
-    for (const membership of memberships) {
-      if (!membership.spaceId) continue;
-      const space = membership.spaceId;
-      const memberCount = await Member.countDocuments({ spaceId: space._id });
-      if (space.type === "individual" || memberCount <= 1) {
-        await Promise.all([
-          Transaction.deleteMany({ spaceId: space._id }), PurchasePlan.deleteMany({ spaceId: space._id }), Account.deleteMany({ spaceId: space._id }),
-          Invite.deleteMany({ spaceId: space._id }), AuditLog.deleteMany({ spaceId: space._id }), BackupSnapshot.deleteMany({ spaceId: space._id }), Member.deleteMany({ spaceId: space._id }),
-        ]);
-        await Space.deleteOne({ _id: space._id });
-      } else {
-        await Member.deleteOne({ _id: membership._id });
-        if (String(space.ownerId) === String(user._id)) {
-          const nextOwner = await Member.findOne({ spaceId: space._id });
-          if (nextOwner) await Space.updateOne({ _id: space._id }, { ownerId: nextOwner.userId });
-        }
-      }
-    }
-    await Promise.all([Invite.deleteMany({ createdBy: user._id }), AuditLog.deleteMany({ userId: user._id }), BackupSnapshot.deleteMany({ createdBy: user._id }), User.deleteOne({ _id: user._id })]);
-  }
-  console.log(`Limpeza autorizada concluída: ${candidates.length} conta(s) de teste removida(s).`);
-}
-
 async function start() {
   if (!MONGODB_URI) {
     console.error("MONGODB_URI não configurado.");
@@ -1068,7 +1037,6 @@ async function start() {
   }
   await mongoose.connect(MONGODB_URI);
   console.log("MongoDB conectado.");
-  await cleanupTestUsersWhenAuthorized();
   app.listen(PORT, () => console.log(`FinanFlow API rodando na porta ${PORT}`));
 }
 
