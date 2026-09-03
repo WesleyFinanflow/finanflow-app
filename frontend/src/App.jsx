@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
-import { calculatePurchase, calculateSummary } from "./finance.js";
+import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
@@ -1805,7 +1805,7 @@ function Decision({ buyForm, setBuyForm, ready, free, transactions, plans, saveP
     if (item.type === "despesa" || item.type === "divida") row.commitments += amount;
     map.set(month, row);
     return map;
-  }, new Map()).entries()).sort(([left], [right]) => right.localeCompare(left)).slice(0, 3);
+  }, new Map()).entries()).filter(([month]) => month <= currentMonthKey).sort(([left], [right]) => right.localeCompare(left)).slice(0, 3);
   const availableHistory = monthlyHistory.map(([, row]) => Math.max(0, row.income - row.commitments - Number(reserve || 0)));
   const fallback = Math.max(0, Number(free || 0));
   const safeMinimum = availableHistory.length ? Math.min(...availableHistory) : fallback;
