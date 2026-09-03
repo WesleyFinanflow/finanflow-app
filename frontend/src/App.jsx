@@ -33,6 +33,7 @@ const today = new Date().toISOString().slice(0, 10);
 const currentMonthKey = today.slice(0, 7);
 const MAX_MONEY = 1_000_000_000_000;
 const ACTIVE_MODE_KEY = "finanflow_active_mode";
+const HIDE_VALUES_KEY = "finanflow_hide_values";
 const transactionCategories = {
   receita: ["Salário", "Renda extra", "Benefícios", "Investimentos", "Reembolso", "Presente", "Outras receitas"],
   despesa: ["Alimentação", "Moradia", "Transporte", "Saúde", "Educação", "Lazer", "Assinaturas", "Compras", "Serviços", "Impostos", "Pets", "Família", "Outras despesas"],
@@ -190,6 +191,7 @@ export default function App() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const [dueReminderOpen, setDueReminderOpen] = useState(true);
+  const [hideValues, setHideValues] = useState(() => localStorage.getItem(HIDE_VALUES_KEY) === "true");
   const spaceRequestId = useRef(0);
   const profileMenuRef = useRef(null);
 
@@ -206,6 +208,13 @@ export default function App() {
     .sort((left, right) => String(left.date).localeCompare(String(right.date))), [transactions, user]);
 
   const hasData = accounts.length > 0 || transactions.length > 0;
+
+  function toggleValuePrivacy() {
+    setHideValues((hidden) => {
+      localStorage.setItem(HIDE_VALUES_KEY, String(!hidden));
+      return !hidden;
+    });
+  }
 
   async function loadSpaceData(spaceId) {
     if (!spaceId) return;
@@ -646,7 +655,7 @@ export default function App() {
   }
 
   return (
-    <main className="finanflow-app">
+    <main className={`finanflow-app ${hideValues ? "values-hidden" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon" aria-hidden="true">
@@ -710,7 +719,7 @@ export default function App() {
       </aside>
 
       <section className="main-content">
-        <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} />
+        <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
@@ -868,7 +877,7 @@ function PasswordInput({ id, label, value, onChange, visible, toggle, autoComple
   );
 }
 
-function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu }) {
+function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu, hideValues, toggleValuePrivacy }) {
   const isCouple = Boolean(coupleSpace);
   const coupleMembers = (coupleSpace?.members?.slice(0, 2) || []).map((member) => String(member.id) === String(user?.id || user?._id) ? { ...member, profilePhoto: user?.profilePhoto || member.profilePhoto } : member);
   const coupleName = coupleMembers.length
@@ -891,7 +900,7 @@ function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu }) {
         </div>
       </div>
       <div className="balance-focus">
-        <div className="balance-label"><span>Saldo livre seguro</span></div>
+        <div className="balance-label"><span>Saldo livre seguro</span><button type="button" className="privacy-toggle" onClick={toggleValuePrivacy} aria-label={hideValues ? "Mostrar valores" : "Ocultar valores"} title={hideValues ? "Mostrar valores" : "Ocultar valores"}>{hideValues ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
         <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
         <small>Protegido pela sua reserva financeira.</small>
       </div>
