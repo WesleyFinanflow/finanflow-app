@@ -182,7 +182,8 @@ export default function App() {
   const [editingGoalId, setEditingGoalId] = useState("");
   const [goalToDelete, setGoalToDelete] = useState(null);
   const [editingTransactionId, setEditingTransactionId] = useState("");
-  const [buyForm, setBuyForm] = useState({ item: "", total: "", installments: "1" });
+  const [buyForm, setBuyForm] = useState({ item: "", total: "", monthlyLimit: "" });
+  const [purchasePlans, setPurchasePlans] = useState([]);
   const [reserve, setReserve] = useState(300);
   const [coupleInvite, setCoupleInvite] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
@@ -222,10 +223,11 @@ export default function App() {
   async function loadSpaceData(spaceId) {
     if (!spaceId) return;
     const requestId = ++spaceRequestId.current;
-    const [accountData, txData] = await Promise.all([api(`/api/spaces/${spaceId}/accounts`), api(`/api/spaces/${spaceId}/transactions`)]);
+    const [accountData, txData, planData] = await Promise.all([api(`/api/spaces/${spaceId}/accounts`), api(`/api/spaces/${spaceId}/transactions`), api(`/api/spaces/${spaceId}/purchase-plans`)]);
     if (requestId !== spaceRequestId.current) return;
     setAccounts(accountData.accounts || []);
     setTransactions(txData.transactions || []);
+    setPurchasePlans(planData.plans || []);
   }
 
   async function loadSpaces(mode = localStorage.getItem(ACTIVE_MODE_KEY) === "couple" ? "couple" : "individual") {
@@ -418,6 +420,40 @@ export default function App() {
       setEditingGoalId("");
       await loadSpaceData(activeSpaceId);
       setMessage(existing ? "Meta atualizada." : "Dinheiro separado para o planejamento.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function savePurchasePlan(event) {
+    event.preventDefault();
+    const item = buyForm.item.trim();
+    const total = Number(buyForm.total);
+    const monthlyLimit = Number(buyForm.monthlyLimit);
+    if (!item) return setMessage("Informe o que deseja comprar.");
+    if (!Number.isFinite(total) || total <= 0 || total > MAX_MONEY) return setMessage("Informe o valor total da compra.");
+    if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0 || monthlyLimit > MAX_MONEY) return setMessage("Informe quanto pode guardar por mês.");
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/purchase-plans`, { method: "POST", body: JSON.stringify({ item, total, monthlyLimit }) });
+      setBuyForm({ item: "", total: "", monthlyLimit: "" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Objetivo de compra adicionado ao planejamento.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deletePurchasePlan(plan) {
+    setLoading(true);
+    try {
+      await api(`/api/spaces/${activeSpaceId}/purchase-plans/${plan._id}`, { method: "DELETE" });
+      await loadSpaceData(activeSpaceId);
+      setMessage("Planejamento de compra removido.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -770,7 +806,7 @@ export default function App() {
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} />}
+        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
@@ -1109,7 +1145,7 @@ function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loa
   );
 }
 
-function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId }) {
+function Planejamento({ summary, hasData, buyForm, setBuyForm, purchasePlans, savePurchasePlan, deletePurchasePlan, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId, reserve }) {
   const goals = transactions.filter((item) => item.type === "meta" && item.status === "pago");
   return (
     <>
@@ -1131,7 +1167,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, transactions, goa
         })}</div> : <div className="planning-empty"><ShieldCheck size={26} aria-hidden="true" /><span><strong>Nenhum valor separado ainda</strong><small>Crie uma reserva, um sonho ou outro objetivo.</small></span></div>}
       </section>
       <section className="grid-two">
-        <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} />
+        <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} transactions={transactions} plans={purchasePlans} savePlan={savePurchasePlan} deletePlan={deletePurchasePlan} loading={loading} activeMode={activeMode} currentUserId={currentUserId} reserve={reserve} />
         <section className="panel">
           <div className="panel-head">
             <div>
@@ -1758,25 +1794,58 @@ function Empty({ title, text }) {
   return <div className="empty-state"><strong>{title}</strong><p>{text}</p></div>;
 }
 
-function Decision({ buyForm, setBuyForm, ready, free }) {
-  const total = Number(buyForm.total || 0);
-  const { monthlyImpact, canBuy } = calculatePurchase(total, buyForm.installments, free);
+function Decision({ buyForm, setBuyForm, ready, free, transactions, plans, savePlan, deletePlan, loading, activeMode, currentUserId, reserve }) {
+  const monthlyHistory = Array.from(transactions.reduce((map, item) => {
+    if (item.type === "meta") return map;
+    const month = String(item.date || "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) return map;
+    const row = map.get(month) || { income: 0, commitments: 0 };
+    const amount = Number(item.amount || 0);
+    if (item.type === "receita") row.income += amount;
+    if (item.type === "despesa" || item.type === "divida") row.commitments += amount;
+    map.set(month, row);
+    return map;
+  }, new Map()).entries()).sort(([left], [right]) => right.localeCompare(left)).slice(0, 3);
+  const availableHistory = monthlyHistory.map(([, row]) => Math.max(0, row.income - row.commitments - Number(reserve || 0)));
+  const fallback = Math.max(0, Number(free || 0));
+  const safeMinimum = availableHistory.length ? Math.min(...availableHistory) : fallback;
+  const safeMaximum = availableHistory.length ? availableHistory.reduce((sum, value) => sum + value, 0) / availableHistory.length : fallback;
+  const planCount = Math.max(1, plans.length);
+  const minimumPerPlan = safeMinimum / planCount;
+  const maximumPerPlan = safeMaximum / planCount;
   return (
-    <section className="panel">
+    <section className="panel purchase-planner">
       <div className="panel-head">
         <div>
           <span className="eyebrow">Decisão financeira</span>
-          <h2>Posso comprar?</h2>
+          <h2>Planejar uma compra</h2>
+          <p>Descubra quanto guardar por mês e quando poderá comprar.</p>
         </div>
       </div>
-      <div className="buy-grid">
+      <form className="buy-grid purchase-plan-form" onSubmit={savePlan}>
         <label>Compra<input value={buyForm.item} onChange={(e) => setBuyForm({ ...buyForm, item: e.target.value })} placeholder="Ex: geladeira" /></label>
         <label>Valor total<input type="number" value={buyForm.total} onChange={(e) => setBuyForm({ ...buyForm, total: e.target.value })} placeholder="0,00" min="0" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
-        <label>Parcelas<input type="number" value={buyForm.installments} onChange={(e) => setBuyForm({ ...buyForm, installments: e.target.value })} min="1" max="600" step="1" inputMode="numeric" /></label>
+        <label>Quanto posso guardar por mês<input type="number" value={buyForm.monthlyLimit} onChange={(e) => setBuyForm({ ...buyForm, monthlyLimit: e.target.value })} placeholder="0,00" min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
+        <button disabled={loading}>{loading ? "Salvando..." : "Adicionar ao planejamento"}</button>
+      </form>
+      <div className="purchase-capacity">
+        <span><small>Mínimo seguro por compra</small><strong>{ready ? money(minimumPerPlan) : "Aguardando dados"}</strong></span>
+        <span><small>Máximo recomendado</small><strong>{ready ? money(maximumPerPlan) : "Aguardando dados"}</strong></span>
+        <p>Baseado em {monthlyHistory.length || 0} {monthlyHistory.length === 1 ? "mês" : "meses"} do seu histórico. Com mais objetivos, o valor disponível é dividido entre todos.</p>
       </div>
-      <div className={canBuy ? "decision-box ok" : "decision-box bad"}>
-        {ready ? (total > 0 ? (canBuy ? `Compra parece possível. Parcela estimada: ${money(monthlyImpact)}.` : `Compra não recomendada agora. Parcela estimada: ${money(monthlyImpact)}.`) : "Informe uma compra para simular.") : "Aguardando dados. Cadastre saldo, receita e despesas antes de simular uma compra."}
-      </div>
+      {plans.length > 0 ? <div className="purchase-plan-list">{plans.map((plan) => {
+        const fairShare = Math.max(0, maximumPerPlan);
+        const monthly = Math.min(Number(plan.monthlyLimit || 0), fairShare || Number(plan.monthlyLimit || 0));
+        const months = monthly > 0 ? Math.ceil(Number(plan.total || 0) / monthly) : null;
+        const target = months ? new Date(new Date().getFullYear(), new Date().getMonth() + months, 1).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }).replace(" de ", "/") : "Sem previsão";
+        const owner = String(plan.createdBy || "") === String(currentUserId || "");
+        return <article className="purchase-plan-card" key={plan._id}>
+          <span className="purchase-plan-icon"><ShoppingCart size={20} aria-hidden="true" /></span>
+          <div className="purchase-plan-copy"><strong>{plan.item}</strong><small>{activeMode === "couple" ? `${String(plan.responsibleName || "Responsável").split(/\s+/)[0]} · ` : ""}Meta de {money(plan.total)}</small><div className="purchase-plan-progress"><i style={{ width: `${Math.min(100, (monthly / Number(plan.total || 1)) * 100)}%` }} /></div></div>
+          <div className="purchase-plan-result"><strong>{months ? `${months} ${months === 1 ? "mês" : "meses"}` : "—"}</strong><small>{money(monthly)}/mês · previsão {target}</small></div>
+          {owner && <button type="button" className="purchase-plan-delete" disabled={loading} onClick={() => deletePlan(plan)} aria-label={`Excluir planejamento ${plan.item}`}><Trash2 size={17} /></button>}
+        </article>;
+      })}</div> : <div className="decision-box ok">Adicione a primeira compra para ver o prazo estimado.</div>}
     </section>
   );
 }

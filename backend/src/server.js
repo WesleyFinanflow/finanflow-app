@@ -136,6 +136,18 @@ const transactionSchema = new mongoose.Schema(
 );
 transactionSchema.index({ spaceId: 1, requestId: 1 }, { unique: true, sparse: true });
 
+const purchasePlanSchema = new mongoose.Schema(
+  {
+    spaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Space", required: true, index: true },
+    item: { type: String, required: true, trim: true, maxlength: 120 },
+    total: { type: Number, required: true, min: 0.01, max: 1000000000000 },
+    monthlyLimit: { type: Number, required: true, min: 0.01, max: 1000000000000 },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    responsibleName: { type: String, default: "Individual", maxlength: 80 },
+  },
+  { timestamps: true }
+);
+
 const inviteSchema = new mongoose.Schema(
   {
     spaceId: { type: mongoose.Schema.Types.ObjectId, ref: "Space", required: true },
@@ -182,6 +194,7 @@ const Space = mongoose.model("Space", spaceSchema);
 const Member = mongoose.model("Member", memberSchema);
 const Account = mongoose.model("Account", accountSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
+const PurchasePlan = mongoose.model("PurchasePlan", purchasePlanSchema);
 const Invite = mongoose.model("Invite", inviteSchema);
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 const BackupSnapshot = mongoose.model("BackupSnapshot", backupSnapshotSchema);
@@ -731,6 +744,35 @@ app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res)
   res.json({ transactions: await Transaction.find({ spaceId: { $in: viewIds } }).sort({ date: -1, createdAt: -1 }) });
 }));
 
+app.get("/api/spaces/:spaceId/purchase-plans", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const viewIds = await spaceViewIds(req.params.spaceId);
+  res.json({ plans: await PurchasePlan.find({ spaceId: { $in: viewIds } }).sort({ createdAt: 1 }) });
+}));
+
+app.post("/api/spaces/:spaceId/purchase-plans", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const item = String(req.body?.item || "").trim();
+  const total = Number(req.body?.total);
+  const monthlyLimit = Number(req.body?.monthlyLimit);
+  if (!item || item.length > 120) return res.status(400).json({ message: "Informe o produto com até 120 caracteres." });
+  if (!Number.isFinite(total) || total <= 0 || total > 1000000000000) return res.status(400).json({ message: "Informe um valor total válido." });
+  if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0 || monthlyLimit > 1000000000000) return res.status(400).json({ message: "Informe quanto pode guardar por mês." });
+  const writeSpaceId = await userWriteSpaceId(req.params.spaceId, req.user._id);
+  const plan = await PurchasePlan.create({ spaceId: writeSpaceId, item, total, monthlyLimit, createdBy: req.user._id, responsibleName: req.user.name });
+  res.status(201).json({ plan });
+}));
+
+app.delete("/api/spaces/:spaceId/purchase-plans/:planId", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  const viewIds = await spaceViewIds(req.params.spaceId);
+  const plan = await PurchasePlan.findOne({ _id: req.params.planId, spaceId: { $in: viewIds } });
+  if (!plan) return res.status(404).json({ message: "Planejamento não encontrado." });
+  if (String(plan.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou este planejamento pode excluí-lo." });
+  await plan.deleteOne();
+  res.json({ ok: true });
+}));
+
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
   try {
     if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
@@ -893,6 +935,7 @@ app.delete("/api/spaces/:spaceId/reset", auth, asyncHandler(async (req, res) => 
   const space = await Space.findById(req.params.spaceId);
   const snapshot = await createSpaceSnapshot(req.params.spaceId, req.user, "before_reset");
   await Transaction.deleteMany({ spaceId: req.params.spaceId });
+  await PurchasePlan.deleteMany({ spaceId: req.params.spaceId });
   await Account.deleteMany({ spaceId: req.params.spaceId });
   if (space?.type === "couple") {
     await Account.create({ spaceId: req.params.spaceId, name: "Conta conjunta", ownerName: "Casal", balance: 0 });
