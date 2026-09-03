@@ -900,8 +900,8 @@ function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu, hide
         </div>
       </div>
       <div className="balance-focus">
-        <div className="balance-label"><span>Saldo livre seguro</span><button type="button" className="privacy-toggle" onClick={toggleValuePrivacy} aria-label={hideValues ? "Mostrar valores" : "Ocultar valores"} title={hideValues ? "Mostrar valores" : "Ocultar valores"}>{hideValues ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>
-        <strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong>
+        <div className="balance-label"><span>Saldo livre seguro</span></div>
+        <div className="balance-value"><button type="button" className="privacy-toggle" onClick={toggleValuePrivacy} aria-label={hideValues ? "Mostrar valores" : "Ocultar valores"} title={hideValues ? "Mostrar valores" : "Ocultar valores"}>{hideValues ? <EyeOff size={17} /> : <Eye size={17} />}</button><strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong></div>
         <small>Protegido pela sua reserva financeira.</small>
       </div>
     </section>
