@@ -1028,7 +1028,10 @@ app.use((error, _req, res, _next) => {
 
 async function cleanupTestUsersWhenAuthorized() {
   if (process.env.CLEANUP_EXACT_TEST_USERS !== "Wesley,Célia") return;
-  const candidates = (await User.find().select("name")).filter((user) => ["Wesley", "Célia"].includes(user.name));
+  const candidates = (await User.find().select("name email")).filter((user) => {
+    const exactName = String(user.name || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    return ["wesley", "celia"].includes(exactName) || String(user.email || "").toLowerCase() === "parceiro.teste.20260830@finanflow.local";
+  });
   for (const user of candidates) {
     const memberships = await Member.find({ userId: user._id }).populate("spaceId");
     for (const membership of memberships) {
