@@ -1,0 +1,28 @@
+name: Backup semanal do MongoDB
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar MongoDB Database Tools
+        run: |
+          curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+          sudo apt-get update && sudo apt-get install -y mongodb-database-tools
+      - name: Criar backup
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: mongodump --uri="$MONGODB_URI" --archive=finanflow.archive.gz --gzip
+      - name: Criar checksum
+        run: sha256sum finanflow.archive.gz > finanflow.archive.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: finanflow-backup-${{ github.run_id }}
+          path: |
+            finanflow.archive.gz
+            finanflow.archive.gz.sha256
+          retention-days: 30

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -167,7 +167,7 @@ async function api(path, options = {}) {
 export default function App() {
   const [user, setUser] = useState(() => readStoredUser());
   const [authMode, setAuthMode] = useState("login");
-  const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
+  const [authForm, setAuthForm] = useState({ name: "", email: "", password: "", acceptLegal: false });
   const [activeMenu, setActiveMenu] = useState("Início");
   const [activeMode, setActiveMode] = useState(() => localStorage.getItem(ACTIVE_MODE_KEY) === "couple" ? "couple" : "individual");
   const [spaces, setSpaces] = useState([]);
@@ -711,6 +711,10 @@ export default function App() {
     }
   }
 
+  if (["/privacidade", "/termos"].includes(window.location.pathname)) {
+    return <LegalPage type={window.location.pathname === "/privacidade" ? "privacy" : "terms"} />;
+  }
+
   if (passwordResetToken) {
     return <ResetPasswordScreen token={passwordResetToken} onComplete={() => {
       window.history.replaceState({}, "", "/");
@@ -825,6 +829,35 @@ export default function App() {
   );
 }
 
+function LegalPage({ type }) {
+  const privacy = type === "privacy";
+  return (
+    <main className="legal-page"><article className="legal-document">
+      <a className="legal-back" href="/">← Voltar ao FinanFlow</a>
+      <span className="eyebrow">FinanFlow · versão 03/09/2026</span>
+      <h1>{privacy ? "Política de Privacidade" : "Termos de Uso"}</h1>
+      <p className="legal-lead">{privacy ? "Esta política explica, em linguagem simples, como tratamos seus dados pessoais e financeiros conforme a LGPD." : "Estes termos definem as regras para usar o FinanFlow com segurança e transparência."}</p>
+      {privacy ? <>
+        <h2>1. Dados tratados</h2><p>Tratamos nome, e-mail, foto opcional, credenciais protegidas, lançamentos financeiros, contas, metas, preferências, registros de segurança e dados do espaço compartilhado que você decidir criar.</p>
+        <h2>2. Para que usamos</h2><p>Os dados são usados para autenticar seu acesso, prestar as funções do aplicativo, sincronizar dispositivos, gerar relatórios, recuperar sua conta, prevenir fraude e atender solicitações.</p>
+        <h2>3. Compartilhamento e operadores</h2><p>Usamos fornecedores de infraestrutura e comunicação, como Vercel, Railway, MongoDB e Resend. Eles recebem somente o necessário para operar o serviço. No modo casal, os dados do espaço compartilhado ficam visíveis aos integrantes aceitos.</p>
+        <h2>4. Armazenamento e segurança</h2><p>Aplicamos autenticação, senhas com hash, controle de acesso, limitação de tentativas e comunicação HTTPS. Nenhum sistema é infalível; por isso, não compartilhe sua senha e mantenha seu dispositivo protegido.</p>
+        <h2>5. Seus direitos</h2><p>Você pode acessar e exportar dados, corrigir o perfil, sair do modo casal e excluir a conta nas Configurações. Também pode solicitar confirmação, revisão, portabilidade ou informação sobre o tratamento.</p>
+        <h2>6. Retenção</h2><p>Conservamos dados enquanto a conta estiver ativa ou pelo período necessário ao serviço, à segurança e a obrigações legais. Ao excluir a conta, removemos os dados vinculados, salvo retenção legal indispensável.</p>
+        <h2>7. Contato</h2><p>Para dúvidas ou solicitações de privacidade, use o canal de suporte divulgado pelo FinanFlow. Nunca envie sua senha ou dados bancários completos.</p>
+      </> : <>
+        <h2>1. O serviço</h2><p>O FinanFlow ajuda a registrar receitas, despesas, dívidas, metas, lembretes e informações compartilhadas. Ele é uma ferramenta de organização e não substitui orientação contábil, jurídica ou de investimentos.</p>
+        <h2>2. Sua conta</h2><p>Forneça informações corretas, proteja sua senha e avise sobre uso não autorizado. Você responde pelos lançamentos e pelas decisões tomadas com base neles.</p>
+        <h2>3. Modo casal</h2><p>O compartilhamento só começa depois da aceitação do convite. Integrantes podem ver e alterar os dados do espaço comum. Dados individuais permanecem separados.</p>
+        <h2>4. Disponibilidade</h2><p>Buscamos manter o aplicativo disponível e os cálculos corretos, mas podem ocorrer manutenções ou falhas de terceiros. Faça conferências antes de decisões financeiras importantes e mantenha exportações periódicas.</p>
+        <h2>5. Uso permitido</h2><p>Não tente invadir, automatizar abusivamente, prejudicar outros usuários ou usar o serviço para atividade ilegal. O acesso pode ser limitado em caso de risco à segurança.</p>
+        <h2>6. Encerramento e mudanças</h2><p>Você pode excluir sua conta nas Configurações. Estes termos podem ser atualizados; mudanças relevantes serão informadas e terão uma nova versão.</p>
+      </>}
+      <footer><a href={privacy ? "/termos" : "/privacidade"}>{privacy ? "Ler os Termos de Uso" : "Ler a Política de Privacidade"}</a></footer>
+    </article></main>
+  );
+}
+
 function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthForm, handleAuth, loading, message, setMessage }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
@@ -878,10 +911,12 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
               </button>
             </span>
           </div>
+          {!isLogin && <label className="legal-consent"><input type="checkbox" checked={Boolean(authForm.acceptLegal)} onChange={(event) => setAuthForm({ ...authForm, acceptLegal: event.target.checked })} required /><span>Li e aceito os <a href="/termos" target="_blank" rel="noreferrer">Termos de Uso</a> e a <a href="/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>.</span></label>}
           {isLogin && <button className="auth-forgot" type="button" onClick={forgotPassword}>Esqueci minha senha</button>}
           <button className="auth-submit" disabled={loading}>{loading ? "Aguarde..." : isLogin ? "Entrar" : "Criar conta"}</button>
         </form>
         <button className="ghost-button auth-switch" onClick={changeMode}>{isLogin ? "Ainda não tenho conta" : "Já tenho conta"}</button>
+        <p className="auth-legal-links"><a href="/termos">Termos</a><span>•</span><a href="/privacidade">Privacidade</a></p>
         {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
       </section>
       {showRecovery && (
@@ -1298,6 +1333,8 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   const [profileName, setProfileName] = useState(user?.name || firstName);
   const [history, setHistory] = useState([]);
   const [historyMessage, setHistoryMessage] = useState("");
+  const [adminOverview, setAdminOverview] = useState(null);
+  const [adminMessage, setAdminMessage] = useState("");
   const photoInputRef = useRef(null);
 
   async function loadHistory() {
@@ -1311,6 +1348,11 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   }
 
   useEffect(() => { loadHistory(); }, [activeSpaceId]);
+
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+    api("/api/admin/overview").then(setAdminOverview).catch((error) => setAdminMessage(error.message));
+  }, [user?.isAdmin]);
 
   async function restoreHistoryItem(item) {
     setHistoryMessage("Restaurando...");
@@ -1434,6 +1476,19 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
           <button type="button" className="data-action danger" disabled={loading} onClick={() => setConfirmation({ eyebrow: "Exclusão definitiva", title: "Apagar sua conta?", description: "Seus dados individuais serão removidos e você sairá dos espaços compartilhados.", note: "Esta ação não pode ser desfeita.", confirmLabel: "Apagar minha conta", action: deleteUserAccount })}><Trash2 size={24} /><span><strong>Apagar conta</strong><small>Ação irreversível.</small></span></button>
         </div>
       </section>
+
+      {user?.isAdmin && <section className="settings-card settings-admin-card">
+        <SettingsTitle icon={Server} title="Administração" />
+        <p>Visão operacional sem acesso a senhas ou valores financeiros dos usuários.</p>
+        {adminOverview ? <div className="admin-metrics">
+          <span><strong>{adminOverview.users}</strong><small>Usuários</small></span>
+          <span><strong>{adminOverview.newUsers}</strong><small>Novos em 7 dias</small></span>
+          <span><strong>{adminOverview.spaces}</strong><small>Espaços</small></span>
+          <span><strong>{adminOverview.transactions}</strong><small>Lançamentos</small></span>
+          <span><strong>{adminOverview.pendingInvites}</strong><small>Convites ativos</small></span>
+          <span className={adminOverview.database === "online" ? "is-online" : "is-offline"}><strong>{adminOverview.database}</strong><small>Banco de dados</small></span>
+        </div> : <small>{adminMessage || "Carregando indicadores..."}</small>}
+      </section>}
 
       {confirmation && <ConfirmationModal confirmation={confirmation} loading={loading} close={() => setConfirmation(null)} confirm={confirmDestructiveAction} />}
     </section>

@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
+import helmet from "helmet";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
 
@@ -17,6 +18,8 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 const FRONTEND_URL = String(process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const LEGAL_VERSION = "2026-09-03";
+const ADMIN_EMAILS = new Set(String(process.env.ADMIN_EMAILS || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
 const CORS_ORIGINS = String(process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
@@ -24,6 +27,7 @@ const CORS_ORIGINS = String(process.env.CORS_ORIGIN || "http://localhost:5173")
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));
 app.use((_req, res, next) => {
   res.set({
     "X-Content-Type-Options": "nosniff",
@@ -78,6 +82,9 @@ const userSchema = new mongoose.Schema(
     passwordResetExpiresAt: { type: Date, select: false },
     failedLoginAttempts: { type: Number, default: 0, select: false },
     loginLockedUntil: { type: Date, select: false },
+    termsAcceptedAt: { type: Date },
+    privacyAcceptedAt: { type: Date },
+    legalVersion: { type: String, maxlength: 20 },
   },
   { timestamps: true }
 );
@@ -255,6 +262,15 @@ async function userCanAccessSpace(userId, spaceId) {
   return Boolean(await Member.findOne({ userId, spaceId }));
 }
 
+function publicUser(user) {
+  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", isAdmin: ADMIN_EMAILS.has(String(user.email).toLowerCase()) };
+}
+
+function adminOnly(req, res, next) {
+  if (!ADMIN_EMAILS.has(String(req.user?.email || "").toLowerCase())) return res.status(403).json({ message: "Acesso administrativo não autorizado." });
+  next();
+}
+
 async function spaceViewIds(spaceId) {
   const space = await Space.findById(spaceId).lean();
   if (!space || space.type !== "couple") return [new mongoose.Types.ObjectId(spaceId)];
@@ -402,18 +418,25 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, app: "FinanFlow API", database: mongoose.connection.readyState === 1 ? "connected" : "disconnected" });
 });
 
+app.get("/api/ready", (_req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString() });
+});
+
 app.post("/api/auth/register", registerLimiter, async (req, res) => {
   try {
-    const { name: rawName, email: rawEmail, password } = req.body || {};
+    const { name: rawName, email: rawEmail, password, acceptLegal } = req.body || {};
     const name = requiredText(rawName, "Nome", 80);
     const email = emailAddress(rawEmail);
     validatePassword(password);
+    if (acceptLegal !== true) throw new InputError("Aceite os Termos de Uso e a Política de Privacidade para criar a conta.");
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, passwordHash });
+    const acceptedAt = new Date();
+    const user = await User.create({ name, email, passwordHash, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION });
     await createIndividualSpaceForUser(user);
-    res.status(201).json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" } });
+    res.status(201).json({ token: createToken(user), user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
     if (error?.code === 11000) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
@@ -492,14 +515,14 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     user.failedLoginAttempts = 0;
     user.loginLockedUntil = undefined;
     await user.save();
-    res.json({ token: createToken(user), user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" } });
+    res.json({ token: createToken(user), user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     res.status(500).json({ message: "Erro ao fazer login." });
   }
 });
 
-app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: req.user })));
+app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: publicUser(req.user) })));
 
 app.patch("/api/me/profile", auth, async (req, res) => {
   try {
@@ -510,7 +533,7 @@ app.patch("/api/me/profile", auth, async (req, res) => {
     }
     const user = await User.findByIdAndUpdate(req.user._id, { name, profilePhoto }, { new: true, runValidators: true }).select("name email profilePhoto");
     await Transaction.updateMany({ createdBy: user._id }, { responsibleName: name.split(/\s+/)[0] });
-    res.json({ user: { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "" }, message: "Perfil atualizado." });
+    res.json({ user: publicUser(user), message: "Perfil atualizado." });
   } catch {
     res.status(500).json({ message: "Erro ao salvar o perfil." });
   }
@@ -944,6 +967,19 @@ app.delete("/api/spaces/:spaceId/reset", auth, asyncHandler(async (req, res) => 
   }
   await recordAudit({ spaceId: req.params.spaceId, user: req.user, action: "reset", entityType: "space", entityId: req.params.spaceId, summary: "Dados financeiros zerados com cópia de segurança", after: { backupId: snapshot._id } });
   res.json({ ok: true });
+}));
+
+app.get("/api/admin/overview", auth, adminOnly, asyncHandler(async (_req, res) => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [users, spaces, transactions, newUsers, pendingInvites] = await Promise.all([
+    User.countDocuments(), Space.countDocuments(), Transaction.countDocuments(), User.countDocuments({ createdAt: { $gte: since } }), Invite.countDocuments({ usedAt: { $exists: false }, expiresAt: { $gt: new Date() } }),
+  ]);
+  res.json({ users, spaces, transactions, newUsers, pendingInvites, database: mongoose.connection.readyState === 1 ? "online" : "offline", emailConfigured: Boolean(RESEND_API_KEY && EMAIL_FROM), generatedAt: new Date().toISOString() });
+}));
+
+app.get("/api/admin/users", auth, adminOnly, asyncHandler(async (_req, res) => {
+  const users = await User.find().select("name email createdAt legalVersion termsAcceptedAt").sort({ createdAt: -1 }).limit(50).lean();
+  res.json({ users });
 }));
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
