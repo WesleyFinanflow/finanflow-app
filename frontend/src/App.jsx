@@ -1350,9 +1350,10 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   useEffect(() => { loadHistory(); }, [activeSpaceId]);
 
   useEffect(() => {
-    if (!user?.isAdmin) return;
-    api("/api/admin/overview").then(setAdminOverview).catch((error) => setAdminMessage(error.message));
-  }, [user?.isAdmin]);
+    api("/api/admin/overview")
+      .then((data) => { setAdminOverview(data); setAdminMessage(""); })
+      .catch((error) => { setAdminOverview(null); if (!/não autorizado/i.test(error.message)) setAdminMessage(error.message); });
+  }, [user?.id, user?._id]);
 
   async function restoreHistoryItem(item) {
     setHistoryMessage("Restaurando...");
@@ -1477,7 +1478,7 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
         </div>
       </section>
 
-      {user?.isAdmin && <section className="settings-card settings-admin-card">
+      {adminOverview && <section className="settings-card settings-admin-card">
         <SettingsTitle icon={Server} title="Administração" />
         <p>Visão operacional sem acesso a senhas ou valores financeiros dos usuários.</p>
         {adminOverview ? <div className="admin-metrics">
