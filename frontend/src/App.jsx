@@ -1110,6 +1110,9 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
     setFormOpen(false);
   };
   const monthTransactions = transactions.filter((item) => String(item.date || "").slice(0, 7) === selectedMonthKey && item.type !== "meta");
+  const byDate = (a, b) => String(a.date || "").localeCompare(String(b.date || ""));
+  const pendingTransactions = monthTransactions.filter((item) => item.status !== "pago").sort(byDate);
+  const completedTransactions = monthTransactions.filter((item) => item.status === "pago").sort((a, b) => byDate(b, a));
   const categories = Array.from(new Set([...(transactionCategories[txForm.type] || transactionCategories.despesa), ...transactions.filter((item) => item.type === txForm.type).map((item) => item.category).filter(Boolean)]));
   const isInstallment = txForm.recurrence !== "monthly" && Number(txForm.installmentCount || 1) > 1;
 
@@ -1153,20 +1156,31 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           </div>
         </div>
         <div className="transaction-list">
-          {monthTransactions.length ? monthTransactions.map((item) => (
-            <article className={`transaction-row ${item.type}`} key={item._id}>
+          {monthTransactions.length ? <>
+            {!!pendingTransactions.length && <div className="transaction-group-title"><span>Pendentes</span><small>Por data de vencimento</small></div>}
+            {pendingTransactions.map((item) => (
+            <article className={`transaction-row ${item.type} pending-item`} key={item._id}>
               <div className="transaction-main">
                 <strong>{item.description}</strong>
                 {activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}
-                <span>{item.category} · {item.status === "pago" ? item.type === "receita" ? "recebido" : "pago" : "pendente"}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
+                <span>{item.category}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
+                <span className="transaction-date">Vence em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span>
               </div>
-              <div className="transaction-value"><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="transaction-value"><b className="transaction-status">Pendente</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
               <div className="row-actions">
                 <button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button>
                 <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button>
               </div>
             </article>
-          )) : <Empty title="Nenhum lançamento neste mês" text="Use Novo lançamento para cadastrar receitas, despesas ou dívidas." />}
+            ))}
+            {!!completedTransactions.length && <div className="transaction-group-title completed-title"><span>Pagos e recebidos</span><small>Concluídos</small></div>}
+            {completedTransactions.map((item) => (
+            <article className={`transaction-row ${item.type} completed-item`} key={item._id}>
+              <div className="transaction-main"><strong>{item.description}</strong>{activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}<span>{item.category}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span><span className="transaction-date">{item.type === "receita" ? "Recebido" : "Pago"} em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span></div>
+              <div className="transaction-value"><b className="transaction-status completed">{item.type === "receita" ? "Recebido" : "Pago"}</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="row-actions"><button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button><button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button></div>
+            </article>))}
+          </> : <Empty title="Nenhum lançamento neste mês" text="Use Novo lançamento para cadastrar receitas, despesas ou dívidas." />}
         </div>
       </section>
     </section>
