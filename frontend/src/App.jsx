@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -13,6 +13,7 @@ import navTransactionsIcon from "./assets/navigation/transactions.webp";
 import navAccountsIcon from "./assets/navigation/accounts.webp";
 import navPlanningIcon from "./assets/navigation/planning.webp";
 import navReportsIcon from "./assets/navigation/reports.webp";
+import AdminApp from "./AdminApp.jsx";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -196,6 +197,8 @@ export default function App() {
   const [selectedMonthKey, setSelectedMonthKey] = useState(currentMonthKey);
   const [dueReminderOpen, setDueReminderOpen] = useState(true);
   const [hideValues, setHideValues] = useState(() => localStorage.getItem(HIDE_VALUES_KEY) === "true");
+  const [platformConfig,setPlatformConfig]=useState(null);
+  const [platformFeatures,setPlatformFeatures]=useState({});
   const spaceRequestId = useRef(0);
   const profileMenuRef = useRef(null);
 
@@ -248,6 +251,9 @@ export default function App() {
   }
 
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
+
+  useEffect(()=>{api("/api/platform/config").then(setPlatformConfig).catch(()=>undefined);},[]);
+  useEffect(()=>{if(user)api("/api/platform/features").then(data=>setPlatformFeatures(data.features||{})).catch(()=>undefined);},[user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -751,6 +757,12 @@ export default function App() {
     return <AuthScreen pendingInvite={pendingInvite} authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} loading={loading} message={message} setMessage={setMessage} />;
   }
 
+  if(platformConfig?.maintenanceMode&&!user.isAdmin)return <main className="maintenance-page"><ShieldCheck size={48}/><span className="eyebrow">Manutenção programada</span><h1>FinanFlow está em manutenção</h1><p>{platformConfig.maintenanceMessage}</p><button onClick={()=>window.location.reload()}>Verificar novamente</button></main>;
+
+  if (window.location.pathname === "/admin") {
+    return <AdminApp api={api} user={user} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} />;
+  }
+
   if (pendingInvite) {
     return <InviteAccept invite={inviteInfo} loading={loading} message={message} acceptInvite={acceptInvite} />;
   }
@@ -769,7 +781,7 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          {menu.map(({ label, shortLabel, icon: Icon, iconImage }) => (
+          {menu.filter(({label})=>{const key={Planejamento:"planejamento","Relatórios":"relatorios"}[label];return !key||platformFeatures[key]!==false;}).map(({ label, shortLabel, icon: Icon, iconImage }) => (
             <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label}>
               {iconImage ? <img className="premium-nav-icon" src={iconImage} alt="" aria-hidden="true" /> : <Icon size={18} strokeWidth={2} aria-hidden="true" />}
               <span className="nav-label-full">{label}</span>
@@ -792,7 +804,7 @@ export default function App() {
               </button>
               {!coupleMenuState.enabled && coupleSpace && <button type="button" className="profile-menu-invite" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Casal"); }}>Ver convite</button>}
               <div className="profile-menu-divider" />
-              {user.isAdmin && <button type="button" className="profile-menu-action admin-link" role="menuitem" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Administração"); }}><Server size={18} aria-hidden="true" />Administração</button>}
+              {user.isAdmin && <button type="button" className="profile-menu-action admin-link" role="menuitem" onClick={() => { window.history.pushState({}, "", "/admin"); window.location.reload(); }}><Server size={18} aria-hidden="true" />Administração</button>}
               <button type="button" className="profile-menu-action" role="menuitem" onClick={() => { setProfileMenuOpen(false); setActiveMenu("Configurações"); }}><Settings size={18} aria-hidden="true" />Configurações</button>
               <button type="button" className="profile-menu-action logout" role="menuitem" onClick={() => { setProfileMenuOpen(false); logout(); }}><LogOut size={18} aria-hidden="true" />Sair da conta</button>
             </section>
@@ -821,14 +833,14 @@ export default function App() {
       </aside>
 
       <section className="main-content">
-        {activeMenu !== "Administração" && <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />}
+        {platformConfig?.globalNoticeEnabled&&platformConfig.globalNotice&&<div className="platform-notice"><Megaphone size={17}/>{platformConfig.globalNotice}</div>}
+        <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
         {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
-        {activeMenu === "Administração" && user.isAdmin && <AdminPanel />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
         {transactionToDelete && <ConfirmationModal confirmation={{ eyebrow: "Excluir lançamento", title: `Excluir “${transactionToDelete.description}”?`, description: `${transactionToDelete.type === "receita" ? "A receita de" : "O valor de"} ${money(transactionToDelete.amount)} será removido do seu histórico.`, note: transactionToDelete.seriesId && transactionToDelete.recurrence === "monthly" ? "Esta é uma conta fixa. Todas as repetições, inclusive as dos próximos meses, também serão excluídas." : transactionToDelete.seriesId && Number(transactionToDelete.installmentCount || 1) > 1 ? `Este lançamento faz parte de um parcelamento. Todas as ${transactionToDelete.installmentCount} parcelas serão excluídas.` : "Somente este lançamento será excluído. Essa ação ficará registrada no histórico de segurança.", confirmLabel: "Excluir lançamento" }} loading={loading} close={() => setTransactionToDelete(null)} confirm={confirmDeleteTransaction} />}
@@ -1529,10 +1541,19 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
           <button type="button" className="data-action danger" disabled={loading} onClick={() => setConfirmation({ eyebrow: "Exclusão definitiva", title: "Apagar sua conta?", description: "Seus dados individuais serão removidos e você sairá dos espaços compartilhados.", note: "Esta ação não pode ser desfeita.", confirmLabel: "Apagar minha conta", action: deleteUserAccount })}><Trash2 size={24} /><span><strong>Apagar conta</strong><small>Ação irreversível.</small></span></button>
         </div>
       </section>
+      <UserSupport />
 
       {confirmation && <ConfirmationModal confirmation={confirmation} loading={loading} close={() => setConfirmation(null)} confirm={confirmDestructiveAction} />}
     </section>
   );
+}
+
+function UserSupport(){
+  const [form,setForm]=useState({subject:"",message:"",category:"QUESTION"}),[tickets,setTickets]=useState([]),[status,setStatus]=useState("");
+  const load=()=>api("/api/support/me").then(data=>setTickets(data.tickets||[])).catch(()=>undefined);
+  useEffect(()=>{load();},[]);
+  async function send(event){event.preventDefault();setStatus("Enviando...");try{await api("/api/support",{method:"POST",body:JSON.stringify(form)});setForm({subject:"",message:"",category:"QUESTION"});setStatus("Chamado enviado.");load();}catch(error){setStatus(error.message);}}
+  return <section className="settings-card settings-support-card"><SettingsTitle icon={HeartHandshake} title="Suporte"/><p>Envie uma dúvida, problema ou sugestão diretamente para a equipe do FinanFlow.</p><form className="support-user-form" onSubmit={send}><select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}><option value="QUESTION">Dúvida</option><option value="PROBLEM">Problema</option><option value="SUGGESTION">Sugestão</option></select><input required maxLength={160} value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} placeholder="Assunto"/><textarea required maxLength={3000} value={form.message} onChange={e=>setForm({...form,message:e.target.value})} placeholder="Conte o que aconteceu"/><button>Enviar chamado</button></form>{status&&<small>{status}</small>}<div className="support-user-list">{tickets.slice(0,5).map(t=><span key={t._id}><strong>{t.subject}</strong><small>{t.status} · {new Date(t.createdAt).toLocaleDateString("pt-BR")}</small></span>)}</div></section>;
 }
 
 function SettingsTitle({ icon: Icon, title, danger = false }) {

@@ -8,6 +8,8 @@ import crypto from "node:crypto";
 import helmet from "helmet";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
+import { AppConfig, Subscription, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
+import { canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
 
 dotenv.config();
 
@@ -88,6 +90,11 @@ const userSchema = new mongoose.Schema(
     accessStatus: { type: String, enum: ["active", "trial", "blocked"], default: "active" },
     trialEndsAt: { type: Date },
     blockedAt: { type: Date },
+    role: { type: String, enum: ["USER", "ADMIN", "SUPER_ADMIN"], default: "USER" },
+    lastLoginAt: { type: Date },
+    trialStartedAt: { type: Date },
+    trialStatus: { type: String, enum: ["NOT_STARTED", "ACTIVE", "EXPIRED", "CONVERTED", "CANCELLED"], default: "NOT_STARTED" },
+    planCode: { type: String, default: "FREE", maxlength: 30 },
   },
   { timestamps: true }
 );
@@ -251,6 +258,9 @@ async function auth(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
+    const config=await AppConfig.findOne({key:"global"}).select("maintenanceMode maintenanceMessage").lean();
+    const effectiveRole=ADMIN_EMAILS.has(String(user.email).toLowerCase())?"SUPER_ADMIN":user.role||"USER";
+    if(config?.maintenanceMode&&effectiveRole==="USER")return res.status(503).json({message:config.maintenanceMessage||"FinanFlow está em manutenção. Voltaremos em breve."});
     const deniedMessage = accessDenied(user);
     if (deniedMessage) return res.status(403).json({ message: deniedMessage });
     if (Number(decoded.passwordVersion || 0) !== Number(user.passwordVersion || 0)) {
@@ -268,7 +278,8 @@ async function userCanAccessSpace(userId, spaceId) {
 }
 
 function publicUser(user) {
-  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", isAdmin: ADMIN_EMAILS.has(String(user.email).toLowerCase()), accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null };
+  const role = effectiveRole(user,ADMIN_EMAILS);
+  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE" };
 }
 
 function accessDenied(user) {
@@ -279,8 +290,17 @@ function accessDenied(user) {
 }
 
 function adminOnly(req, res, next) {
-  if (!ADMIN_EMAILS.has(String(req.user?.email || "").toLowerCase())) return res.status(403).json({ message: "Acesso administrativo não autorizado." });
+  const role=effectiveRole(req.user,ADMIN_EMAILS);
+  req.user.role=role;
+  if (!canAccessAdmin(role)) return res.status(403).json({ message: "Acesso administrativo não autorizado." });
   next();
+}
+
+function superAdminOnly(req,res,next){adminOnly(req,res,()=>canAccessSuperAdmin(req.user.role)?next():res.status(403).json({message:"Ação exclusiva de SUPER_ADMIN."}));}
+
+async function sendRecoveryForUser(user){
+  if(!RESEND_API_KEY||!EMAIL_FROM) throw new InputError("Envio de e-mail ainda não configurado.");
+  const token=crypto.randomBytes(32).toString("base64url");user.passwordResetTokenHash=hashResetToken(token);user.passwordResetExpiresAt=new Date(Date.now()+30*60*1000);await user.save();await sendPasswordResetEmail(user.email,token);
 }
 
 async function spaceViewIds(spaceId) {
@@ -432,11 +452,13 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/ready", (_req, res) => {
   const ready = mongoose.connection.readyState === 1;
-  res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString() });
+  res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString(),environment:process.env.RAILWAY_ENVIRONMENT_NAME||process.env.NODE_ENV||"local",version:process.env.RAILWAY_GIT_COMMIT_SHA||"development" });
 });
 
 app.post("/api/auth/register", registerLimiter, async (req, res) => {
   try {
+    const platformConfig=await AppConfig.findOne({key:"global"}).lean();
+    if(platformConfig?.registrationsOpen===false)return res.status(403).json({message:"Novos cadastros estão temporariamente fechados."});
     const { name: rawName, email: rawEmail, password, acceptLegal } = req.body || {};
     const name = requiredText(rawName, "Nome", 80);
     const email = emailAddress(rawEmail);
@@ -446,8 +468,11 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     if (existing) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
     const passwordHash = await bcrypt.hash(password, 10);
     const acceptedAt = new Date();
-    const user = await User.create({ name, email, passwordHash, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION });
+    const trialEnabled=platformConfig?.trialEnabled!==false;
+    const trialEndsAt=trialEnabled?new Date(Date.now()+Number(platformConfig?.defaultTrialDays||7)*86400000):undefined;
+    const user = await User.create({ name, email, passwordHash, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION,accessStatus:trialEnabled?"trial":"active",trialStartedAt:trialEnabled?acceptedAt:undefined,trialEndsAt,trialStatus:trialEnabled?"ACTIVE":"NOT_STARTED",planCode:trialEnabled?(platformConfig?.trialPlanCode||"PREMIUM"):(platformConfig?.defaultPlanCode||"FREE") });
     await createIndividualSpaceForUser(user);
+    if(trialEnabled)await Subscription.create({userId:user._id,planCode:user.planCode,startsAt:acceptedAt,endsAt:trialEndsAt,status:"TRIAL",origin:"TRIAL"});
     res.status(201).json({ token: createToken(user), user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
@@ -528,6 +553,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     }
     user.failedLoginAttempts = 0;
     user.loginLockedUntil = undefined;
+    user.lastLoginAt = new Date();
     await user.save();
     res.json({ token: createToken(user), user: publicUser(user) });
   } catch (error) {
@@ -1018,6 +1044,8 @@ app.patch("/api/admin/users/:userId/access", auth, adminOnly, asyncHandler(async
   res.json({ message: action === "trial" ? "Período de teste aplicado." : action === "block" ? "Usuário bloqueado e sessões encerradas." : "Acesso liberado." });
 }));
 
+registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,sendRecovery:sendRecoveryForUser});
+
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
 
 app.use((error, _req, res, _next) => {
@@ -1037,6 +1065,7 @@ async function start() {
   }
   await mongoose.connect(MONGODB_URI);
   console.log("MongoDB conectado.");
+  await seedAdminDefaults();
   app.listen(PORT, () => console.log(`FinanFlow API rodando na porta ${PORT}`));
 }
 
