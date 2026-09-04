@@ -1169,7 +1169,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
                 <span>{item.category}{item.fundingSource === "meal" ? " · vale-refeição" : ""}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
                 <span className="transaction-date">Vence em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span>
               </div>
-              <div className="transaction-value"><b className="transaction-status">Pendente</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="transaction-value"><b className="transaction-status pending">Pendente</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
               <div className="row-actions">
                 <button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button>
                 <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button>
@@ -1180,7 +1180,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
             {completedTransactions.map((item) => (
             <article className={`transaction-row ${item.type} completed-item`} key={item._id}>
               <div className="transaction-main"><strong>{item.description}</strong>{activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}<span>{item.category}{item.fundingSource === "meal" ? " · vale-refeição" : ""}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span><span className="transaction-date">{item.type === "receita" ? "Recebido" : "Pago"} em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span></div>
-              <div className="transaction-value"><b className="transaction-status completed">{item.type === "receita" ? "Recebido" : "Pago"}</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="transaction-value"><b className={`transaction-status completed ${item.type === "receita" ? "received" : "paid"}`}>{item.type === "receita" ? "Recebido" : "Pago"}</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
               <div className="row-actions"><button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button><button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button></div>
             </article>))}
           </> : <Empty title="Nenhum lançamento neste mês" text="Use Novo lançamento para cadastrar receitas, despesas ou dívidas." />}
