@@ -1,4 +1,4 @@
-import { useEffect,useMemo,useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import { Activity,ArrowLeft,BarChart3,Bell,CalendarDays,Check as CheckIcon,ChevronDown,ClipboardCheck,Download,FileText,Home,LifeBuoy,LockKeyhole,LogOut,Megaphone,Menu,PackageCheck,RefreshCw,Search,Settings,ShieldCheck,Ticket,ToggleRight,UserRound,Users,WalletCards,X } from "lucide-react";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
 
@@ -14,10 +14,10 @@ const toCsv=(rows)=>{if(!rows?.length)return "";const keys=Object.keys(rows[0]);
 
 export default function AdminApp({api,user,onExit,onLogout}){
   const initial=location.hash.replace("#","")||"dashboard";
-  const [tab,setTabState]=useState(NAV.some(x=>x[0]===initial)?initial:"dashboard"),[data,setData]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(true),[more,setMore]=useState(false),[profileOpen,setProfileOpen]=useState(false);
+  const [tab,setTabState]=useState(NAV.some(x=>x[0]===initial)?initial:"dashboard"),[data,setData]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(true),[more,setMore]=useState(false),[profileOpen,setProfileOpen]=useState(false),refreshingRef=useRef(false);
   const setTab=(next)=>{setTabState(next);location.hash=next;setMore(false);};
-  async function refresh(){setLoading(true);try{setData(await api("/api/admin/bootstrap"));setError("");}catch(e){setError(e.message);}finally{setLoading(false);}}
-  useEffect(()=>{refresh();},[]);
+  async function refresh({silent=false}={}){if(refreshingRef.current)return;refreshingRef.current=true;if(!silent)setLoading(true);try{setData(await api("/api/admin/bootstrap"));setError("");}catch(e){setError(e.message);}finally{refreshingRef.current=false;if(!silent)setLoading(false);}}
+  useEffect(()=>{refresh();const update=()=>refresh({silent:true});const timer=window.setInterval(update,30000);const onVisibility=()=>{if(document.visibilityState==="visible")update();};document.addEventListener("visibilitychange",onVisibility);window.addEventListener("focus",update);return()=>{window.clearInterval(timer);document.removeEventListener("visibilitychange",onVisibility);window.removeEventListener("focus",update);};},[]);
   if(error&&!data)return <main className="admin-denied"><LockKeyhole size={42}/><h1>Acesso administrativo negado</h1><p>{error}</p><button onClick={onExit}>Voltar ao FinanFlow</button></main>;
   const title=NAV.find(x=>x[0]===tab)?.[1]||"Administração";
   return <main className="admin-shell">
