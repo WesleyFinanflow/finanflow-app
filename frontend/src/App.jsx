@@ -1076,6 +1076,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
         <StatCard title="Vale-refeição" value={hasData ? money(summary.mealBalance) : "Aguardando dados"} text="Uso exclusivo em alimentação" tone="green" />
         <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
         <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
+        <StatCard title="Total já pago" value={hasData ? money(summary.paidExpenses + summary.paidDebt) : "Aguardando dados"} text="Despesas e dívidas quitadas no mês" tone="spent" />
         <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={hasNegativeFreeBalance ? `Faltam ${money(Math.abs(summary.free))} após proteger ${money(reserve)}` : `Limite protegido: ${money(reserve)}`} tone={hasNegativeFreeBalance ? "red" : "blue"} />
       </section>
 
@@ -1919,7 +1920,7 @@ function InviteAccept({ invite, loading, message, acceptInvite }) {
 }
 
 function StatCard({ title, value, text, tone }) {
-  const icons = { cyan: balanceWalletIcon, green: incomeWalletIcon, yellow: commitmentsCalendarIcon, blue: safeShieldIcon, red: safeShieldIcon };
+  const icons = { cyan: balanceWalletIcon, green: incomeWalletIcon, yellow: commitmentsCalendarIcon, spent: commitmentsCalendarIcon, blue: safeShieldIcon, red: safeShieldIcon };
   return (
     <article className={`stat-card ${tone}`}>
       <span className="stat-icon"><img src={icons[tone] || balanceWalletIcon} alt="" aria-hidden="true" /></span>
