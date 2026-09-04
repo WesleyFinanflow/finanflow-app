@@ -186,7 +186,7 @@ export default function App() {
   const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [buyForm, setBuyForm] = useState({ item: "", total: "", monthlyLimit: "" });
   const [purchasePlans, setPurchasePlans] = useState([]);
-  const [reserve, setReserve] = useState(300);
+  const [reserve, setReserve] = useState(0);
   const [coupleInvite, setCoupleInvite] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
   const [inviteInfo, setInviteInfo] = useState(null);
@@ -247,7 +247,7 @@ export default function App() {
     setActiveMode(mode === "couple" && readyCouple ? "couple" : "individual");
     localStorage.setItem(ACTIVE_MODE_KEY, mode === "couple" && readyCouple ? "couple" : "individual");
     setActiveSpaceId(selected);
-    setReserve(Number(selectedSpace?.reserve ?? 300));
+    setReserve(Number(selectedSpace?.reserve ?? 0));
     if (selected) await loadSpaceData(selected);
   }
 
@@ -608,7 +608,7 @@ export default function App() {
       setActiveMode("couple");
       localStorage.setItem(ACTIVE_MODE_KEY, "couple");
       setActiveSpaceId(refreshedCouple._id);
-      setReserve(Number(refreshedCouple.reserve ?? 300));
+      setReserve(Number(refreshedCouple.reserve ?? 0));
       setAccounts([]);
       setTransactions([]);
       setActiveMenu("Início");
@@ -623,7 +623,7 @@ export default function App() {
     setActiveMode("individual");
     localStorage.setItem(ACTIVE_MODE_KEY, "individual");
     setActiveSpaceId(selected);
-    setReserve(Number(individualSpace?.reserve ?? 300));
+    setReserve(Number(individualSpace?.reserve ?? 0));
     setAccounts([]);
     setTransactions([]);
     setActiveMenu("Início");
@@ -682,7 +682,7 @@ export default function App() {
     setGoalForm({ description: "", amount: "" });
     setEditingTransactionId("");
     setBuyForm({ item: "", total: "", installments: "1" });
-    setReserve(300);
+    setReserve(0);
     setCoupleInvite(null);
     setAuthForm({ name: "", email: "", password: "" });
     spaceRequestId.current += 1;

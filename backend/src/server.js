@@ -104,7 +104,8 @@ const spaceSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     type: { type: String, enum: ["individual", "couple"], required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    reserve: { type: Number, default: 300, min: 0, max: 1000000000000 },
+    reserve: { type: Number, default: 0, min: 0, max: 1000000000000 },
+    reserveConfigured: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -653,6 +654,7 @@ app.patch("/api/spaces/:spaceId/settings", auth, async (req, res) => {
     if (!target) return res.status(404).json({ message: "Espaço individual não encontrado." });
     const before = target.toObject();
     target.reserve = reserve;
+    target.reserveConfigured = true;
     await target.save();
     await recordAudit({ spaceId: target._id, user: req.user, action: "settings", entityType: "space", entityId: target._id, summary: "Proteção financeira individual atualizada", before, after: target });
     const membership = await Member.findOne({ userId: req.user._id, spaceId: requested._id });
@@ -1075,6 +1077,15 @@ async function start() {
   }
   await mongoose.connect(MONGODB_URI);
   console.log("MongoDB conectado.");
+  const automaticReserveCutoff = new Date("2026-09-04T20:00:00.000Z");
+  await Space.updateMany(
+    { reserveConfigured: { $exists: false }, createdAt: { $lt: automaticReserveCutoff } },
+    { $set: { reserveConfigured: true } },
+  );
+  await Space.updateMany(
+    { reserveConfigured: { $exists: false }, createdAt: { $gte: automaticReserveCutoff }, reserve: 300 },
+    { $set: { reserve: 0, reserveConfigured: false } },
+  );
   await seedAdminDefaults();
   app.listen(PORT, () => console.log(`FinanFlow API rodando na porta ${PORT}`));
 }
