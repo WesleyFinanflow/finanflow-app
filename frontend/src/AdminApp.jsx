@@ -1,106 +1,2724 @@
-import { useEffect,useMemo,useRef,useState } from "react";
-import { Activity,ArrowLeft,BarChart3,Bell,CalendarDays,Check as CheckIcon,ChevronDown,ClipboardCheck,Download,Eye,FileText,HeartHandshake,Home,Info as InfoIcon,LifeBuoy,LockKeyhole,LogOut,Megaphone,Menu,PackageCheck,Pencil,RefreshCw,Search,Send,Settings,ShieldCheck,Ticket,ToggleRight,Trash2,UserRound,Users,WalletCards,X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  ArrowLeft,
+  BarChart3,
+  Bell,
+  CalendarDays,
+  Check as CheckIcon,
+  ChevronDown,
+  ClipboardCheck,
+  Download,
+  Eye,
+  FileText,
+  HeartHandshake,
+  Home,
+  Info as InfoIcon,
+  LifeBuoy,
+  LockKeyhole,
+  LogOut,
+  Megaphone,
+  Menu,
+  PackageCheck,
+  Pencil,
+  RefreshCw,
+  Search,
+  Send,
+  Settings,
+  ShieldCheck,
+  Ticket,
+  ToggleRight,
+  Trash2,
+  UserRound,
+  Users,
+  WalletCards,
+  X,
+} from "lucide-react";
 import wesleyAvatar from "./assets/wesley-avatar.jpeg";
 
-const NAV=[
-  ["dashboard","Painel",Home],["clients","Clientes",Users],["trials","Testes grátis",ClipboardCheck],["subscriptions","Assinaturas",WalletCards],["plans","Planos",PackageCheck],["coupons","Cupons",Ticket],
-  ["analytics","Analytics",BarChart3],["reports","Relatórios",FileText],["communication","Comunicação",Megaphone],["support","Suporte",LifeBuoy],["features","Recursos",ToggleRight],["audit","Auditoria",ShieldCheck],["status","Status do sistema",Activity],["settings","Configurações",Settings]
+const NAV = [
+  ["dashboard", "Painel", Home],
+  ["clients", "Clientes", Users],
+  ["trials", "Testes grátis", ClipboardCheck],
+  ["subscriptions", "Assinaturas", WalletCards],
+  ["plans", "Planos", PackageCheck],
+  ["coupons", "Cupons", Ticket],
+  ["analytics", "Analytics", BarChart3],
+  ["reports", "Relatórios", FileText],
+  ["communication", "Comunicação", Megaphone],
+  ["support", "Suporte", LifeBuoy],
+  ["features", "Recursos", ToggleRight],
+  ["audit", "Auditoria", ShieldCheck],
+  ["status", "Status do sistema", Activity],
+  ["settings", "Configurações", Settings],
 ];
-const MOBILE=[["dashboard","Painel",Home],["clients","Clientes",Users],["subscriptions","Assinaturas",WalletCards],["reports","Relatórios",BarChart3],["more","Mais",Menu]];
-const label={active:"Ativo",trial:"Em teste",blocked:"Bloqueado",USER:"Usuário",ADMIN:"Admin",SUPER_ADMIN:"Super Admin",NOT_STARTED:"Não iniciado",ACTIVE:"Ativo",EXPIRED:"Expirado",CONVERTED:"Convertido",CANCELLED:"Cancelado",MANUAL:"Manual",TRIAL:"Teste"};
-const couponBenefitLabel={EXTRA_TRIAL_DAYS:"Dias extras de teste",PLUS_DAYS:"Plus por dias",PREMIUM_DAYS:"Premium por dias",PERCENT_DISCOUNT:"Desconto percentual",AMOUNT_DISCOUNT:"Desconto em valor"};
-const couponStatusLabel={SCHEDULED:"Agendado",ACTIVE:"Ativo",EXHAUSTED:"Esgotado",EXPIRED:"Expirado",DISABLED:"Desativado"};
-const date=(v)=>v?new Intl.DateTimeFormat("pt-BR").format(new Date(v)):"—";
-const localDateTime=(value)=>value?new Date(value).toISOString().slice(0,16):"";
-const download=(name,data,type="json")=>{const content=type==="csv"?toCsv(data):JSON.stringify(data,null,2);const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([content],{type:type==="csv"?"text/csv;charset=utf-8":"application/json"}));a.download=`${name}.${type}`;a.click();URL.revokeObjectURL(a.href);};
-const toCsv=(rows)=>{if(!rows?.length)return "";const keys=Object.keys(rows[0]);return [keys.join(","),...rows.map(r=>keys.map(k=>`"${String(r[k]??"").replaceAll('"','""')}"`).join(","))].join("\n");};
-const downloadExcel=async(rows)=>{const {utils:sheetUtils,writeFileXLSX}=await import("xlsx");const sheet=sheetUtils.json_to_sheet(rows),book=sheetUtils.book_new();sheet["!cols"]=[{wch:28},{wch:34},{wch:16},{wch:20},{wch:14},{wch:22},{wch:22}];sheetUtils.book_append_sheet(book,sheet,"Clientes");writeFileXLSX(book,"finanflow-relatorio-administrativo.xlsx");};
-const downloadReportPdf=async(data,period)=>{const {jsPDF}=await import("jspdf");const pdf=new jsPDF(),periodLabel={1:"Hoje",7:"Últimos 7 dias",30:"Últimos 30 dias",month:"Este mês",previous:"Mês anterior"}[period]||"Período selecionado";pdf.setTextColor(7,117,82);pdf.setFontSize(20);pdf.text("FinanFlow - Relatório administrativo",14,18);pdf.setTextColor(45,65,58);pdf.setFontSize(10);pdf.text(`${periodLabel} · Gerado em ${new Date().toLocaleString("pt-BR")}`,14,26);pdf.setFontSize(12);pdf.text(`Cadastros: ${data.stats.users}    Testes grátis: ${data.stats.trials}    Planos ativos: ${data.stats.subscriptionsActive}    Bloqueios: ${data.stats.blocked}`,14,38);pdf.setFontSize(13);pdf.text("Clientes",14,51);pdf.setFontSize(9);let y=59;for(const user of data.users){if(y>280){pdf.addPage();y=18;}pdf.setFont("helvetica","bold");pdf.text(user.name||"Sem nome",14,y);pdf.setFont("helvetica","normal");pdf.text(`${user.email||"—"}  |  ${user.planCode||"—"}  |  ${label[user.accessStatus]||user.accessStatus||"—"}`,14,y+5);pdf.setDrawColor(225,235,231);pdf.line(14,y+8,196,y+8);y+=14;}pdf.save("finanflow-relatorio-administrativo.pdf");};
+const MOBILE = [
+  ["dashboard", "Painel", Home],
+  ["clients", "Clientes", Users],
+  ["subscriptions", "Assinaturas", WalletCards],
+  ["reports", "Relatórios", BarChart3],
+  ["more", "Mais", Menu],
+];
+const label = {
+  active: "Ativo",
+  trial: "Em teste",
+  blocked: "Bloqueado",
+  USER: "Usuário",
+  ADMIN: "Admin",
+  SUPER_ADMIN: "Super Admin",
+  NOT_STARTED: "Não iniciado",
+  ACTIVE: "Ativo",
+  EXPIRED: "Expirado",
+  CONVERTED: "Convertido",
+  CANCELLED: "Cancelado",
+  MANUAL: "Manual",
+  TRIAL: "Teste",
+};
+const couponBenefitLabel = {
+  EXTRA_TRIAL_DAYS: "Dias extras de teste",
+  PLUS_DAYS: "Plus por dias",
+  PREMIUM_DAYS: "Premium por dias",
+  PERCENT_DISCOUNT: "Desconto percentual",
+  AMOUNT_DISCOUNT: "Desconto em valor",
+};
+const couponStatusLabel = {
+  SCHEDULED: "Agendado",
+  ACTIVE: "Ativo",
+  EXHAUSTED: "Esgotado",
+  EXPIRED: "Expirado",
+  DISABLED: "Desativado",
+};
+const date = (v) =>
+  v ? new Intl.DateTimeFormat("pt-BR").format(new Date(v)) : "—";
+const localDateTime = (value) =>
+  value ? new Date(value).toISOString().slice(0, 16) : "";
+const download = (name, data, type = "json") => {
+  const content = type === "csv" ? toCsv(data) : JSON.stringify(data, null, 2);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(
+    new Blob([content], {
+      type: type === "csv" ? "text/csv;charset=utf-8" : "application/json",
+    }),
+  );
+  a.download = `${name}.${type}`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+const toCsv = (rows) => {
+  if (!rows?.length) return "";
+  const keys = Object.keys(rows[0]);
+  return [
+    keys.join(","),
+    ...rows.map((r) =>
+      keys
+        .map((k) => `"${String(r[k] ?? "").replaceAll('"', '""')}"`)
+        .join(","),
+    ),
+  ].join("\n");
+};
+const downloadExcel = async (rows) => {
+  const { utils: sheetUtils, writeFileXLSX } = await import("xlsx");
+  const sheet = sheetUtils.json_to_sheet(rows),
+    book = sheetUtils.book_new();
+  sheet["!cols"] = [
+    { wch: 28 },
+    { wch: 34 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 14 },
+    { wch: 22 },
+    { wch: 22 },
+  ];
+  sheetUtils.book_append_sheet(book, sheet, "Clientes");
+  writeFileXLSX(book, "finanflow-relatorio-administrativo.xlsx");
+};
+const downloadReportPdf = async (data, period) => {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF(),
+    periodLabel =
+      {
+        1: "Hoje",
+        7: "Últimos 7 dias",
+        30: "Últimos 30 dias",
+        month: "Este mês",
+        previous: "Mês anterior",
+      }[period] || "Período selecionado";
+  pdf.setTextColor(7, 117, 82);
+  pdf.setFontSize(20);
+  pdf.text("FinanFlow - Relatório administrativo", 14, 18);
+  pdf.setTextColor(45, 65, 58);
+  pdf.setFontSize(10);
+  pdf.text(
+    `${periodLabel} · Gerado em ${new Date().toLocaleString("pt-BR")}`,
+    14,
+    26,
+  );
+  pdf.setFontSize(12);
+  pdf.text(
+    `Cadastros: ${data.stats.users}    Testes grátis: ${data.stats.trials}    Planos ativos: ${data.stats.subscriptionsActive}    Bloqueios: ${data.stats.blocked}`,
+    14,
+    38,
+  );
+  pdf.setFontSize(13);
+  pdf.text("Clientes", 14, 51);
+  pdf.setFontSize(9);
+  let y = 59;
+  for (const user of data.users) {
+    if (y > 280) {
+      pdf.addPage();
+      y = 18;
+    }
+    pdf.setFont("helvetica", "bold");
+    pdf.text(user.name || "Sem nome", 14, y);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(
+      `${user.email || "—"}  |  ${user.planCode || "—"}  |  ${label[user.accessStatus] || user.accessStatus || "—"}`,
+      14,
+      y + 5,
+    );
+    pdf.setDrawColor(225, 235, 231);
+    pdf.line(14, y + 8, 196, y + 8);
+    y += 14;
+  }
+  pdf.save("finanflow-relatorio-administrativo.pdf");
+};
 
-export default function AdminApp({api,user,onExit,onLogout}){
-  const initial=location.hash.replace("#","")||"dashboard";
-  const [tab,setTabState]=useState(NAV.some(x=>x[0]===initial)?initial:"dashboard"),[data,setData]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(true),[more,setMore]=useState(false),[profileOpen,setProfileOpen]=useState(false),refreshingRef=useRef(false);
-  const setTab=(next)=>{setTabState(next);location.hash=next;setMore(false);};
-  async function refresh({silent=false}={}){if(refreshingRef.current)return;refreshingRef.current=true;if(!silent)setLoading(true);try{setData(await api("/api/admin/bootstrap"));setError("");}catch(e){setError(e.message);}finally{refreshingRef.current=false;if(!silent)setLoading(false);}}
-  useEffect(()=>{refresh();const update=()=>refresh({silent:true});const timer=window.setInterval(update,30000);const onVisibility=()=>{if(document.visibilityState==="visible")update();};document.addEventListener("visibilitychange",onVisibility);window.addEventListener("focus",update);return()=>{window.clearInterval(timer);document.removeEventListener("visibilitychange",onVisibility);window.removeEventListener("focus",update);};},[]);
-  if(error&&!data)return <main className="admin-denied"><LockKeyhole size={42}/><h1>Acesso administrativo negado</h1><p>{error}</p><button onClick={onExit}>Voltar ao FinanFlow</button></main>;
-  const title=NAV.find(x=>x[0]===tab)?.[1]||"Administração";
-  return <main className="admin-shell">
-    <header className="admin-mobile-header">
-      <div className="admin-mobile-brand"><svg className="admin-brand-mark" viewBox="0 0 64 44" aria-hidden="true"><path d="M3 14c12 7 20 7 31 0S51 7 61 10"/><path d="M3 24c12 7 20 7 31 0s17-7 27-4"/><path d="M3 34c12 7 20 7 31 0s17-7 27-4"/></svg><span><strong>FinanFlow</strong><small>Admin</small></span></div>
-      <button className="admin-mobile-profile" aria-label="Abrir menu do perfil" aria-expanded={profileOpen} onClick={()=>setProfileOpen(!profileOpen)}><AdminAvatar user={user}/></button>
-      {profileOpen&&<section className="admin-mobile-profile-menu admin-profile-menu"><header><AdminAvatar user={user}/><span><strong>{user.name.split(" ")[0]}</strong><small>Área administrativa</small></span></header><em>Minha conta</em><button className="admin-plain" onClick={onExit}><Home size={18}/><span><strong>Meu espaço</strong><small>Voltar às minhas finanças</small></span></button><button className="admin-plain" onClick={()=>{setTab("settings");setProfileOpen(false)}}><Settings size={18}/><span><strong>Configurações</strong><small>Ajustes do Admin</small></span></button><div className="admin-profile-divider"/><button className="admin-plain admin-profile-logout" onClick={onLogout}><LogOut size={18}/><span><strong>Sair da conta</strong><small>Encerrar esta sessão</small></span></button></section>}
-    </header>
-    <aside className="admin-sidebar"><div className="admin-brand"><svg className="admin-brand-mark" viewBox="0 0 64 44" aria-label="FinanFlow Admin"><path d="M3 14c12 7 20 7 31 0S51 7 61 10"/><path d="M3 24c12 7 20 7 31 0s17-7 27-4"/><path d="M3 34c12 7 20 7 31 0s17-7 27-4"/></svg><span><strong>FinanFlow</strong><small>Admin</small></span></div><nav>{NAV.filter(([key])=>key!=="settings").map(([key,name,Icon])=><button key={key} title={name} aria-label={name} data-group={key==="analytics"||key==="features"?"start":undefined} className={`admin-plain ${tab===key?"active":""}`} onClick={()=>setTab(key)}><Icon size={18}/><span>{name}</span></button>)}</nav><footer>{profileOpen&&<section className="admin-profile-menu"><header><AdminAvatar user={user}/><span><strong>{user.name.split(" ")[0]}</strong><small>Área administrativa</small></span></header><em>Minha conta</em><button className="admin-plain" onClick={onExit}><Home size={18}/><span><strong>Meu espaço</strong><small>Voltar às minhas finanças</small></span></button><button className="admin-plain" onClick={()=>{setTab("settings");setProfileOpen(false)}}><Settings size={18}/><span><strong>Configurações</strong><small>Ajustes do Admin</small></span></button><div className="admin-profile-divider"/><button className="admin-plain admin-profile-logout" onClick={onLogout}><LogOut size={18}/><span><strong>Sair da conta</strong><small>Encerrar esta sessão</small></span></button></section>}<button className="admin-profile-trigger admin-plain" aria-label="Abrir menu do perfil de Wesley" aria-expanded={profileOpen} onClick={()=>setProfileOpen(!profileOpen)}><AdminAvatar user={user}/><i><strong>{user.name.split(" ")[0]}</strong></i><ChevronDown size={15}/></button></footer></aside>
-    <section className="admin-workspace"><header className="admin-top"><div><h1>{tab==="dashboard"?"Painel administrativo":title}</h1><p>{tab==="dashboard"?"Visão geral do FinanFlow":"Administração segura com dados reais do FinanFlow."}</p></div><div className="admin-top-tools"><span><CalendarDays size={17}/>{new Date().toLocaleDateString("pt-BR")}</span><i><Bell size={19}/>{data?.audits?.length>0&&<b>{Math.min(data.audits.length,99)}</b>}</i><button onClick={refresh} disabled={loading} title="Atualizar dados"><RefreshCw size={17}/>{loading?"Atualizando...":"Atualizar"}</button></div></header>
-      {data&&<AdminContent tab={tab} data={data} api={api} refresh={refresh} setTab={setTab}/>}</section>
-    <nav className="admin-mobile-nav">{MOBILE.map(([key,name,Icon])=><button key={key} className={tab===key?"active":""} onClick={()=>key==="more"?setMore(!more):setTab(key)}><Icon/><span>{name}</span></button>)}</nav>
-    {more&&<div className="admin-more-menu">{NAV.filter(x=>!["dashboard","clients","subscriptions","reports"].includes(x[0])).map(([key,name,Icon])=><button key={key} onClick={()=>setTab(key)}><Icon size={18}/>{name}</button>)}<button className="admin-return-mobile" onClick={onExit}><ArrowLeft size={18}/>Voltar ao FinanFlow</button></div>}
-  </main>;
+export default function AdminApp({ api, user, onExit, onLogout }) {
+  const initial = location.hash.replace("#", "") || "dashboard";
+  const [tab, setTabState] = useState(
+      NAV.some((x) => x[0] === initial) ? initial : "dashboard",
+    ),
+    [data, setData] = useState(null),
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(true),
+    [more, setMore] = useState(false),
+    [profileOpen, setProfileOpen] = useState(false),
+    refreshingRef = useRef(false);
+  const setTab = (next) => {
+    setTabState(next);
+    location.hash = next;
+    setMore(false);
+  };
+  async function refresh({ silent = false } = {}) {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    if (!silent) setLoading(true);
+    try {
+      setData(await api("/api/admin/bootstrap"));
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      refreshingRef.current = false;
+      if (!silent) setLoading(false);
+    }
+  }
+  useEffect(() => {
+    refresh();
+    const update = () => refresh({ silent: true });
+    const timer = window.setInterval(update, 30000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") update();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", update);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", update);
+    };
+  }, []);
+  if (error && !data)
+    return (
+      <main className="admin-denied">
+        <LockKeyhole size={42} />
+        <h1>Acesso administrativo negado</h1>
+        <p>{error}</p>
+        <button onClick={onExit}>Voltar ao FinanFlow</button>
+      </main>
+    );
+  const title = NAV.find((x) => x[0] === tab)?.[1] || "Administração";
+  return (
+    <main className="admin-shell">
+      <header className="admin-mobile-header">
+        <div className="admin-mobile-brand">
+          <svg
+            className="admin-brand-mark"
+            viewBox="0 0 64 44"
+            aria-hidden="true"
+          >
+            <path d="M3 14c12 7 20 7 31 0S51 7 61 10" />
+            <path d="M3 24c12 7 20 7 31 0s17-7 27-4" />
+            <path d="M3 34c12 7 20 7 31 0s17-7 27-4" />
+          </svg>
+          <span>
+            <strong>FinanFlow</strong>
+            <small>Admin</small>
+          </span>
+        </div>
+        <button
+          className="admin-mobile-profile"
+          aria-label="Abrir menu do perfil"
+          aria-expanded={profileOpen}
+          onClick={() => setProfileOpen(!profileOpen)}
+        >
+          <AdminAvatar user={user} />
+        </button>
+        {profileOpen && (
+          <section className="admin-mobile-profile-menu admin-profile-menu">
+            <header>
+              <AdminAvatar user={user} />
+              <span>
+                <strong>{user.name.split(" ")[0]}</strong>
+                <small>Área administrativa</small>
+              </span>
+            </header>
+            <em>Minha conta</em>
+            <button className="admin-plain" onClick={onExit}>
+              <Home size={18} />
+              <span>
+                <strong>Meu espaço</strong>
+                <small>Voltar às minhas finanças</small>
+              </span>
+            </button>
+            <button
+              className="admin-plain"
+              onClick={() => {
+                setTab("settings");
+                setProfileOpen(false);
+              }}
+            >
+              <Settings size={18} />
+              <span>
+                <strong>Configurações</strong>
+                <small>Ajustes do Admin</small>
+              </span>
+            </button>
+            <div className="admin-profile-divider" />
+            <button
+              className="admin-plain admin-profile-logout"
+              onClick={onLogout}
+            >
+              <LogOut size={18} />
+              <span>
+                <strong>Sair da conta</strong>
+                <small>Encerrar esta sessão</small>
+              </span>
+            </button>
+          </section>
+        )}
+      </header>
+      <aside className="admin-sidebar">
+        <div className="admin-brand">
+          <svg
+            className="admin-brand-mark"
+            viewBox="0 0 64 44"
+            aria-label="FinanFlow Admin"
+          >
+            <path d="M3 14c12 7 20 7 31 0S51 7 61 10" />
+            <path d="M3 24c12 7 20 7 31 0s17-7 27-4" />
+            <path d="M3 34c12 7 20 7 31 0s17-7 27-4" />
+          </svg>
+          <span>
+            <strong>FinanFlow</strong>
+            <small>Admin</small>
+          </span>
+        </div>
+        <nav>
+          {NAV.filter(([key]) => key !== "settings").map(
+            ([key, name, Icon]) => (
+              <button
+                key={key}
+                title={name}
+                aria-label={name}
+                data-group={
+                  key === "analytics" || key === "features"
+                    ? "start"
+                    : undefined
+                }
+                className={`admin-plain ${tab === key ? "active" : ""}`}
+                onClick={() => setTab(key)}
+              >
+                <Icon size={18} />
+                <span>{name}</span>
+              </button>
+            ),
+          )}
+        </nav>
+        <footer>
+          {profileOpen && (
+            <section className="admin-profile-menu">
+              <header>
+                <AdminAvatar user={user} />
+                <span>
+                  <strong>{user.name.split(" ")[0]}</strong>
+                  <small>Área administrativa</small>
+                </span>
+              </header>
+              <em>Minha conta</em>
+              <button className="admin-plain" onClick={onExit}>
+                <Home size={18} />
+                <span>
+                  <strong>Meu espaço</strong>
+                  <small>Voltar às minhas finanças</small>
+                </span>
+              </button>
+              <button
+                className="admin-plain"
+                onClick={() => {
+                  setTab("settings");
+                  setProfileOpen(false);
+                }}
+              >
+                <Settings size={18} />
+                <span>
+                  <strong>Configurações</strong>
+                  <small>Ajustes do Admin</small>
+                </span>
+              </button>
+              <div className="admin-profile-divider" />
+              <button
+                className="admin-plain admin-profile-logout"
+                onClick={onLogout}
+              >
+                <LogOut size={18} />
+                <span>
+                  <strong>Sair da conta</strong>
+                  <small>Encerrar esta sessão</small>
+                </span>
+              </button>
+            </section>
+          )}
+          <button
+            className="admin-profile-trigger admin-plain"
+            aria-label="Abrir menu do perfil de Wesley"
+            aria-expanded={profileOpen}
+            onClick={() => setProfileOpen(!profileOpen)}
+          >
+            <AdminAvatar user={user} />
+            <i>
+              <strong>{user.name.split(" ")[0]}</strong>
+            </i>
+            <ChevronDown size={15} />
+          </button>
+        </footer>
+      </aside>
+      <section className="admin-workspace">
+        <header className="admin-top">
+          <div>
+            <h1>{tab === "dashboard" ? "Painel administrativo" : title}</h1>
+            <p>
+              {tab === "dashboard"
+                ? "Visão geral do FinanFlow"
+                : "Administração segura com dados reais do FinanFlow."}
+            </p>
+          </div>
+          <div className="admin-top-tools">
+            <span>
+              <CalendarDays size={17} />
+              {new Date().toLocaleDateString("pt-BR")}
+            </span>
+            <i>
+              <Bell size={19} />
+              {data?.audits?.length > 0 && (
+                <b>{Math.min(data.audits.length, 99)}</b>
+              )}
+            </i>
+            <button
+              onClick={refresh}
+              disabled={loading}
+              title="Atualizar dados"
+            >
+              <RefreshCw size={17} />
+              {loading ? "Atualizando..." : "Atualizar"}
+            </button>
+          </div>
+        </header>
+        {data && (
+          <AdminContent
+            tab={tab}
+            data={data}
+            api={api}
+            refresh={refresh}
+            setTab={setTab}
+          />
+        )}
+      </section>
+      <nav className="admin-mobile-nav">
+        {MOBILE.map(([key, name, Icon]) => (
+          <button
+            key={key}
+            className={tab === key ? "active" : ""}
+            onClick={() => (key === "more" ? setMore(!more) : setTab(key))}
+          >
+            <Icon />
+            <span>{name}</span>
+          </button>
+        ))}
+      </nav>
+      {more && (
+        <div className="admin-more-menu">
+          {NAV.filter(
+            (x) =>
+              !["dashboard", "clients", "subscriptions", "reports"].includes(
+                x[0],
+              ),
+          ).map(([key, name, Icon]) => (
+            <button key={key} onClick={() => setTab(key)}>
+              <Icon size={18} />
+              {name}
+            </button>
+          ))}
+          <button className="admin-return-mobile" onClick={onExit}>
+            <ArrowLeft size={18} />
+            Voltar ao FinanFlow
+          </button>
+        </div>
+      )}
+    </main>
+  );
 }
 
-function AdminAvatar({user}){const photo=user.profilePhoto||(/^wesley\b/i.test(user.name||"")?wesleyAvatar:"");return <span className="avatar">{photo?<img src={photo} alt=""/>:(user.name||"F").slice(0,2).toUpperCase()}</span>}
-
-function AdminContent({tab,data,api,refresh,setTab}){
-  if(tab==="dashboard")return <Dashboard data={data} setTab={setTab}/>;
-  if(tab==="clients")return <Clients data={data} api={api} refresh={refresh}/>;
-  if(tab==="trials")return <Trials data={data} api={api} refresh={refresh}/>;
-  if(tab==="subscriptions")return <Subscriptions data={data} api={api} refresh={refresh}/>;
-  if(tab==="plans")return <Plans data={data} api={api} refresh={refresh}/>;
-  if(tab==="coupons")return <Coupons data={data} api={api} refresh={refresh}/>;
-  if(tab==="analytics")return <Analytics data={data}/>;
-  if(tab==="reports")return <Reports data={data}/>;
-  if(tab==="communication")return <Communication data={data} api={api} refresh={refresh}/>;
-  if(tab==="support")return <Support data={data} api={api} refresh={refresh}/>;
-  if(tab==="features")return <Features data={data} api={api} refresh={refresh}/>;
-  if(tab==="audit")return <Audit data={data}/>;
-  if(tab==="status")return <SystemStatus api={api}/>;
-  return <AdminSettings data={data} api={api} refresh={refresh}/>;
+function AdminAvatar({ user }) {
+  const photo =
+    user.profilePhoto ||
+    (/^wesley\b/i.test(user.name || "") ? wesleyAvatar : "");
+  return (
+    <span className="avatar">
+      {photo ? (
+        <img src={photo} alt="" />
+      ) : (
+        (user.name || "F").slice(0, 2).toUpperCase()
+      )}
+    </span>
+  );
 }
-function Stat({name,value,hint,icon:Icon=Activity,tone="green"}){return <article className={`admin-stat ${tone}`}><span><small>{name}</small><strong>{value??0}</strong><em>{hint}</em></span><i><Icon/></i></article>}
-function Dashboard({data,setTab}){const s=data.stats;return <div className="admin-stack"><div className="admin-stats dashboard-primary"><Stat name="USUÁRIOS" value={s.users} hint={`${s.new7} novos esta semana`} icon={Users}/><Stat name="ATIVOS" value={s.active} hint={`${s.users?Math.round(s.active/s.users*100):0}% do total`} icon={Activity}/><Stat name="EM TESTE GRÁTIS" value={s.trials} hint={`${s.trialsToday} vencem hoje`} icon={ClipboardCheck} tone="orange"/><Stat name="ASSINANTES" value={s.subscriptionsActive} hint="Planos ativos" icon={WalletCards} tone="purple"/><Stat name="RECEITA (MRR)" value="—" hint="Sem integração de pagamento" icon={WalletCards}/></div><div className="admin-stats compact"><Stat name="ESPAÇOS INDIVIDUAIS" value={s.individualSpaces}/><Stat name="ESPAÇOS CASAL" value={s.coupleSpaces}/><Stat name="LANÇAMENTOS" value={s.transactions}/><Stat name="CONTAS" value={s.accounts}/><Stat name="METAS" value={s.goals}/><Stat name="CONVITES PENDENTES" value={s.pendingInvites}/></div><section className="admin-dashboard-grid"><Chart title="Crescimento de usuários" points={data.monthly}/><article className="admin-card"><h2>Testes grátis</h2><Rows rows={[["Em teste agora",s.trials],["Vencem hoje",s.trialsToday],["Vencem em 3 dias",s.trials3],["Vencem em 7 dias",s.trials7],["Expirados",s.trialsExpired]]}/><button className="admin-link-btn" onClick={()=>setTab("trials")}>Gerenciar testes</button></article><article className="admin-card"><h2>Assinaturas</h2><Rows rows={[["Ativas",s.subscriptionsActive],["Em teste",s.trials],["Manuais",s.subscriptionsManual],["Expiradas",s.subscriptionsExpired],["Canceladas",s.subscriptionsCancelled]]}/></article></section><section className="admin-dashboard-bottom"><article className="admin-card"><div className="admin-section-head"><h2>Últimos cadastros</h2><button onClick={()=>setTab("clients")}>Ver todos</button></div><MiniUsers users={data.users.slice(0,5)}/></article><article className="admin-card"><div className="admin-section-head"><h2>Últimas atividades</h2><button onClick={()=>setTab("audit")}>Ver todas</button></div><div className="admin-activity-feed">{data.audits.slice(0,5).map(a=><div key={a._id}><ShieldCheck size={16}/><span><strong>{a.adminName}</strong> {a.action.replaceAll("_"," ").toLowerCase()} {a.targetName||""}</span><time>{date(a.createdAt)}</time></div>)}{!data.audits.length&&<p>Nenhuma atividade administrativa ainda.</p>}</div></article></section></div>}
-function Rows({rows}){return <div className="admin-rows">{rows.map(([a,b])=><div key={a}><span>{a}</span><strong>{b}</strong></div>)}</div>}
-function Chart({title,points=[]}){const source=new Map(points.map(p=>[p._id,p.users]));const now=new Date(),series=Array.from({length:6},(_,index)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+index,1),key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;return{_id:key,users:source.get(key)||0,label:d.toLocaleDateString("pt-BR",{month:"short"}).replace(".","")}});const max=Math.max(1,...series.map(p=>p.users)),width=600,height=190,pad=22;const coords=series.map((p,i)=>({x:pad+i*(width-pad*2)/(series.length-1),y:height-pad-(p.users/max)*(height-pad*2),...p}));const line=coords.map((p,i)=>`${i?"L":"M"}${p.x},${p.y}`).join(" "),area=`${line} L${coords.at(-1).x},${height-pad} L${coords[0].x},${height-pad} Z`;return <article className="admin-card admin-chart"><header><div><h2>{title}</h2><small>Novos usuários por mês</small></div><span>Últimos 6 meses</span></header><div className="admin-line-chart"><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label={title}><defs><linearGradient id="adminArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#15a575" stopOpacity=".25"/><stop offset="1" stopColor="#15a575" stopOpacity=".02"/></linearGradient></defs><path className="area" d={area}/><path className="line" d={line}/>{coords.map(p=><g key={p._id}><circle cx={p.x} cy={p.y} r="4"/><text x={p.x} y={height-4}>{p.label}</text><title>{p.users} usuários</title></g>)}</svg></div></article>}
-function MiniUsers({users}){return <div className="admin-table mini"><div className="thead"><span>Usuário</span><span>E-mail</span><span>Plano</span><span>Cadastro</span><span>Último acesso</span></div>{users.map(u=><div key={u._id}><strong>{u.name}</strong><span>{u.email}</span><span>{u.planCode}</span><span>{date(u.createdAt)}</span><span>{date(u.lastLoginAt)}</span></div>)}</div>}
 
-function Clients({data,api,refresh}){const [q,setQ]=useState(""),[status,setStatus]=useState("all"),[plan,setPlan]=useState("all"),[role,setRole]=useState("all"),[sort,setSort]=useState("recent"),[selected,setSelected]=useState(null);const users=useMemo(()=>data.users.filter(u=>`${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase())).filter(u=>status==="all"||status==="trial"&&u.trialStatus==="ACTIVE"||status==="blocked"&&u.accessStatus==="blocked"||status==="active"&&u.accessStatus!=="blocked").filter(u=>plan==="all"||u.planCode===plan).filter(u=>role==="all"||u.role===role).sort((a,b)=>sort==="name"?a.name.localeCompare(b.name):sort==="old"?new Date(a.createdAt)-new Date(b.createdAt):sort==="access"?new Date(b.lastLoginAt||0)-new Date(a.lastLoginAt||0):new Date(b.createdAt)-new Date(a.createdAt)),[data.users,q,status,plan,role,sort]);const exportRows=users.map(u=>({nome:u.name,email:u.email,status:u.accessStatus,role:u.role,plano:u.planCode,teste:u.trialStatus,espacos:u.spaces||0,cadastro:u.createdAt,ultimo_acesso:u.lastLoginAt}));async function block(e,u){e.stopPropagation();await api(`/api/admin/users/${u._id}`,{method:"PATCH",body:JSON.stringify({action:u.accessStatus==="blocked"?"unblock":"block"})});refresh();}return <div className="admin-stack clients-page"><div className="admin-stats client-stats"><Stat name="TOTAL DE CLIENTES" value={data.stats.users} hint={`${data.stats.new7} novos esta semana`} icon={Users}/><Stat name="ATIVOS" value={data.stats.active} hint={`${data.stats.users?Math.round(data.stats.active/data.stats.users*100):0}% do total`} icon={Activity}/><Stat name="EM TESTE GRÁTIS" value={data.stats.trials} hint={`${data.stats.trialsToday} vencem hoje`} icon={ClipboardCheck} tone="orange"/><Stat name="BLOQUEADOS" value={data.stats.blocked} hint={`${data.stats.users?Math.round(data.stats.blocked/data.stats.users*100):0}% do total`} icon={LockKeyhole} tone="red"/></div><section className="admin-card client-directory"><Filters q={q} setQ={setQ} status={status} setStatus={setStatus} plan={plan} setPlan={setPlan} role={role} setRole={setRole} sort={sort} setSort={setSort} onExport={()=>download("finanflow-clientes",exportRows,"csv")}/><div className="admin-client-list"><div className="client-list-head"><span>Avatar</span><span>Nome / e-mail</span><span>Status</span><span>Role</span><span>Plano</span><span>Teste</span><span>Espaços</span><span>Último acesso</span><span>Ações</span></div>{users.map(u=><article key={u._id} onClick={()=>setSelected(u)}><span className="avatar">{u.profilePhoto?<img src={u.profilePhoto}/>:u.name.slice(0,2).toUpperCase()}</span><span><strong>{u.name}</strong><small>{u.email}</small></span><em className={`pill ${u.accessStatus}`}>{label[u.accessStatus]}</em><span>{label[u.role]||u.role}</span><span>{u.planCode}</span><span>{u.trialStatus==="ACTIVE"?`Até ${date(u.trialEndsAt)}`:"—"}</span><span>{u.spaces||0}</span><span>{date(u.lastLoginAt)}</span><span className="client-row-actions"><button className="admin-plain" onClick={e=>{e.stopPropagation();setSelected(u)}}>Ver cliente</button><button className={`admin-plain ${u.accessStatus==="blocked"?"":"danger"}`} onClick={e=>block(e,u)}>{u.accessStatus==="blocked"?"Desbloquear":"Bloquear"}</button></span></article>)}</div><footer className="client-list-footer">Mostrando {users.length} de {data.users.length} clientes</footer></section>{selected&&<ClientModal user={selected} close={()=>setSelected(null)} api={api} refresh={async()=>{await refresh();setSelected(null);}}/>}</div>}
-function Filters({q,setQ,status,setStatus,plan,setPlan,role,setRole,sort,setSort,onExport}){return <div className="admin-filters client-filters"><label className="client-search"><Search size={17}/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar nome ou e-mail"/></label><FilterSelect className="status-filter" label="Status" value={status} change={setStatus} options={[["all","Todos"],["active","Ativos"],["blocked","Bloqueados"],["trial","Em teste"]]}/><FilterSelect className="plan-filter" label="Plano" value={plan} change={setPlan} options={[["all","Todos"],["FREE","Gratuito"],["PLUS","Plus"],["PREMIUM","Premium"]]}/><FilterSelect className="role-filter" label="Tipo de acesso" value={role} change={setRole} options={[["all","Todos"],["USER","Usuários"],["ADMIN","Administradores"],["SUPER_ADMIN","Super administradores"]]}/><FilterSelect className="sort-filter" label="Ordenar" value={sort} change={setSort} options={[["recent","Mais recentes"],["old","Mais antigos"],["access","Último acesso"],["name","Nome"]]}/><button className="admin-plain export-clients" onClick={onExport} title="Exportar clientes em CSV"><Download size={15}/><span>Exportar</span></button></div>}
-function FilterSelect({label,value,change,options,className=""}){const [open,setOpen]=useState(false),current=options.find(([key])=>key===value)?.[1];return <div className={`filter-select ${className}`}><button type="button" className="admin-plain" aria-expanded={open} onClick={()=>setOpen(!open)}><span><small>{label}</small><strong>{current}</strong></span><ChevronDown size={15}/></button>{open&&<div className="filter-options">{options.map(([key,name])=><button type="button" className={`admin-plain ${key===value?"selected":""}`} key={key} onClick={()=>{change(key);setOpen(false)}}><span>{name}</span>{key===value&&<CheckIcon size={15}/>}</button>)}</div>}</div>}
-function ClientModal({user,close,api,refresh}){const [full,setFull]=useState(null),[busy,setBusy]=useState(false),[note,setNote]=useState(""),[confirm,setConfirm]=useState(false);useEffect(()=>{api(`/api/admin/users/${user._id}`).then(setFull);},[user._id]);async function action(payload){setBusy(true);try{await api(`/api/admin/users/${user._id}`,{method:"PATCH",body:JSON.stringify(payload)});await refresh();}finally{setBusy(false)}}async function addNote(){if(!note.trim())return;await api(`/api/admin/users/${user._id}/notes`,{method:"POST",body:JSON.stringify({text:note})});setNote("");setFull(await api(`/api/admin/users/${user._id}`));}async function remove(){setBusy(true);await api(`/api/admin/users/${user._id}`,{method:"DELETE"});await refresh();}return <div className="admin-modal-bg"><section className="admin-modal client-detail"><button className="close" onClick={close}><X/></button><header><span className="avatar large">{user.name.slice(0,2)}</span><div><h2>{user.name}</h2><p>{user.email}</p><small>ID: {user._id}</small></div></header>{full?<><div className="detail-grid"><Info title="Perfil" rows={[["Cadastro",date(user.createdAt)],["Último acesso",date(user.lastLoginAt)],["Role",user.role]]}/><Info title="Uso agregado" rows={[["Espaços",full.user.spaces],["Lançamentos",full.user.transactions],["Metas",full.user.goals],["Convites pendentes",full.user.pendingInvites]]}/><Info title="Plano e teste" rows={[["Plano",user.planCode],["Status",label[user.trialStatus]],["Fim",date(user.trialEndsAt)]]}/></div><h3>Ações de acesso</h3><div className="action-grid"><button onClick={()=>action({action:user.accessStatus==="blocked"?"unblock":"block"})}>{user.accessStatus==="blocked"?"Desbloquear":"Bloquear"}</button><button onClick={()=>action({action:"sessions"})}>Encerrar sessões</button><button onClick={()=>api(`/api/admin/users/${user._id}/recovery`,{method:"POST"})}>Enviar recuperação</button><select onChange={e=>action({action:"role",role:e.target.value})} defaultValue={user.role}><option>USER</option><option>ADMIN</option><option>SUPER_ADMIN</option></select></div><h3>Teste grátis</h3><div className="action-grid">{[3,7,15,30].map(d=><button key={d} onClick={()=>action({action:"trial",days:d})}>+{d} dias</button>)}<input type="date" onChange={e=>e.target.value&&action({action:"trial",endsAt:e.target.value})}/><button className="danger" onClick={()=>action({action:"end_trial"})}>Encerrar teste</button></div><h3>Plano manual</h3><div className="action-grid">{["FREE","PLUS","PREMIUM"].map(p=><button key={p} onClick={()=>action({action:"plan",planCode:p})}>{p}</button>)}</div><h3>Notas internas</h3><div className="note-form"><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Nota privada para administradores"/><button onClick={addNote}>Adicionar nota</button></div><div className="notes">{full.notes.map(n=><p key={n._id}>{n.text}<small>{n.authorName} · {date(n.createdAt)}</small></p>)}</div><h3>Conta</h3><button className="danger account-delete" onClick={()=>setConfirm(true)}>Excluir conta e dados vinculados</button></>:<p>Carregando dados agregados...</p>}{confirm&&<div className="admin-confirm"><div><h3>Excluir definitivamente?</h3><p>A conta de {user.name} e seus dados vinculados serão removidos. Esta ação não pode ser desfeita.</p><span><button onClick={()=>setConfirm(false)}>Cancelar</button><button className="danger" onClick={remove}>Excluir conta</button></span></div></div>}{busy&&<div className="busy">Aplicando alteração...</div>}</section></div>}
-function Info({title,rows,size}){if(size)return <InfoIcon size={size}/>;return <article><h3>{title}</h3>{rows.map(([a,b])=><p key={a}><span>{a}</span><strong>{b??0}</strong></p>)}</article>}
+function AdminContent({ tab, data, api, refresh, setTab }) {
+  if (tab === "dashboard") return <Dashboard data={data} setTab={setTab} />;
+  if (tab === "clients")
+    return <Clients data={data} api={api} refresh={refresh} />;
+  if (tab === "trials")
+    return <Trials data={data} api={api} refresh={refresh} />;
+  if (tab === "subscriptions")
+    return <Subscriptions data={data} api={api} refresh={refresh} />;
+  if (tab === "plans") return <Plans data={data} api={api} refresh={refresh} />;
+  if (tab === "coupons")
+    return <Coupons data={data} api={api} refresh={refresh} />;
+  if (tab === "analytics") return <Analytics data={data} />;
+  if (tab === "reports") return <Reports data={data} />;
+  if (tab === "communication")
+    return <Communication data={data} api={api} refresh={refresh} />;
+  if (tab === "support")
+    return <Support data={data} api={api} refresh={refresh} />;
+  if (tab === "features")
+    return <Features data={data} api={api} refresh={refresh} />;
+  if (tab === "audit") return <Audit data={data} />;
+  if (tab === "status") return <SystemStatus api={api} />;
+  return <AdminSettings data={data} api={api} refresh={refresh} />;
+}
+function Stat({ name, value, hint, icon: Icon = Activity, tone = "green" }) {
+  return (
+    <article className={`admin-stat ${tone}`}>
+      <span>
+        <small>{name}</small>
+        <strong>{value ?? 0}</strong>
+        <em>{hint}</em>
+      </span>
+      <i>
+        <Icon />
+      </i>
+    </article>
+  );
+}
+function Dashboard({ data, setTab }) {
+  const s = data.stats;
+  return (
+    <div className="admin-stack">
+      <div className="admin-stats dashboard-primary">
+        <Stat
+          name="USUÁRIOS"
+          value={s.users}
+          hint={`${s.new7} novos esta semana`}
+          icon={Users}
+        />
+        <Stat
+          name="ATIVOS"
+          value={s.active}
+          hint={`${s.users ? Math.round((s.active / s.users) * 100) : 0}% do total`}
+          icon={Activity}
+        />
+        <Stat
+          name="EM TESTE GRÁTIS"
+          value={s.trials}
+          hint={`${s.trialsToday} vencem hoje`}
+          icon={ClipboardCheck}
+          tone="orange"
+        />
+        <Stat
+          name="ASSINANTES"
+          value={s.subscriptionsActive}
+          hint="Planos ativos"
+          icon={WalletCards}
+          tone="purple"
+        />
+        <Stat
+          name="RECEITA (MRR)"
+          value="—"
+          hint="Sem integração de pagamento"
+          icon={WalletCards}
+        />
+      </div>
+      <div className="admin-stats compact">
+        <Stat name="ESPAÇOS INDIVIDUAIS" value={s.individualSpaces} />
+        <Stat name="ESPAÇOS CASAL" value={s.coupleSpaces} />
+        <Stat name="LANÇAMENTOS" value={s.transactions} />
+        <Stat name="CONTAS" value={s.accounts} />
+        <Stat name="METAS" value={s.goals} />
+        <Stat name="CONVITES PENDENTES" value={s.pendingInvites} />
+      </div>
+      <section className="admin-dashboard-grid">
+        <Chart title="Crescimento de usuários" points={data.monthly} />
+        <article className="admin-card">
+          <h2>Testes grátis</h2>
+          <Rows
+            rows={[
+              ["Em teste agora", s.trials],
+              ["Vencem hoje", s.trialsToday],
+              ["Vencem em 3 dias", s.trials3],
+              ["Vencem em 7 dias", s.trials7],
+              ["Expirados", s.trialsExpired],
+            ]}
+          />
+          <button className="admin-link-btn" onClick={() => setTab("trials")}>
+            Gerenciar testes
+          </button>
+        </article>
+        <article className="admin-card">
+          <h2>Assinaturas</h2>
+          <Rows
+            rows={[
+              ["Ativas", s.subscriptionsActive],
+              ["Em teste", s.trials],
+              ["Manuais", s.subscriptionsManual],
+              ["Expiradas", s.subscriptionsExpired],
+              ["Canceladas", s.subscriptionsCancelled],
+            ]}
+          />
+        </article>
+      </section>
+      <section className="admin-dashboard-bottom">
+        <article className="admin-card">
+          <div className="admin-section-head">
+            <h2>Últimos cadastros</h2>
+            <button onClick={() => setTab("clients")}>Ver todos</button>
+          </div>
+          <MiniUsers users={data.users.slice(0, 5)} />
+        </article>
+        <article className="admin-card">
+          <div className="admin-section-head">
+            <h2>Últimas atividades</h2>
+            <button onClick={() => setTab("audit")}>Ver todas</button>
+          </div>
+          <div className="admin-activity-feed">
+            {data.audits.slice(0, 5).map((a) => (
+              <div key={a._id}>
+                <ShieldCheck size={16} />
+                <span>
+                  <strong>{a.adminName}</strong>{" "}
+                  {a.action.replaceAll("_", " ").toLowerCase()}{" "}
+                  {a.targetName || ""}
+                </span>
+                <time>{date(a.createdAt)}</time>
+              </div>
+            ))}
+            {!data.audits.length && (
+              <p>Nenhuma atividade administrativa ainda.</p>
+            )}
+          </div>
+        </article>
+      </section>
+    </div>
+  );
+}
+function Rows({ rows }) {
+  return (
+    <div className="admin-rows">
+      {rows.map(([a, b]) => (
+        <div key={a}>
+          <span>{a}</span>
+          <strong>{b}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+function Chart({ title, points = [] }) {
+  const source = new Map(points.map((p) => [p._id, p.users]));
+  const now = new Date(),
+    series = Array.from({ length: 6 }, (_, index) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1),
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return {
+        _id: key,
+        users: source.get(key) || 0,
+        label: d
+          .toLocaleDateString("pt-BR", { month: "short" })
+          .replace(".", ""),
+      };
+    });
+  const max = Math.max(1, ...series.map((p) => p.users)),
+    width = 600,
+    height = 190,
+    pad = 22;
+  const coords = series.map((p, i) => ({
+    x: pad + (i * (width - pad * 2)) / (series.length - 1),
+    y: height - pad - (p.users / max) * (height - pad * 2),
+    ...p,
+  }));
+  const line = coords.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" "),
+    area = `${line} L${coords.at(-1).x},${height - pad} L${coords[0].x},${height - pad} Z`;
+  return (
+    <article className="admin-card admin-chart">
+      <header>
+        <div>
+          <h2>{title}</h2>
+          <small>Novos usuários por mês</small>
+        </div>
+        <span>Últimos 6 meses</span>
+      </header>
+      <div className="admin-line-chart">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          aria-label={title}
+        >
+          <defs>
+            <linearGradient id="adminArea" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#15a575" stopOpacity=".25" />
+              <stop offset="1" stopColor="#15a575" stopOpacity=".02" />
+            </linearGradient>
+          </defs>
+          <path className="area" d={area} />
+          <path className="line" d={line} />
+          {coords.map((p) => (
+            <g key={p._id}>
+              <circle cx={p.x} cy={p.y} r="4" />
+              <text x={p.x} y={height - 4}>
+                {p.label}
+              </text>
+              <title>{p.users} usuários</title>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </article>
+  );
+}
+function MiniUsers({ users }) {
+  return (
+    <div className="admin-table mini">
+      <div className="thead">
+        <span>Usuário</span>
+        <span>E-mail</span>
+        <span>Plano</span>
+        <span>Cadastro</span>
+        <span>Último acesso</span>
+      </div>
+      {users.map((u) => (
+        <div key={u._id}>
+          <strong>{u.name}</strong>
+          <span>{u.email}</span>
+          <span>{u.planCode}</span>
+          <span>{date(u.createdAt)}</span>
+          <span>{date(u.lastLoginAt)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function Trials({data,api,refresh}){const list=data.users.filter(u=>u.trialStatus!=="NOT_STARTED");const act=(u,days)=>api(`/api/admin/users/${u._id}`,{method:"PATCH",body:JSON.stringify({action:days?"trial":"end_trial",days})}).then(refresh);return <div className="admin-stack"><div className="admin-stats compact"><Stat name="EM TESTE AGORA" value={data.stats.trials}/><Stat name="VENCEM HOJE" value={data.stats.trialsToday} tone="orange"/><Stat name="EM 3 DIAS" value={data.stats.trials3} tone="orange"/><Stat name="EM 7 DIAS" value={data.stats.trials7}/><Stat name="EXPIRADOS" value={data.stats.trialsExpired} tone="red"/></div><section className="admin-card"><h2>Usuários em teste grátis</h2><div className="admin-table trials"><div className="thead"><span>Nome</span><span>Plano</span><span>Início</span><span>Fim</span><span>Status</span><span>Ações</span></div>{list.map(u=><div key={u._id}><strong>{u.name}<small>{u.email}</small></strong><span>{u.planCode}</span><span>{date(u.trialStartedAt)}</span><span>{date(u.trialEndsAt)}</span><span>{label[u.trialStatus]}</span><span className="inline-actions">{[3,7,15,30].map(d=><button onClick={()=>act(u,d)} key={d}>+{d}</button>)}<button className="danger" onClick={()=>act(u,0)}>Encerrar</button></span></div>)}</div></section></div>}
-function Subscriptions({data,api,refresh}){const [form,setForm]=useState({userId:"",planCode:"PREMIUM",status:"MANUAL",origin:"ADMIN",startsAt:new Date().toISOString().slice(0,10),endsAt:""});async function save(e){e.preventDefault();await api("/api/admin/subscriptions",{method:"POST",body:JSON.stringify(form)});refresh();}return <div className="admin-stack"><div className="admin-stats"><Stat name="ATIVAS" value={data.stats.subscriptionsActive}/><Stat name="EM TESTE" value={data.stats.trials} tone="orange"/><Stat name="MANUAIS" value={data.stats.subscriptionsManual} tone="purple"/><Stat name="EXPIRADAS" value={data.stats.subscriptionsExpired} tone="red"/></div><section className="admin-card"><h2>Nova assinatura manual</h2><form className="admin-inline-form" onSubmit={save}><select required value={form.userId} onChange={e=>setForm({...form,userId:e.target.value})}><option value="">Escolha o cliente</option>{data.users.map(u=><option key={u._id} value={u._id}>{u.name} — {u.email}</option>)}</select><select value={form.planCode} onChange={e=>setForm({...form,planCode:e.target.value})}>{data.plans.map(p=><option key={p.code}>{p.code}</option>)}</select><input type="date" value={form.startsAt} onChange={e=>setForm({...form,startsAt:e.target.value})}/><input type="date" value={form.endsAt} onChange={e=>setForm({...form,endsAt:e.target.value})}/><button>Ativar manualmente</button></form></section><section className="admin-card"><h2>Assinaturas</h2><GenericTable items={data.subscriptions} columns={["planCode","status","origin","startsAt","endsAt"]}/></section></div>}
-function Plans({data,api,refresh}){const [edit,setEdit]=useState(null);async function save(e){e.preventDefault();const body=Object.fromEntries(new FormData(e.currentTarget));body.referencePrice=Number(body.referencePrice);body.features=body.features.split(",").map(x=>x.trim()).filter(Boolean);body.active=true;await api(edit?`/api/admin/plans/${edit._id}`:"/api/admin/plans",{method:edit?"PATCH":"POST",body:JSON.stringify(body)});setEdit(null);refresh();}return <div className="admin-stack"><div className="plan-grid">{data.plans.map(p=><article className="admin-plan" key={p._id}><span className="pill active">{p.active?"Ativo":"Inativo"}</span><h2>{p.name}</h2><strong>{Number(p.referencePrice).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}/mês</strong><p>{p.description}</p><ul>{p.features.map(f=><li key={f}>✓ {f}</li>)}</ul><button onClick={()=>setEdit(p)}>Editar plano</button></article>)}</div><section className="admin-card"><h2>{edit?"Editar plano":"Criar plano"}</h2><form className="admin-form" onSubmit={save}><input name="code" placeholder="Código" defaultValue={edit?.code}/><input name="name" placeholder="Nome" defaultValue={edit?.name}/><input name="referencePrice" type="number" step=".01" placeholder="Preço de referência" defaultValue={edit?.referencePrice}/><input name="description" placeholder="Descrição" defaultValue={edit?.description}/><textarea name="features" placeholder="Recursos separados por vírgula" defaultValue={edit?.features?.join(", ")}/><button>Salvar plano</button></form></section></div>}
-function Coupons({data,api,refresh}){
-  const empty={code:"",description:"",benefitType:"EXTRA_TRIAL_DAYS",benefitValue:7,maxUses:0,maxUsesPerUser:1,startsAt:new Date().toISOString().slice(0,10),endsAt:"",active:true,allowedPlan:"ALL",allowedAudience:"ALL",stackable:false,dailyLimit:0,autoExpireAtLimit:true,newUsersOnly:false,trialUsersOnly:false,allowAfterTrialExpired:false};
-  const [form,setForm]=useState(empty),[editing,setEditing]=useState(null),[open,setOpen]=useState(false),[usageView,setUsageView]=useState(null),[message,setMessage]=useState("");
-  const change=(key,value)=>setForm(current=>({...current,[key]:value}));
-  const begin=(coupon=null)=>{setEditing(coupon?._id||null);setForm(coupon?{...empty,...coupon,startsAt:coupon.startsAt?.slice(0,10)||"",endsAt:coupon.endsAt?.slice(0,10)||""}:empty);setOpen(true);setMessage("");};
-  async function save(e){e.preventDefault();setMessage("Salvando...");try{await api(editing?`/api/admin/coupons/${editing}`:"/api/admin/coupons",{method:editing?"PATCH":"POST",body:JSON.stringify({...form,benefitValue:Number(form.benefitValue),maxUses:Number(form.maxUses),maxUsesPerUser:Number(form.maxUsesPerUser),dailyLimit:Number(form.dailyLimit)})});setOpen(false);setEditing(null);setMessage("Cupom salvo com sucesso.");await refresh();}catch(error){setMessage(error.message);}}
-  async function action(coupon,kind){if(kind==="delete"&&!window.confirm(`Excluir o cupom ${coupon.code} e seu histórico de utilizações?`))return;setMessage("Aplicando alteração...");try{await api(`/api/admin/coupons/${coupon._id}${kind==="toggle"?"/toggle":kind==="duplicate"?"/duplicate":""}`,{method:kind==="delete"?"DELETE":"POST"});setMessage(kind==="duplicate"?"Cópia criada como desativada.":"Alteração concluída.");await refresh();}catch(error){setMessage(error.message);}}
-  async function showUsages(coupon){setMessage("Carregando utilizações...");try{setUsageView(await api(`/api/admin/coupons/${coupon._id}/usages`));setMessage("");}catch(error){setMessage(error.message);}}
-  return <div className="admin-stack coupons-page"><section className="admin-card"><div className="admin-section-head"><div><h2>Cupons e promoções</h2><p>Benefícios controlados pelo FinanFlow, sem gateway de pagamento.</p></div><button onClick={()=>open?setOpen(false):begin()}>+ Novo cupom</button></div>{message&&<p className="coupon-message">{message}</p>}{open&&<form className="coupon-form" onSubmit={save}><label>Código<input required maxLength="40" value={form.code} onChange={e=>change("code",e.target.value.toUpperCase())}/></label><label>Descrição<input maxLength="300" value={form.description} onChange={e=>change("description",e.target.value)}/></label><label>Tipo de benefício<select value={form.benefitType} onChange={e=>change("benefitType",e.target.value)}>{Object.entries(couponBenefitLabel).map(([value,name])=><option value={value} key={value}>{name}</option>)}</select></label><label>Valor do benefício<input required type="number" min="0.01" step="0.01" value={form.benefitValue} onChange={e=>change("benefitValue",e.target.value)}/></label><label>Quantidade máxima de usos<input type="number" min="0" value={form.maxUses} onChange={e=>change("maxUses",e.target.value)}/><small>Use 0 para ilimitado</small></label><label>Máximo por usuário<input type="number" min="0" value={form.maxUsesPerUser} onChange={e=>change("maxUsesPerUser",e.target.value)}/><small>Use 0 para permitir reutilização</small></label><label>Data de início<input required type="date" value={form.startsAt} onChange={e=>change("startsAt",e.target.value)}/></label><label>Data de término<input type="date" value={form.endsAt||""} onChange={e=>change("endsAt",e.target.value)}/></label><label>Plano permitido<select value={form.allowedPlan} onChange={e=>change("allowedPlan",e.target.value)}><option value="ALL">Todos os planos</option><option value="FREE">Gratuito</option><option value="PLUS">Plus</option><option value="PREMIUM">Premium</option></select></label><label>Público permitido<select value={form.allowedAudience} onChange={e=>change("allowedAudience",e.target.value)}><option value="ALL">Todos</option><option value="USERS">Usuários</option><option value="ADMINS">Administradores</option></select></label><label>Limite diário opcional<input type="number" min="0" value={form.dailyLimit} onChange={e=>change("dailyLimit",e.target.value)}/><small>Use 0 para não limitar</small></label><div className="coupon-checks"><CouponCheck text="Cupom ativo" value={form.active} change={v=>change("active",v)}/><CouponCheck text="Acumulativo com outros cupons" value={form.stackable} change={v=>change("stackable",v)}/><CouponCheck text="Expirar ao atingir o limite" value={form.autoExpireAtLimit} change={v=>change("autoExpireAtLimit",v)}/><CouponCheck text="Somente novos usuários (até 7 dias)" value={form.newUsersOnly} change={v=>change("newUsersOnly",v)}/><CouponCheck text="Somente usuários em teste" value={form.trialUsersOnly} change={v=>change("trialUsersOnly",v)}/><CouponCheck text="Permitir após teste expirado" value={form.allowAfterTrialExpired} change={v=>change("allowAfterTrialExpired",v)}/></div><div className="coupon-form-actions"><button type="button" onClick={()=>setOpen(false)}>Cancelar</button><button type="submit">{editing?"Salvar alterações":"Criar cupom"}</button></div></form>}</section><section className="admin-card coupon-list-card"><div className="coupon-table coupon-head"><span>Código</span><span>Benefício</span><span>Validade</span><span>Limite</span><span>Usos</span><span>Restantes</span><span>Status</span><span>Ações</span></div>{data.coupons.map(coupon=><article className="coupon-table" key={coupon._id}><strong>{coupon.code}<small>{coupon.description}</small></strong><span>{couponBenefitLabel[coupon.benefitType]||coupon.benefitType}<small>{coupon.benefitValue}</small></span><span>{date(coupon.startsAt)}<small>até {date(coupon.endsAt)}</small></span><span>{coupon.maxUses||"Ilimitado"}</span><span>{coupon.usageCount||0}</span><span>{coupon.remainingUses===null?"∞":coupon.remainingUses}</span><em className={`coupon-status ${String(coupon.status).toLowerCase()}`}>{couponStatusLabel[coupon.status]||coupon.status}</em><span className="coupon-actions"><button onClick={()=>begin(coupon)}>Editar</button><button onClick={()=>action(coupon,"toggle")}>{coupon.active?"Desativar":"Ativar"}</button><button onClick={()=>action(coupon,"duplicate")}>Duplicar</button><button onClick={()=>showUsages(coupon)}>Utilizações</button><button className="danger" onClick={()=>action(coupon,"delete")}>Excluir</button></span></article>)}{!data.coupons.length&&<p>Nenhum cupom cadastrado.</p>}</section>{usageView&&<div className="admin-modal-bg"><section className="admin-modal coupon-usage-modal"><button className="close" onClick={()=>setUsageView(null)}><X/></button><h2>Utilizações de {usageView.coupon.code}</h2><p>{usageView.coupon.usageCount||0} usos registrados</p><div className="coupon-usage-list"><div><strong>Usuário</strong><strong>Data/hora</strong><strong>Benefício aplicado</strong><strong>Status</strong></div>{usageView.usages.map(use=><article key={use._id}><span><strong>{use.userName}</strong><small>{use.userEmail}</small></span><time>{new Date(use.usedAt).toLocaleString("pt-BR")}</time><span>{use.benefitApplied}</span><em className={use.status.toLowerCase()}>{use.status==="SUCCESS"?"Aplicado":"Recusado"}{use.reason&&<small>{use.reason}</small>}</em></article>)}{!usageView.usages.length&&<p>Este cupom ainda não foi utilizado.</p>}</div></section></div>}</div>;
+function Clients({ data, api, refresh }) {
+  const [q, setQ] = useState(""),
+    [status, setStatus] = useState("all"),
+    [plan, setPlan] = useState("all"),
+    [role, setRole] = useState("all"),
+    [sort, setSort] = useState("recent"),
+    [selected, setSelected] = useState(null);
+  const users = useMemo(
+    () =>
+      data.users
+        .filter((u) =>
+          `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()),
+        )
+        .filter(
+          (u) =>
+            status === "all" ||
+            (status === "trial" && u.trialStatus === "ACTIVE") ||
+            (status === "blocked" && u.accessStatus === "blocked") ||
+            (status === "active" && u.accessStatus !== "blocked"),
+        )
+        .filter((u) => plan === "all" || u.planCode === plan)
+        .filter((u) => role === "all" || u.role === role)
+        .sort((a, b) =>
+          sort === "name"
+            ? a.name.localeCompare(b.name)
+            : sort === "old"
+              ? new Date(a.createdAt) - new Date(b.createdAt)
+              : sort === "access"
+                ? new Date(b.lastLoginAt || 0) - new Date(a.lastLoginAt || 0)
+                : new Date(b.createdAt) - new Date(a.createdAt),
+        ),
+    [data.users, q, status, plan, role, sort],
+  );
+  const exportRows = users.map((u) => ({
+    nome: u.name,
+    email: u.email,
+    status: u.accessStatus,
+    role: u.role,
+    plano: u.planCode,
+    teste: u.trialStatus,
+    espacos: u.spaces || 0,
+    cadastro: u.createdAt,
+    ultimo_acesso: u.lastLoginAt,
+  }));
+  async function block(e, u) {
+    e.stopPropagation();
+    await api(`/api/admin/users/${u._id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: u.accessStatus === "blocked" ? "unblock" : "block",
+      }),
+    });
+    refresh();
+  }
+  return (
+    <div className="admin-stack clients-page">
+      <div className="admin-stats client-stats">
+        <Stat
+          name="TOTAL DE CLIENTES"
+          value={data.stats.users}
+          hint={`${data.stats.new7} novos esta semana`}
+          icon={Users}
+        />
+        <Stat
+          name="ATIVOS"
+          value={data.stats.active}
+          hint={`${data.stats.users ? Math.round((data.stats.active / data.stats.users) * 100) : 0}% do total`}
+          icon={Activity}
+        />
+        <Stat
+          name="EM TESTE GRÁTIS"
+          value={data.stats.trials}
+          hint={`${data.stats.trialsToday} vencem hoje`}
+          icon={ClipboardCheck}
+          tone="orange"
+        />
+        <Stat
+          name="BLOQUEADOS"
+          value={data.stats.blocked}
+          hint={`${data.stats.users ? Math.round((data.stats.blocked / data.stats.users) * 100) : 0}% do total`}
+          icon={LockKeyhole}
+          tone="red"
+        />
+      </div>
+      <section className="admin-card client-directory">
+        <Filters
+          q={q}
+          setQ={setQ}
+          status={status}
+          setStatus={setStatus}
+          plan={plan}
+          setPlan={setPlan}
+          role={role}
+          setRole={setRole}
+          sort={sort}
+          setSort={setSort}
+          onExport={() => download("finanflow-clientes", exportRows, "csv")}
+        />
+        <div className="admin-client-list">
+          <div className="client-list-head">
+            <span>Avatar</span>
+            <span>Nome / e-mail</span>
+            <span>Status</span>
+            <span>Role</span>
+            <span>Plano</span>
+            <span>Teste</span>
+            <span>Espaços</span>
+            <span>Último acesso</span>
+            <span>Ações</span>
+          </div>
+          {users.map((u) => (
+            <article key={u._id} onClick={() => setSelected(u)}>
+              <span className="avatar">
+                {u.profilePhoto ? (
+                  <img src={u.profilePhoto} />
+                ) : (
+                  u.name.slice(0, 2).toUpperCase()
+                )}
+              </span>
+              <span>
+                <strong>{u.name}</strong>
+                <small>{u.email}</small>
+              </span>
+              <em className={`pill ${u.accessStatus}`}>
+                {label[u.accessStatus]}
+              </em>
+              <span>{label[u.role] || u.role}</span>
+              <span>{u.planCode}</span>
+              <span>
+                {u.trialStatus === "ACTIVE"
+                  ? `Até ${date(u.trialEndsAt)}`
+                  : "—"}
+              </span>
+              <span>{u.spaces || 0}</span>
+              <span>{date(u.lastLoginAt)}</span>
+              <span className="client-row-actions">
+                <button
+                  className="admin-plain"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelected(u);
+                  }}
+                >
+                  Ver cliente
+                </button>
+                <button
+                  className={`admin-plain ${u.accessStatus === "blocked" ? "" : "danger"}`}
+                  onClick={(e) => block(e, u)}
+                >
+                  {u.accessStatus === "blocked" ? "Desbloquear" : "Bloquear"}
+                </button>
+              </span>
+            </article>
+          ))}
+        </div>
+        <footer className="client-list-footer">
+          Mostrando {users.length} de {data.users.length} clientes
+        </footer>
+      </section>
+      {selected && (
+        <ClientModal
+          user={selected}
+          close={() => setSelected(null)}
+          api={api}
+          refresh={async () => {
+            await refresh();
+            setSelected(null);
+          }}
+        />
+      )}
+    </div>
+  );
 }
-function CouponCheck({text,value,change}){return <label><input type="checkbox" checked={Boolean(value)} onChange={e=>change(e.target.checked)}/><span>{text}</span></label>}
-function Analytics({data}){const s=data.stats;const pct=(n)=>s.users?`${Math.round(n/s.users*100)}%`:"0%";return <div className="admin-stack"><div className="admin-stats"><Stat name="ATIVOS HOJE" value={s.activeToday}/><Stat name="ATIVOS EM 7 DIAS" value={s.active7}/><Stat name="ATIVOS EM 30 DIAS" value={s.active30}/><Stat name="MÉDIA DE LANÇAMENTOS" value={s.users?(s.transactions/s.users).toFixed(1):0}/></div><section className="admin-dashboard-grid"><Chart title="Crescimento de usuários" points={data.monthly}/><article className="admin-card"><h2>Uso da plataforma</h2><Rows rows={[["Média de espaços",s.users?(s.spaces/s.users).toFixed(1):0],["Com metas",pct(data.users.filter(u=>u.goals>0).length)],["Usando modo casal",pct(s.activeCouples*2)],["Com atividade em 30 dias",pct(s.active30)]]}/></article><article className="admin-card"><h2>Funcionalidades mais usadas</h2><Rows rows={[["Lançamentos",s.transactions],["Contas",s.accounts],["Planejamento",s.goals],["Modo casal",s.activeCouples],["Relatórios","Uso disponível no app"]]}/></article></section></div>}
-function Reports({data}){const [period,setPeriod]=useState("30"),now=new Date(),start=new Date(now);start.setHours(0,0,0,0);if(period==="7"||period==="30")start.setDate(now.getDate()-Number(period)+1);else if(period==="month")start.setDate(1);else if(period==="previous"){start.setMonth(now.getMonth()-1,1);}const end=period==="previous"?new Date(now.getFullYear(),now.getMonth(),1):now;const users=data.users.filter(u=>{const created=new Date(u.createdAt);return created>=start&&created<=end;});const reportData={...data,users,stats:{...data.stats,users:users.length,trials:users.filter(u=>u.trialStatus==="ACTIVE").length,subscriptionsActive:users.filter(u=>u.planCode&&u.planCode!=="FREE").length,blocked:users.filter(u=>u.accessStatus==="blocked").length}};const exportRows=users.map(u=>({nome:u.name,email:u.email,status:u.accessStatus,role:u.role,plano:u.planCode,cadastro:u.createdAt,ultimo_acesso:u.lastLoginAt}));return <div className="admin-stack"><section className="admin-card admin-report-bar"><select value={period} onChange={e=>setPeriod(e.target.value)}><option value="1">Hoje</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="month">Este mês</option><option value="previous">Mês anterior</option></select><span/><button onClick={()=>downloadExcel(exportRows)} title="Baixar planilha do Excel"><Download/>Excel</button><button onClick={()=>downloadReportPdf(reportData,period)} title="Baixar relatório em PDF"><Download/>PDF</button></section><div className="admin-stats"><Stat name="CADASTROS" value={reportData.stats.users}/><Stat name="TESTES GRÁTIS" value={reportData.stats.trials} tone="orange"/><Stat name="PLANOS ATIVOS" value={reportData.stats.subscriptionsActive}/><Stat name="BLOQUEIOS" value={reportData.stats.blocked} tone="red"/></div><section className="admin-dashboard-grid"><Chart title="Visão geral de cadastros" points={data.monthly}/><article className="admin-card"><h2>Distribuição de planos</h2><Rows rows={["FREE","PLUS","PREMIUM"].map(p=>[p,users.filter(u=>u.planCode===p).length])}/></article></section></div>}
-function Communication({data,api,refresh}){
-  const initial={title:"",message:"",audience:"ALL",startsAt:"",endsAt:"",active:true};
-  const [form,setForm]=useState(initial),[editing,setEditing]=useState(null),[query,setQuery]=useState(""),[filter,setFilter]=useState("ALL"),[notice,setNotice]=useState("");
-  const audienceLabel={ALL:"Todos",FREE:"Gratuito",PLUS:"Plus",PREMIUM:"Premium",TRIAL:"Teste grátis",ADMINS:"Admins"};
-  const statusOf=(item)=>!item.active?"Desativado":new Date(item.startsAt)>new Date()?"Agendado":new Date(item.endsAt)<new Date()?"Expirado":"Ativo";
-  const visible=data.announcements.filter(item=>(filter==="ALL"||statusOf(item)===filter)&&`${item.title} ${item.message}`.toLowerCase().includes(query.toLowerCase()));
-  const change=(key,value)=>setForm(current=>({...current,[key]:value}));
-  function edit(item){setEditing(item._id);setForm({...item,startsAt:localDateTime(item.startsAt),endsAt:localDateTime(item.endsAt)});window.scrollTo({top:0,behavior:"smooth"});}
-  async function save(e){e.preventDefault();setNotice("Salvando...");try{await api(editing?`/api/admin/announcements/${editing}`:"/api/admin/announcements",{method:editing?"PATCH":"POST",body:JSON.stringify(form)});setForm(initial);setEditing(null);setNotice(editing?"Aviso atualizado.":"Aviso publicado.");await refresh();}catch(error){setNotice(error.message);}}
-  async function action(item,type){if(type==="delete"&&!window.confirm(`Excluir o aviso ${item.title}?`))return;await api(`/api/admin/announcements/${item._id}`,{method:type==="delete"?"DELETE":"PATCH",body:type==="toggle"?JSON.stringify({active:!item.active}):undefined});await refresh();}
-  return <div className="admin-stack communication-page"><section className="communication-compose"><section className="admin-card communication-form-card"><div className="communication-title"><span><Megaphone size={20}/></span><div><h2>{editing?"Editar aviso":"Novo aviso"}</h2><p>Crie avisos internos para públicos específicos.</p></div></div><form onSubmit={save}><label>Título<input required maxLength="160" value={form.title} onChange={e=>change("title",e.target.value)} placeholder="Ex.: Manutenção programada no sistema"/></label><label>Mensagem<textarea required maxLength="500" value={form.message} onChange={e=>change("message",e.target.value)} placeholder="Digite a mensagem exibida para o público selecionado..."/><small>{form.message.length}/500 caracteres</small></label><fieldset><legend>Público</legend><div className="audience-options">{Object.entries(audienceLabel).map(([value,name])=><button type="button" className={form.audience===value?"active":""} key={value} onClick={()=>change("audience",value)}>{name}</button>)}</div></fieldset><div className="communication-dates"><label>Data inicial<input required type="datetime-local" value={form.startsAt} onChange={e=>change("startsAt",e.target.value)}/></label><label>Data final<input required type="datetime-local" value={form.endsAt} onChange={e=>change("endsAt",e.target.value)}/></label></div><CouponCheck text="Aviso ativo" value={form.active} change={value=>change("active",value)}/>{notice&&<p className="communication-notice">{notice}</p>}<div className="communication-actions"><button type="button" onClick={()=>{setForm(initial);setEditing(null)}}>Cancelar</button><button type="submit"><Send size={16}/>{editing?"Salvar alterações":"Publicar aviso"}</button></div></form></section><section className="admin-card communication-preview"><div><h2>Prévia do aviso no sistema</h2><p>Veja como será exibido aos usuários.</p></div><span>Banner no topo</span><article><Info size={18}/><div><strong>{form.title||"Título do seu aviso"}</strong><p>{form.message||"A mensagem aparecerá aqui enquanto você digita."}</p><small>{audienceLabel[form.audience]}{form.endsAt&&` · até ${date(form.endsAt)}`}</small></div><X size={17}/></article><div className="preview-skeleton"><i/><i/><i/></div></section></section><section className="admin-card announcements-card"><div className="announcements-toolbar"><div><h2>Avisos publicados</h2><p>{data.announcements.length} comunicados cadastrados</p></div><label><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar avisos..."/></label><select value={filter} onChange={e=>setFilter(e.target.value)}><option value="ALL">Todos os status</option><option>Ativo</option><option>Agendado</option><option>Expirado</option><option>Desativado</option></select></div><div className="announcements-list"><div className="announcements-head"><span>Aviso</span><span>Público</span><span>Período</span><span>Status</span><span>Ações</span></div>{visible.map(item=>{const status=statusOf(item);return <article key={item._id}><span><i><Megaphone size={16}/></i><span><strong>{item.title}</strong><small>{item.message}</small></span></span><em>{audienceLabel[item.audience]||item.audience}</em><span><time>{new Date(item.startsAt).toLocaleString("pt-BR")}</time><small>até {new Date(item.endsAt).toLocaleString("pt-BR")}</small></span><b className={`announcement-status ${status.toLowerCase()}`}>{status}</b><span className="announcement-actions"><button title="Visualizar" onClick={()=>edit(item)}><Eye/></button><button title="Editar" onClick={()=>edit(item)}><Pencil/></button><button title={item.active?"Desativar":"Ativar"} onClick={()=>action(item,"toggle")}><ToggleRight/></button><button title="Excluir" className="danger" onClick={()=>action(item,"delete")}><Trash2/></button></span></article>})}{!visible.length&&<p className="announcement-empty">Nenhum aviso encontrado.</p>}</div></section></div>;
+function Filters({
+  q,
+  setQ,
+  status,
+  setStatus,
+  plan,
+  setPlan,
+  role,
+  setRole,
+  sort,
+  setSort,
+  onExport,
+}) {
+  return (
+    <div className="admin-filters client-filters">
+      <label className="client-search">
+        <Search size={17} />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar nome ou e-mail"
+        />
+      </label>
+      <FilterSelect
+        className="status-filter"
+        label="Status"
+        value={status}
+        change={setStatus}
+        options={[
+          ["all", "Todos"],
+          ["active", "Ativos"],
+          ["blocked", "Bloqueados"],
+          ["trial", "Em teste"],
+        ]}
+      />
+      <FilterSelect
+        className="plan-filter"
+        label="Plano"
+        value={plan}
+        change={setPlan}
+        options={[
+          ["all", "Todos"],
+          ["FREE", "Gratuito"],
+          ["PLUS", "Plus"],
+          ["PREMIUM", "Premium"],
+        ]}
+      />
+      <FilterSelect
+        className="role-filter"
+        label="Tipo de acesso"
+        value={role}
+        change={setRole}
+        options={[
+          ["all", "Todos"],
+          ["USER", "Usuários"],
+          ["ADMIN", "Administradores"],
+          ["SUPER_ADMIN", "Super administradores"],
+        ]}
+      />
+      <FilterSelect
+        className="sort-filter"
+        label="Ordenar"
+        value={sort}
+        change={setSort}
+        options={[
+          ["recent", "Mais recentes"],
+          ["old", "Mais antigos"],
+          ["access", "Último acesso"],
+          ["name", "Nome"],
+        ]}
+      />
+      <button
+        className="admin-plain export-clients"
+        onClick={onExport}
+        title="Exportar clientes em CSV"
+      >
+        <Download size={15} />
+        <span>Exportar</span>
+      </button>
+    </div>
+  );
 }
-function Support({data,api,refresh}){const [selected,setSelected]=useState(data.tickets[0]||null);async function update(status){await api(`/api/admin/tickets/${selected._id}`,{method:"PATCH",body:JSON.stringify({status})});setSelected(null);refresh();}return <div className="admin-stack"><div className="admin-stats"><Stat name="ABERTOS" value={data.tickets.filter(t=>t.status==="OPEN").length}/><Stat name="EM ATENDIMENTO" value={data.tickets.filter(t=>t.status==="IN_PROGRESS").length} tone="orange"/><Stat name="RESOLVIDOS" value={data.tickets.filter(t=>t.status==="RESOLVED").length}/><Stat name="FECHADOS" value={data.tickets.filter(t=>t.status==="CLOSED").length} tone="purple"/></div><div className="support-grid"><section className="admin-card ticket-list"><h2>Caixa de entrada</h2>{data.tickets.map(t=><button className={selected?._id===t._id?"active":""} key={t._id} onClick={()=>setSelected(t)}><span><strong>{t.subject}</strong><small>{t.userId?.name||"Usuário"}</small></span><em>{t.status}</em></button>)}</section><section className="admin-card ticket-detail">{selected?<><small>Ticket #{selected._id.slice(-6)}</small><h2>{selected.subject}</h2><p>{selected.message}</p><div className="action-grid"><button onClick={()=>update("IN_PROGRESS")}>Assumir</button><button onClick={()=>update("RESOLVED")}>Resolver</button><button onClick={()=>update("CLOSED")}>Fechar</button></div></>:<p>Selecione um chamado.</p>}</section></div></div>}
-function Features({data,api,refresh}){const [saving,setSaving]=useState("");async function toggle(f){setSaving(f._id);try{await api(`/api/admin/features/${f._id}`,{method:"PATCH",body:JSON.stringify({active:!f.active})});await refresh();}finally{setSaving("");}}async function audience(f,v){setSaving(f._id);try{await api(`/api/admin/features/${f._id}`,{method:"PATCH",body:JSON.stringify({audience:v})});await refresh();}finally{setSaving("");}}const active=data.flags.filter(f=>f.active).length;return <div className="admin-stack features-page"><section className="admin-stats feature-stats"><Stat name="RECURSOS" value={data.flags.length} hint="Cadastrados" icon={PackageCheck}/><Stat name="ATIVOS" value={active} hint="Disponíveis agora" icon={CheckIcon}/><Stat name="DESATIVADOS" value={data.flags.length-active} hint="Ocultos dos usuários" icon={LockKeyhole} tone="red"/></section><section className="admin-card feature-panel"><div className="admin-section-head"><div><h2>Controle de recursos</h2><p>Libere funções por público. As alterações são aplicadas automaticamente, sem nova publicação.</p></div><span className="feature-live"><Activity size={15}/>Configuração em tempo real</span></div><div className="feature-list">{data.flags.map((f,index)=>{const Icon=[Download,HeartHandshake,ToggleRight,ClipboardCheck,BarChart3][index%5];return <article className={f.active?"active":"disabled"} key={f._id}><span className="feature-icon"><Icon size={21}/></span><span className="feature-copy"><strong>{f.name}</strong><small>{f.description}</small><em className={`feature-state ${f.active?"on":"off"}`}>{f.active?"Disponível":"Indisponível"}</em></span><label><small>Público permitido</small><select disabled={saving===f._id} value={f.audience} onChange={e=>audience(f,e.target.value)}><option value="ALL">Todos os usuários</option><option value="PREMIUM">Apenas Premium</option><option value="ADMINS">Apenas administradores</option><option value="TEST_GROUP">Grupo de teste</option></select></label><button disabled={saving===f._id} aria-label={`${f.active?"Desativar":"Ativar"} ${f.name}`} className={f.active?"toggle on":"toggle"} onClick={()=>toggle(f)}><i/></button><strong className="feature-status-text">{saving===f._id?"Salvando...":f.active?"Ativo":"Desativado"}</strong></article>})}</div></section></div>}
-function Audit({data}){const [q,setQ]=useState("");const items=data.audits.filter(a=>`${a.adminName} ${a.targetName} ${a.action}`.toLowerCase().includes(q.toLowerCase()));return <section className="admin-card"><div className="admin-section-head"><div><h2>Auditoria administrativa</h2><p>Registros permanentes das ações realizadas.</p></div><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Filtrar administrador, usuário ou ação"/></div><div className="audit-list">{items.map(a=><article key={a._id}><ShieldCheck/><span><strong>{a.adminName} · {a.action.replaceAll("_"," ")}</strong><small>Usuário afetado: {a.targetName||"Sistema"}</small></span><time>{new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date(a.createdAt))}</time></article>)}</div></section>}
-function SystemStatus({api}){const [status,setStatus]=useState(null);async function check(){const start=performance.now();try{const r=await api("/api/ready");setStatus({...r,response:Math.round(performance.now()-start),frontend:"online"});}catch(e){setStatus({ok:false,error:e.message,response:Math.round(performance.now()-start),frontend:"online"});}}useEffect(()=>{check();},[]);return <div className="admin-stack"><section className="admin-card"><div className="admin-section-head"><div><h2>Status do sistema</h2><p>Verificação real dos componentes disponíveis.</p></div><button onClick={check}>Atualizar status</button></div><div className="system-grid"><Stat name="API" value={status?.ok?"Online":"Indisponível"} hint={`${status?.response||0} ms`}/><Stat name="BANCO DE DADOS" value={status?.database||"—"}/><Stat name="FRONTEND" value="Online" hint={location.host}/><Stat name="AUTENTICAÇÃO" value={status?.ok?"Online":"Não verificada"}/></div><p>Última verificação: {status?.timestamp?new Date(status.timestamp).toLocaleString("pt-BR"):"—"}</p></section></div>}
-function AdminSettings({data,api,refresh}){const c=data.config||{};const [form,setForm]=useState(c);async function save(e){e.preventDefault();await api("/api/admin/config",{method:"PATCH",body:JSON.stringify(form)});refresh();}return <section className="admin-card"><h2>Configurações globais</h2><form className="settings-global" onSubmit={save}><label>Nome do produto<input value={form.productName||""} onChange={e=>setForm({...form,productName:e.target.value})}/></label><label>Duração padrão do teste<input type="number" value={form.defaultTrialDays||7} onChange={e=>setForm({...form,defaultTrialDays:Number(e.target.value)})}/></label><Check name="Teste grátis ativo" value={form.trialEnabled} change={v=>setForm({...form,trialEnabled:v})}/><label>Plano liberado no teste<select value={form.trialPlanCode||"PREMIUM"} onChange={e=>setForm({...form,trialPlanCode:e.target.value})}><option>FREE</option><option>PLUS</option><option>PREMIUM</option></select></label><label>Plano padrão<select value={form.defaultPlanCode||"FREE"} onChange={e=>setForm({...form,defaultPlanCode:e.target.value})}><option>FREE</option><option>PLUS</option><option>PREMIUM</option></select></label><Check name="Permitir novos cadastros" value={form.registrationsOpen} change={v=>setForm({...form,registrationsOpen:v})}/><Check name="Suporte habilitado" value={form.supportEnabled} change={v=>setForm({...form,supportEnabled:v})}/><Check name="Cupons habilitados" value={form.couponsEnabled} change={v=>setForm({...form,couponsEnabled:v})}/><Check name="Modo manutenção" value={form.maintenanceMode} change={v=>setForm({...form,maintenanceMode:v})}/><label>Mensagem de manutenção<textarea value={form.maintenanceMessage||""} onChange={e=>setForm({...form,maintenanceMessage:e.target.value})}/></label><Check name="Aviso global" value={form.globalNoticeEnabled} change={v=>setForm({...form,globalNoticeEnabled:v})}/><label>Mensagem global<input value={form.globalNotice||""} onChange={e=>setForm({...form,globalNotice:e.target.value})}/></label><button>Salvar configurações</button></form><h2>Backup administrativo</h2><div className="action-grid">{["users","plans","subscriptions","coupons","audit","config"].map(k=><button key={k} onClick={async()=>download(`finanflow-${k}`,await api(`/api/admin/export/${k}`))}>Exportar {k}</button>)}</div></section>}
-function Check({name,value,change}){return <label className="admin-check"><span>{name}</span><button type="button" className={value?"toggle on":"toggle"} onClick={()=>change(!value)}><i/></button></label>}
-function GenericTable({items,columns}){return <div className="admin-table generic"><div className="thead">{columns.map(c=><span key={c}>{c}</span>)}</div>{items.map(x=><div key={x._id}>{columns.map(c=><span key={c}>{c.toLowerCase().includes("at")?date(x[c]):String(x[c]??"—")}</span>)}</div>)}</div>}
+function FilterSelect({ label, value, change, options, className = "" }) {
+  const [open, setOpen] = useState(false),
+    current = options.find(([key]) => key === value)?.[1];
+  return (
+    <div className={`filter-select ${className}`}>
+      <button
+        type="button"
+        className="admin-plain"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span>
+          <small>{label}</small>
+          <strong>{current}</strong>
+        </span>
+        <ChevronDown size={15} />
+      </button>
+      {open && (
+        <div className="filter-options">
+          {options.map(([key, name]) => (
+            <button
+              type="button"
+              className={`admin-plain ${key === value ? "selected" : ""}`}
+              key={key}
+              onClick={() => {
+                change(key);
+                setOpen(false);
+              }}
+            >
+              <span>{name}</span>
+              {key === value && <CheckIcon size={15} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function ClientModal({ user, close, api, refresh }) {
+  const [full, setFull] = useState(null),
+    [busy, setBusy] = useState(false),
+    [note, setNote] = useState(""),
+    [confirm, setConfirm] = useState(false);
+  useEffect(() => {
+    api(`/api/admin/users/${user._id}`).then(setFull);
+  }, [user._id]);
+  async function action(payload) {
+    setBusy(true);
+    try {
+      await api(`/api/admin/users/${user._id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function addNote() {
+    if (!note.trim()) return;
+    await api(`/api/admin/users/${user._id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ text: note }),
+    });
+    setNote("");
+    setFull(await api(`/api/admin/users/${user._id}`));
+  }
+  async function remove() {
+    setBusy(true);
+    await api(`/api/admin/users/${user._id}`, { method: "DELETE" });
+    await refresh();
+  }
+  return (
+    <div className="admin-modal-bg">
+      <section className="admin-modal client-detail">
+        <button className="close" onClick={close}>
+          <X />
+        </button>
+        <header>
+          <span className="avatar large">{user.name.slice(0, 2)}</span>
+          <div>
+            <h2>{user.name}</h2>
+            <p>{user.email}</p>
+            <small>ID: {user._id}</small>
+          </div>
+        </header>
+        {full ? (
+          <>
+            <div className="detail-grid">
+              <Info
+                title="Perfil"
+                rows={[
+                  ["Cadastro", date(user.createdAt)],
+                  ["Último acesso", date(user.lastLoginAt)],
+                  ["Role", user.role],
+                ]}
+              />
+              <Info
+                title="Uso agregado"
+                rows={[
+                  ["Espaços", full.user.spaces],
+                  ["Lançamentos", full.user.transactions],
+                  ["Metas", full.user.goals],
+                  ["Convites pendentes", full.user.pendingInvites],
+                ]}
+              />
+              <Info
+                title="Plano e teste"
+                rows={[
+                  ["Plano", user.planCode],
+                  ["Status", label[user.trialStatus]],
+                  ["Fim", date(user.trialEndsAt)],
+                ]}
+              />
+            </div>
+            <h3>Ações de acesso</h3>
+            <div className="action-grid">
+              <button
+                onClick={() =>
+                  action({
+                    action:
+                      user.accessStatus === "blocked" ? "unblock" : "block",
+                  })
+                }
+              >
+                {user.accessStatus === "blocked" ? "Desbloquear" : "Bloquear"}
+              </button>
+              <button onClick={() => action({ action: "sessions" })}>
+                Encerrar sessões
+              </button>
+              <button
+                onClick={() =>
+                  api(`/api/admin/users/${user._id}/recovery`, {
+                    method: "POST",
+                  })
+                }
+              >
+                Enviar recuperação
+              </button>
+              <select
+                onChange={(e) =>
+                  action({ action: "role", role: e.target.value })
+                }
+                defaultValue={user.role}
+              >
+                <option>USER</option>
+                <option>ADMIN</option>
+                <option>SUPER_ADMIN</option>
+              </select>
+            </div>
+            <h3>Teste grátis</h3>
+            <div className="action-grid">
+              {[3, 7, 15, 30].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => action({ action: "trial", days: d })}
+                >
+                  +{d} dias
+                </button>
+              ))}
+              <input
+                type="date"
+                onChange={(e) =>
+                  e.target.value &&
+                  action({ action: "trial", endsAt: e.target.value })
+                }
+              />
+              <button
+                className="danger"
+                onClick={() => action({ action: "end_trial" })}
+              >
+                Encerrar teste
+              </button>
+            </div>
+            <h3>Plano manual</h3>
+            <div className="action-grid">
+              {["FREE", "PLUS", "PREMIUM"].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => action({ action: "plan", planCode: p })}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <h3>Notas internas</h3>
+            <div className="note-form">
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Nota privada para administradores"
+              />
+              <button onClick={addNote}>Adicionar nota</button>
+            </div>
+            <div className="notes">
+              {full.notes.map((n) => (
+                <p key={n._id}>
+                  {n.text}
+                  <small>
+                    {n.authorName} · {date(n.createdAt)}
+                  </small>
+                </p>
+              ))}
+            </div>
+            <h3>Conta</h3>
+            <button
+              className="danger account-delete"
+              onClick={() => setConfirm(true)}
+            >
+              Excluir conta e dados vinculados
+            </button>
+          </>
+        ) : (
+          <p>Carregando dados agregados...</p>
+        )}
+        {confirm && (
+          <div className="admin-confirm">
+            <div>
+              <h3>Excluir definitivamente?</h3>
+              <p>
+                A conta de {user.name} e seus dados vinculados serão removidos.
+                Esta ação não pode ser desfeita.
+              </p>
+              <span>
+                <button onClick={() => setConfirm(false)}>Cancelar</button>
+                <button className="danger" onClick={remove}>
+                  Excluir conta
+                </button>
+              </span>
+            </div>
+          </div>
+        )}
+        {busy && <div className="busy">Aplicando alteração...</div>}
+      </section>
+    </div>
+  );
+}
+function Info({ title, rows, size }) {
+  if (size) return <InfoIcon size={size} />;
+  return (
+    <article>
+      <h3>{title}</h3>
+      {rows.map(([a, b]) => (
+        <p key={a}>
+          <span>{a}</span>
+          <strong>{b ?? 0}</strong>
+        </p>
+      ))}
+    </article>
+  );
+}
+
+function Trials({ data, api, refresh }) {
+  const list = data.users.filter((u) => u.trialStatus !== "NOT_STARTED");
+  const act = (u, days) =>
+    api(`/api/admin/users/${u._id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: days ? "trial" : "end_trial", days }),
+    }).then(refresh);
+  return (
+    <div className="admin-stack">
+      <div className="admin-stats compact">
+        <Stat name="EM TESTE AGORA" value={data.stats.trials} />
+        <Stat name="VENCEM HOJE" value={data.stats.trialsToday} tone="orange" />
+        <Stat name="EM 3 DIAS" value={data.stats.trials3} tone="orange" />
+        <Stat name="EM 7 DIAS" value={data.stats.trials7} />
+        <Stat name="EXPIRADOS" value={data.stats.trialsExpired} tone="red" />
+      </div>
+      <section className="admin-card">
+        <h2>Usuários em teste grátis</h2>
+        <div className="admin-table trials">
+          <div className="thead">
+            <span>Nome</span>
+            <span>Plano</span>
+            <span>Início</span>
+            <span>Fim</span>
+            <span>Status</span>
+            <span>Ações</span>
+          </div>
+          {list.map((u) => (
+            <div key={u._id}>
+              <strong>
+                {u.name}
+                <small>{u.email}</small>
+              </strong>
+              <span>{u.planCode}</span>
+              <span>{date(u.trialStartedAt)}</span>
+              <span>{date(u.trialEndsAt)}</span>
+              <span>{label[u.trialStatus]}</span>
+              <span className="inline-actions">
+                {[3, 7, 15, 30].map((d) => (
+                  <button onClick={() => act(u, d)} key={d}>
+                    +{d}
+                  </button>
+                ))}
+                <button className="danger" onClick={() => act(u, 0)}>
+                  Encerrar
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+function Subscriptions({ data, api, refresh }) {
+  const [form, setForm] = useState({
+    userId: "",
+    planCode: "PREMIUM",
+    status: "MANUAL",
+    origin: "ADMIN",
+    startsAt: new Date().toISOString().slice(0, 10),
+    endsAt: "",
+  });
+  async function save(e) {
+    e.preventDefault();
+    await api("/api/admin/subscriptions", {
+      method: "POST",
+      body: JSON.stringify(form),
+    });
+    refresh();
+  }
+  return (
+    <div className="admin-stack">
+      <div className="admin-stats">
+        <Stat name="ATIVAS" value={data.stats.subscriptionsActive} />
+        <Stat name="EM TESTE" value={data.stats.trials} tone="orange" />
+        <Stat
+          name="MANUAIS"
+          value={data.stats.subscriptionsManual}
+          tone="purple"
+        />
+        <Stat
+          name="EXPIRADAS"
+          value={data.stats.subscriptionsExpired}
+          tone="red"
+        />
+      </div>
+      <section className="admin-card">
+        <h2>Nova assinatura manual</h2>
+        <form className="admin-inline-form" onSubmit={save}>
+          <select
+            required
+            value={form.userId}
+            onChange={(e) => setForm({ ...form, userId: e.target.value })}
+          >
+            <option value="">Escolha o cliente</option>
+            {data.users.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.name} — {u.email}
+              </option>
+            ))}
+          </select>
+          <select
+            value={form.planCode}
+            onChange={(e) => setForm({ ...form, planCode: e.target.value })}
+          >
+            {data.plans.map((p) => (
+              <option key={p.code}>{p.code}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={form.startsAt}
+            onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+          />
+          <input
+            type="date"
+            value={form.endsAt}
+            onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
+          />
+          <button>Ativar manualmente</button>
+        </form>
+      </section>
+      <section className="admin-card">
+        <h2>Assinaturas</h2>
+        <GenericTable
+          items={data.subscriptions}
+          columns={["planCode", "status", "origin", "startsAt", "endsAt"]}
+        />
+      </section>
+    </div>
+  );
+}
+function Plans({ data, api, refresh }) {
+  const [edit, setEdit] = useState(null);
+  async function save(e) {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.currentTarget));
+    body.referencePrice = Number(body.referencePrice);
+    body.features = body.features
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    body.active = true;
+    await api(edit ? `/api/admin/plans/${edit._id}` : "/api/admin/plans", {
+      method: edit ? "PATCH" : "POST",
+      body: JSON.stringify(body),
+    });
+    setEdit(null);
+    refresh();
+  }
+  return (
+    <div className="admin-stack">
+      <div className="plan-grid">
+        {data.plans.map((p) => (
+          <article className="admin-plan" key={p._id}>
+            <span className="pill active">
+              {p.active ? "Ativo" : "Inativo"}
+            </span>
+            <h2>{p.name}</h2>
+            <strong>
+              {Number(p.referencePrice).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+              /mês
+            </strong>
+            <p>{p.description}</p>
+            <ul>
+              {p.features.map((f) => (
+                <li key={f}>✓ {f}</li>
+              ))}
+            </ul>
+            <button onClick={() => setEdit(p)}>Editar plano</button>
+          </article>
+        ))}
+      </div>
+      <section className="admin-card">
+        <h2>{edit ? "Editar plano" : "Criar plano"}</h2>
+        <form className="admin-form" onSubmit={save}>
+          <input name="code" placeholder="Código" defaultValue={edit?.code} />
+          <input name="name" placeholder="Nome" defaultValue={edit?.name} />
+          <input
+            name="referencePrice"
+            type="number"
+            step=".01"
+            placeholder="Preço de referência"
+            defaultValue={edit?.referencePrice}
+          />
+          <input
+            name="description"
+            placeholder="Descrição"
+            defaultValue={edit?.description}
+          />
+          <textarea
+            name="features"
+            placeholder="Recursos separados por vírgula"
+            defaultValue={edit?.features?.join(", ")}
+          />
+          <button>Salvar plano</button>
+        </form>
+      </section>
+    </div>
+  );
+}
+function Coupons({ data, api, refresh }) {
+  const empty = {
+    code: "",
+    description: "",
+    benefitType: "EXTRA_TRIAL_DAYS",
+    benefitValue: 7,
+    maxUses: 0,
+    maxUsesPerUser: 1,
+    startsAt: new Date().toISOString().slice(0, 10),
+    endsAt: "",
+    active: true,
+    allowedPlan: "ALL",
+    allowedAudience: "ALL",
+    stackable: false,
+    dailyLimit: 0,
+    autoExpireAtLimit: true,
+    newUsersOnly: false,
+    trialUsersOnly: false,
+    allowAfterTrialExpired: false,
+  };
+  const [form, setForm] = useState(empty),
+    [editing, setEditing] = useState(null),
+    [open, setOpen] = useState(false),
+    [usageView, setUsageView] = useState(null),
+    [message, setMessage] = useState("");
+  const change = (key, value) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  const begin = (coupon = null) => {
+    setEditing(coupon?._id || null);
+    setForm(
+      coupon
+        ? {
+            ...empty,
+            ...coupon,
+            startsAt: coupon.startsAt?.slice(0, 10) || "",
+            endsAt: coupon.endsAt?.slice(0, 10) || "",
+          }
+        : empty,
+    );
+    setOpen(true);
+    setMessage("");
+  };
+  async function save(e) {
+    e.preventDefault();
+    setMessage("Salvando...");
+    try {
+      await api(
+        editing ? `/api/admin/coupons/${editing}` : "/api/admin/coupons",
+        {
+          method: editing ? "PATCH" : "POST",
+          body: JSON.stringify({
+            ...form,
+            benefitValue: Number(form.benefitValue),
+            maxUses: Number(form.maxUses),
+            maxUsesPerUser: Number(form.maxUsesPerUser),
+            dailyLimit: Number(form.dailyLimit),
+          }),
+        },
+      );
+      setOpen(false);
+      setEditing(null);
+      setMessage("Cupom salvo com sucesso.");
+      await refresh();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+  async function action(coupon, kind) {
+    if (
+      kind === "delete" &&
+      !window.confirm(
+        `Excluir o cupom ${coupon.code} e seu histórico de utilizações?`,
+      )
+    )
+      return;
+    setMessage("Aplicando alteração...");
+    try {
+      await api(
+        `/api/admin/coupons/${coupon._id}${kind === "toggle" ? "/toggle" : kind === "duplicate" ? "/duplicate" : ""}`,
+        { method: kind === "delete" ? "DELETE" : "POST" },
+      );
+      setMessage(
+        kind === "duplicate"
+          ? "Cópia criada como desativada."
+          : "Alteração concluída.",
+      );
+      await refresh();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+  async function showUsages(coupon) {
+    setMessage("Carregando utilizações...");
+    try {
+      setUsageView(await api(`/api/admin/coupons/${coupon._id}/usages`));
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+  return (
+    <div className="admin-stack coupons-page">
+      <section className="admin-card">
+        <div className="admin-section-head">
+          <div>
+            <h2>Cupons e promoções</h2>
+            <p>
+              Benefícios controlados pelo FinanFlow, sem gateway de pagamento.
+            </p>
+          </div>
+          <button onClick={() => (open ? setOpen(false) : begin())}>
+            + Novo cupom
+          </button>
+        </div>
+        {message && <p className="coupon-message">{message}</p>}
+        {open && (
+          <form className="coupon-form" onSubmit={save}>
+            <label>
+              Código
+              <input
+                required
+                maxLength="40"
+                value={form.code}
+                onChange={(e) => change("code", e.target.value.toUpperCase())}
+              />
+            </label>
+            <label>
+              Descrição
+              <input
+                maxLength="300"
+                value={form.description}
+                onChange={(e) => change("description", e.target.value)}
+              />
+            </label>
+            <label>
+              Tipo de benefício
+              <select
+                value={form.benefitType}
+                onChange={(e) => change("benefitType", e.target.value)}
+              >
+                {Object.entries(couponBenefitLabel).map(([value, name]) => (
+                  <option value={value} key={value}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Valor do benefício
+              <input
+                required
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.benefitValue}
+                onChange={(e) => change("benefitValue", e.target.value)}
+              />
+            </label>
+            <label>
+              Quantidade máxima de usos
+              <input
+                type="number"
+                min="0"
+                value={form.maxUses}
+                onChange={(e) => change("maxUses", e.target.value)}
+              />
+              <small>Use 0 para ilimitado</small>
+            </label>
+            <label>
+              Máximo por usuário
+              <input
+                type="number"
+                min="0"
+                value={form.maxUsesPerUser}
+                onChange={(e) => change("maxUsesPerUser", e.target.value)}
+              />
+              <small>Use 0 para permitir reutilização</small>
+            </label>
+            <label>
+              Data de início
+              <input
+                required
+                type="date"
+                value={form.startsAt}
+                onChange={(e) => change("startsAt", e.target.value)}
+              />
+            </label>
+            <label>
+              Data de término
+              <input
+                type="date"
+                value={form.endsAt || ""}
+                onChange={(e) => change("endsAt", e.target.value)}
+              />
+            </label>
+            <label>
+              Plano permitido
+              <select
+                value={form.allowedPlan}
+                onChange={(e) => change("allowedPlan", e.target.value)}
+              >
+                <option value="ALL">Todos os planos</option>
+                <option value="FREE">Gratuito</option>
+                <option value="PLUS">Plus</option>
+                <option value="PREMIUM">Premium</option>
+              </select>
+            </label>
+            <label>
+              Público permitido
+              <select
+                value={form.allowedAudience}
+                onChange={(e) => change("allowedAudience", e.target.value)}
+              >
+                <option value="ALL">Todos</option>
+                <option value="USERS">Usuários</option>
+                <option value="ADMINS">Administradores</option>
+              </select>
+            </label>
+            <label>
+              Limite diário opcional
+              <input
+                type="number"
+                min="0"
+                value={form.dailyLimit}
+                onChange={(e) => change("dailyLimit", e.target.value)}
+              />
+              <small>Use 0 para não limitar</small>
+            </label>
+            <div className="coupon-checks">
+              <CouponCheck
+                text="Cupom ativo"
+                value={form.active}
+                change={(v) => change("active", v)}
+              />
+              <CouponCheck
+                text="Acumulativo com outros cupons"
+                value={form.stackable}
+                change={(v) => change("stackable", v)}
+              />
+              <CouponCheck
+                text="Expirar ao atingir o limite"
+                value={form.autoExpireAtLimit}
+                change={(v) => change("autoExpireAtLimit", v)}
+              />
+              <CouponCheck
+                text="Somente novos usuários (até 7 dias)"
+                value={form.newUsersOnly}
+                change={(v) => change("newUsersOnly", v)}
+              />
+              <CouponCheck
+                text="Somente usuários em teste"
+                value={form.trialUsersOnly}
+                change={(v) => change("trialUsersOnly", v)}
+              />
+              <CouponCheck
+                text="Permitir após teste expirado"
+                value={form.allowAfterTrialExpired}
+                change={(v) => change("allowAfterTrialExpired", v)}
+              />
+            </div>
+            <div className="coupon-form-actions">
+              <button type="button" onClick={() => setOpen(false)}>
+                Cancelar
+              </button>
+              <button type="submit">
+                {editing ? "Salvar alterações" : "Criar cupom"}
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+      <section className="admin-card coupon-list-card">
+        <div className="coupon-table coupon-head">
+          <span>Código</span>
+          <span>Benefício</span>
+          <span>Validade</span>
+          <span>Limite</span>
+          <span>Usos</span>
+          <span>Restantes</span>
+          <span>Status</span>
+          <span>Ações</span>
+        </div>
+        {data.coupons.map((coupon) => (
+          <article className="coupon-table" key={coupon._id}>
+            <strong>
+              {coupon.code}
+              <small>{coupon.description}</small>
+            </strong>
+            <span>
+              {couponBenefitLabel[coupon.benefitType] || coupon.benefitType}
+              <small>{coupon.benefitValue}</small>
+            </span>
+            <span>
+              {date(coupon.startsAt)}
+              <small>até {date(coupon.endsAt)}</small>
+            </span>
+            <span>{coupon.maxUses || "Ilimitado"}</span>
+            <span>{coupon.usageCount || 0}</span>
+            <span>
+              {coupon.remainingUses === null ? "∞" : coupon.remainingUses}
+            </span>
+            <em
+              className={`coupon-status ${String(coupon.status).toLowerCase()}`}
+            >
+              {couponStatusLabel[coupon.status] || coupon.status}
+            </em>
+            <span className="coupon-actions">
+              <button onClick={() => begin(coupon)}>Editar</button>
+              <button onClick={() => action(coupon, "toggle")}>
+                {coupon.active ? "Desativar" : "Ativar"}
+              </button>
+              <button onClick={() => action(coupon, "duplicate")}>
+                Duplicar
+              </button>
+              <button onClick={() => showUsages(coupon)}>Utilizações</button>
+              <button
+                className="danger"
+                onClick={() => action(coupon, "delete")}
+              >
+                Excluir
+              </button>
+            </span>
+          </article>
+        ))}
+        {!data.coupons.length && <p>Nenhum cupom cadastrado.</p>}
+      </section>
+      {usageView && (
+        <div className="admin-modal-bg">
+          <section className="admin-modal coupon-usage-modal">
+            <button className="close" onClick={() => setUsageView(null)}>
+              <X />
+            </button>
+            <h2>Utilizações de {usageView.coupon.code}</h2>
+            <p>{usageView.coupon.usageCount || 0} usos registrados</p>
+            <div className="coupon-usage-list">
+              <div>
+                <strong>Usuário</strong>
+                <strong>Data/hora</strong>
+                <strong>Benefício aplicado</strong>
+                <strong>Status</strong>
+              </div>
+              {usageView.usages.map((use) => (
+                <article key={use._id}>
+                  <span>
+                    <strong>{use.userName}</strong>
+                    <small>{use.userEmail}</small>
+                  </span>
+                  <time>{new Date(use.usedAt).toLocaleString("pt-BR")}</time>
+                  <span>{use.benefitApplied}</span>
+                  <em className={use.status.toLowerCase()}>
+                    {use.status === "SUCCESS" ? "Aplicado" : "Recusado"}
+                    {use.reason && <small>{use.reason}</small>}
+                  </em>
+                </article>
+              ))}
+              {!usageView.usages.length && (
+                <p>Este cupom ainda não foi utilizado.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+function CouponCheck({ text, value, change }) {
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={Boolean(value)}
+        onChange={(e) => change(e.target.checked)}
+      />
+      <span>{text}</span>
+    </label>
+  );
+}
+function Analytics({ data }) {
+  const s = data.stats;
+  const pct = (n) => (s.users ? `${Math.round((n / s.users) * 100)}%` : "0%");
+  return (
+    <div className="admin-stack">
+      <div className="admin-stats">
+        <Stat name="ATIVOS HOJE" value={s.activeToday} />
+        <Stat name="ATIVOS EM 7 DIAS" value={s.active7} />
+        <Stat name="ATIVOS EM 30 DIAS" value={s.active30} />
+        <Stat
+          name="MÉDIA DE LANÇAMENTOS"
+          value={s.users ? (s.transactions / s.users).toFixed(1) : 0}
+        />
+      </div>
+      <section className="admin-dashboard-grid">
+        <Chart title="Crescimento de usuários" points={data.monthly} />
+        <article className="admin-card">
+          <h2>Uso da plataforma</h2>
+          <Rows
+            rows={[
+              [
+                "Média de espaços",
+                s.users ? (s.spaces / s.users).toFixed(1) : 0,
+              ],
+              ["Com metas", pct(data.users.filter((u) => u.goals > 0).length)],
+              ["Usando modo casal", pct(s.activeCouples * 2)],
+              ["Com atividade em 30 dias", pct(s.active30)],
+            ]}
+          />
+        </article>
+        <article className="admin-card">
+          <h2>Funcionalidades mais usadas</h2>
+          <Rows
+            rows={[
+              ["Lançamentos", s.transactions],
+              ["Contas", s.accounts],
+              ["Planejamento", s.goals],
+              ["Modo casal", s.activeCouples],
+              ["Relatórios", "Uso disponível no app"],
+            ]}
+          />
+        </article>
+      </section>
+    </div>
+  );
+}
+function Reports({ data }) {
+  const [period, setPeriod] = useState("30"),
+    now = new Date(),
+    start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === "7" || period === "30")
+    start.setDate(now.getDate() - Number(period) + 1);
+  else if (period === "month") start.setDate(1);
+  else if (period === "previous") {
+    start.setMonth(now.getMonth() - 1, 1);
+  }
+  const end =
+    period === "previous"
+      ? new Date(now.getFullYear(), now.getMonth(), 1)
+      : now;
+  const users = data.users.filter((u) => {
+    const created = new Date(u.createdAt);
+    return created >= start && created <= end;
+  });
+  const reportData = {
+    ...data,
+    users,
+    stats: {
+      ...data.stats,
+      users: users.length,
+      trials: users.filter((u) => u.trialStatus === "ACTIVE").length,
+      subscriptionsActive: users.filter(
+        (u) => u.planCode && u.planCode !== "FREE",
+      ).length,
+      blocked: users.filter((u) => u.accessStatus === "blocked").length,
+    },
+  };
+  const exportRows = users.map((u) => ({
+    nome: u.name,
+    email: u.email,
+    status: u.accessStatus,
+    role: u.role,
+    plano: u.planCode,
+    cadastro: u.createdAt,
+    ultimo_acesso: u.lastLoginAt,
+  }));
+  return (
+    <div className="admin-stack">
+      <section className="admin-card admin-report-bar">
+        <select value={period} onChange={(e) => setPeriod(e.target.value)}>
+          <option value="1">Hoje</option>
+          <option value="7">7 dias</option>
+          <option value="30">30 dias</option>
+          <option value="month">Este mês</option>
+          <option value="previous">Mês anterior</option>
+        </select>
+        <span />
+        <button
+          onClick={() => downloadExcel(exportRows)}
+          title="Baixar planilha do Excel"
+        >
+          <Download />
+          Excel
+        </button>
+        <button
+          onClick={() => downloadReportPdf(reportData, period)}
+          title="Baixar relatório em PDF"
+        >
+          <Download />
+          PDF
+        </button>
+      </section>
+      <div className="admin-stats">
+        <Stat name="CADASTROS" value={reportData.stats.users} />
+        <Stat
+          name="TESTES GRÁTIS"
+          value={reportData.stats.trials}
+          tone="orange"
+        />
+        <Stat
+          name="PLANOS ATIVOS"
+          value={reportData.stats.subscriptionsActive}
+        />
+        <Stat name="BLOQUEIOS" value={reportData.stats.blocked} tone="red" />
+      </div>
+      <section className="admin-dashboard-grid">
+        <Chart title="Visão geral de cadastros" points={data.monthly} />
+        <article className="admin-card">
+          <h2>Distribuição de planos</h2>
+          <Rows
+            rows={["FREE", "PLUS", "PREMIUM"].map((p) => [
+              p,
+              users.filter((u) => u.planCode === p).length,
+            ])}
+          />
+        </article>
+      </section>
+    </div>
+  );
+}
+function Communication({ data, api, refresh }) {
+  const initial = {
+    title: "",
+    message: "",
+    audience: "ALL",
+    startsAt: "",
+    endsAt: "",
+    active: true,
+  };
+  const [form, setForm] = useState(initial),
+    [editing, setEditing] = useState(null),
+    [query, setQuery] = useState(""),
+    [filter, setFilter] = useState("ALL"),
+    [notice, setNotice] = useState("");
+  const audienceLabel = {
+    ALL: "Todos",
+    FREE: "Gratuito",
+    PLUS: "Plus",
+    PREMIUM: "Premium",
+    TRIAL: "Teste grátis",
+    ADMINS: "Admins",
+  };
+  const statusOf = (item) =>
+    !item.active
+      ? "Desativado"
+      : new Date(item.startsAt) > new Date()
+        ? "Agendado"
+        : new Date(item.endsAt) < new Date()
+          ? "Expirado"
+          : "Ativo";
+  const visible = data.announcements.filter(
+    (item) =>
+      (filter === "ALL" || statusOf(item) === filter) &&
+      `${item.title} ${item.message}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  );
+  const change = (key, value) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  function edit(item) {
+    setEditing(item._id);
+    setForm({
+      ...item,
+      startsAt: localDateTime(item.startsAt),
+      endsAt: localDateTime(item.endsAt),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async function save(e) {
+    e.preventDefault();
+    setNotice("Salvando...");
+    try {
+      await api(
+        editing
+          ? `/api/admin/announcements/${editing}`
+          : "/api/admin/announcements",
+        { method: editing ? "PATCH" : "POST", body: JSON.stringify(form) },
+      );
+      setForm(initial);
+      setEditing(null);
+      setNotice(editing ? "Aviso atualizado." : "Aviso publicado.");
+      await refresh();
+    } catch (error) {
+      setNotice(error.message);
+    }
+  }
+  async function action(item, type) {
+    if (type === "delete" && !window.confirm(`Excluir o aviso ${item.title}?`))
+      return;
+    await api(`/api/admin/announcements/${item._id}`, {
+      method: type === "delete" ? "DELETE" : "PATCH",
+      body:
+        type === "toggle"
+          ? JSON.stringify({ active: !item.active })
+          : undefined,
+    });
+    await refresh();
+  }
+  return (
+    <div className="admin-stack communication-page">
+      <section className="communication-compose">
+        <section className="admin-card communication-form-card">
+          <div className="communication-title">
+            <span>
+              <Megaphone size={20} />
+            </span>
+            <div>
+              <h2>{editing ? "Editar aviso" : "Novo aviso"}</h2>
+              <p>Crie avisos internos para públicos específicos.</p>
+            </div>
+          </div>
+          <form onSubmit={save}>
+            <label>
+              Título
+              <input
+                required
+                maxLength="160"
+                value={form.title}
+                onChange={(e) => change("title", e.target.value)}
+                placeholder="Ex.: Manutenção programada no sistema"
+              />
+            </label>
+            <label>
+              Mensagem
+              <textarea
+                required
+                maxLength="500"
+                value={form.message}
+                onChange={(e) => change("message", e.target.value)}
+                placeholder="Digite a mensagem exibida para o público selecionado..."
+              />
+              <small>{form.message.length}/500 caracteres</small>
+            </label>
+            <fieldset>
+              <legend>Público</legend>
+              <div className="audience-options">
+                {Object.entries(audienceLabel).map(([value, name]) => (
+                  <button
+                    type="button"
+                    className={form.audience === value ? "active" : ""}
+                    key={value}
+                    onClick={() => change("audience", value)}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div className="communication-dates">
+              <label>
+                Data inicial
+                <input
+                  required
+                  type="datetime-local"
+                  value={form.startsAt}
+                  onChange={(e) => change("startsAt", e.target.value)}
+                />
+              </label>
+              <label>
+                Data final
+                <input
+                  required
+                  type="datetime-local"
+                  value={form.endsAt}
+                  onChange={(e) => change("endsAt", e.target.value)}
+                />
+              </label>
+            </div>
+            <CouponCheck
+              text="Aviso ativo"
+              value={form.active}
+              change={(value) => change("active", value)}
+            />
+            {notice && <p className="communication-notice">{notice}</p>}
+            <div className="communication-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(initial);
+                  setEditing(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button type="submit">
+                <Send size={16} />
+                {editing ? "Salvar alterações" : "Publicar aviso"}
+              </button>
+            </div>
+          </form>
+        </section>
+        <section className="admin-card communication-preview">
+          <div>
+            <h2>Prévia do aviso no sistema</h2>
+            <p>Veja como será exibido aos usuários.</p>
+          </div>
+          <span>Banner no topo</span>
+          <article>
+            <Info size={18} />
+            <div>
+              <strong>{form.title || "Título do seu aviso"}</strong>
+              <p>
+                {form.message ||
+                  "A mensagem aparecerá aqui enquanto você digita."}
+              </p>
+              <small>
+                {audienceLabel[form.audience]}
+                {form.endsAt && ` · até ${date(form.endsAt)}`}
+              </small>
+            </div>
+            <X size={17} />
+          </article>
+          <div className="preview-skeleton">
+            <i />
+            <i />
+            <i />
+          </div>
+        </section>
+      </section>
+      <section className="admin-card announcements-card">
+        <div className="announcements-toolbar">
+          <div>
+            <h2>Avisos publicados</h2>
+            <p>{data.announcements.length} comunicados cadastrados</p>
+          </div>
+          <label>
+            <Search size={17} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar avisos..."
+            />
+          </label>
+          <details className="announcement-filter">
+            <summary>
+              <span>{filter === "ALL" ? "Todos os status" : filter}</span>
+              <ChevronDown size={16} />
+            </summary>
+            <div>
+              {[
+                ["ALL", "Todos os status"],
+                ["Ativo", "Ativo"],
+                ["Agendado", "Agendado"],
+                ["Expirado", "Expirado"],
+                ["Desativado", "Desativado"],
+              ].map(([value, name]) => (
+                <button
+                  type="button"
+                  className={filter === value ? "selected" : ""}
+                  key={value}
+                  onClick={(event) => {
+                    setFilter(value);
+                    event.currentTarget.closest("details").removeAttribute("open");
+                  }}
+                >
+                  <i className={`filter-dot ${value.toLowerCase()}`} />
+                  {name}
+                  {filter === value && <CheckIcon size={15} />}
+                </button>
+              ))}
+            </div>
+          </details>
+        </div>
+        <div className="announcements-list">
+          {!!visible.length && <div className="announcements-head">
+            <span>Aviso</span>
+            <span>Público</span>
+            <span>Período</span>
+            <span>Status</span>
+            <span>Ações</span>
+          </div>}
+          {visible.map((item) => {
+            const status = statusOf(item);
+            return (
+              <article key={item._id}>
+                <span>
+                  <i>
+                    <Megaphone size={16} />
+                  </i>
+                  <span>
+                    <strong>{item.title}</strong>
+                    <small>{item.message}</small>
+                  </span>
+                </span>
+                <em>{audienceLabel[item.audience] || item.audience}</em>
+                <span>
+                  <time>{new Date(item.startsAt).toLocaleString("pt-BR")}</time>
+                  <small>
+                    até {new Date(item.endsAt).toLocaleString("pt-BR")}
+                  </small>
+                </span>
+                <b className={`announcement-status ${status.toLowerCase()}`}>
+                  {status}
+                </b>
+                <span className="announcement-actions">
+                  <button title="Visualizar" onClick={() => edit(item)}>
+                    <Eye />
+                  </button>
+                  <button title="Editar" onClick={() => edit(item)}>
+                    <Pencil />
+                  </button>
+                  <button
+                    title={item.active ? "Desativar" : "Ativar"}
+                    onClick={() => action(item, "toggle")}
+                  >
+                    <ToggleRight />
+                  </button>
+                  <button
+                    title="Excluir"
+                    className="danger"
+                    onClick={() => action(item, "delete")}
+                  >
+                    <Trash2 />
+                  </button>
+                </span>
+              </article>
+            );
+          })}
+          {!visible.length && (
+            <p className="announcement-empty">Nenhum aviso encontrado.</p>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+function Support({ data, api, refresh }) {
+  const [selected, setSelected] = useState(data.tickets[0] || null);
+  async function update(status) {
+    await api(`/api/admin/tickets/${selected._id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    setSelected(null);
+    refresh();
+  }
+  return (
+    <div className="admin-stack">
+      <div className="admin-stats">
+        <Stat
+          name="ABERTOS"
+          value={data.tickets.filter((t) => t.status === "OPEN").length}
+        />
+        <Stat
+          name="EM ATENDIMENTO"
+          value={data.tickets.filter((t) => t.status === "IN_PROGRESS").length}
+          tone="orange"
+        />
+        <Stat
+          name="RESOLVIDOS"
+          value={data.tickets.filter((t) => t.status === "RESOLVED").length}
+        />
+        <Stat
+          name="FECHADOS"
+          value={data.tickets.filter((t) => t.status === "CLOSED").length}
+          tone="purple"
+        />
+      </div>
+      <div className="support-grid">
+        <section className="admin-card ticket-list">
+          <h2>Caixa de entrada</h2>
+          {data.tickets.map((t) => (
+            <button
+              className={selected?._id === t._id ? "active" : ""}
+              key={t._id}
+              onClick={() => setSelected(t)}
+            >
+              <span>
+                <strong>{t.subject}</strong>
+                <small>{t.userId?.name || "Usuário"}</small>
+              </span>
+              <em>{t.status}</em>
+            </button>
+          ))}
+        </section>
+        <section className="admin-card ticket-detail">
+          {selected ? (
+            <>
+              <small>Ticket #{selected._id.slice(-6)}</small>
+              <h2>{selected.subject}</h2>
+              <p>{selected.message}</p>
+              <div className="action-grid">
+                <button onClick={() => update("IN_PROGRESS")}>Assumir</button>
+                <button onClick={() => update("RESOLVED")}>Resolver</button>
+                <button onClick={() => update("CLOSED")}>Fechar</button>
+              </div>
+            </>
+          ) : (
+            <p>Selecione um chamado.</p>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+function Features({ data, api, refresh }) {
+  const [saving, setSaving] = useState("");
+  async function toggle(f) {
+    setSaving(f._id);
+    try {
+      await api(`/api/admin/features/${f._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: !f.active }),
+      });
+      await refresh();
+    } finally {
+      setSaving("");
+    }
+  }
+  async function audience(f, v) {
+    setSaving(f._id);
+    try {
+      await api(`/api/admin/features/${f._id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ audience: v }),
+      });
+      await refresh();
+    } finally {
+      setSaving("");
+    }
+  }
+  const active = data.flags.filter((f) => f.active).length;
+  return (
+    <div className="admin-stack features-page">
+      <section className="admin-stats feature-stats">
+        <Stat
+          name="RECURSOS"
+          value={data.flags.length}
+          hint="Cadastrados"
+          icon={PackageCheck}
+        />
+        <Stat
+          name="ATIVOS"
+          value={active}
+          hint="Disponíveis agora"
+          icon={CheckIcon}
+        />
+        <Stat
+          name="DESATIVADOS"
+          value={data.flags.length - active}
+          hint="Ocultos dos usuários"
+          icon={LockKeyhole}
+          tone="red"
+        />
+      </section>
+      <section className="admin-card feature-panel">
+        <div className="admin-section-head">
+          <div>
+            <h2>Controle de recursos</h2>
+            <p>
+              Libere funções por público. As alterações são aplicadas
+              automaticamente, sem nova publicação.
+            </p>
+          </div>
+          <span className="feature-live">
+            <Activity size={15} />
+            Configuração em tempo real
+          </span>
+        </div>
+        <div className="feature-list">
+          {data.flags.map((f, index) => {
+            const Icon = [
+              Download,
+              HeartHandshake,
+              ToggleRight,
+              ClipboardCheck,
+              BarChart3,
+            ][index % 5];
+            return (
+              <article className={f.active ? "active" : "disabled"} key={f._id}>
+                <span className="feature-icon">
+                  <Icon size={21} />
+                </span>
+                <span className="feature-copy">
+                  <strong>{f.name}</strong>
+                  <small>{f.description}</small>
+                  <em className={`feature-state ${f.active ? "on" : "off"}`}>
+                    {f.active ? "Disponível" : "Indisponível"}
+                  </em>
+                </span>
+                <label>
+                  <small>Público permitido</small>
+                  <select
+                    disabled={saving === f._id}
+                    value={f.audience}
+                    onChange={(e) => audience(f, e.target.value)}
+                  >
+                    <option value="ALL">Todos os usuários</option>
+                    <option value="PREMIUM">Apenas Premium</option>
+                    <option value="ADMINS">Apenas administradores</option>
+                    <option value="TEST_GROUP">Grupo de teste</option>
+                  </select>
+                </label>
+                <button
+                  disabled={saving === f._id}
+                  aria-label={`${f.active ? "Desativar" : "Ativar"} ${f.name}`}
+                  className={f.active ? "toggle on" : "toggle"}
+                  onClick={() => toggle(f)}
+                >
+                  <i />
+                </button>
+                <strong className="feature-status-text">
+                  {saving === f._id
+                    ? "Salvando..."
+                    : f.active
+                      ? "Ativo"
+                      : "Desativado"}
+                </strong>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+function Audit({ data }) {
+  const [q, setQ] = useState("");
+  const items = data.audits.filter((a) =>
+    `${a.adminName} ${a.targetName} ${a.action}`
+      .toLowerCase()
+      .includes(q.toLowerCase()),
+  );
+  return (
+    <section className="admin-card">
+      <div className="admin-section-head">
+        <div>
+          <h2>Auditoria administrativa</h2>
+          <p>Registros permanentes das ações realizadas.</p>
+        </div>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filtrar administrador, usuário ou ação"
+        />
+      </div>
+      <div className="audit-list">
+        {items.map((a) => (
+          <article key={a._id}>
+            <ShieldCheck />
+            <span>
+              <strong>
+                {a.adminName} · {a.action.replaceAll("_", " ")}
+              </strong>
+              <small>Usuário afetado: {a.targetName || "Sistema"}</small>
+            </span>
+            <time>
+              {new Intl.DateTimeFormat("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              }).format(new Date(a.createdAt))}
+            </time>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+function SystemStatus({ api }) {
+  const [status, setStatus] = useState(null);
+  async function check() {
+    const start = performance.now();
+    try {
+      const r = await api("/api/ready");
+      setStatus({
+        ...r,
+        response: Math.round(performance.now() - start),
+        frontend: "online",
+      });
+    } catch (e) {
+      setStatus({
+        ok: false,
+        error: e.message,
+        response: Math.round(performance.now() - start),
+        frontend: "online",
+      });
+    }
+  }
+  useEffect(() => {
+    check();
+  }, []);
+  return (
+    <div className="admin-stack">
+      <section className="admin-card">
+        <div className="admin-section-head">
+          <div>
+            <h2>Status do sistema</h2>
+            <p>Verificação real dos componentes disponíveis.</p>
+          </div>
+          <button onClick={check}>Atualizar status</button>
+        </div>
+        <div className="system-grid">
+          <Stat
+            name="API"
+            value={status?.ok ? "Online" : "Indisponível"}
+            hint={`${status?.response || 0} ms`}
+          />
+          <Stat name="BANCO DE DADOS" value={status?.database || "—"} />
+          <Stat name="FRONTEND" value="Online" hint={location.host} />
+          <Stat
+            name="AUTENTICAÇÃO"
+            value={status?.ok ? "Online" : "Não verificada"}
+          />
+        </div>
+        <p>
+          Última verificação:{" "}
+          {status?.timestamp
+            ? new Date(status.timestamp).toLocaleString("pt-BR")
+            : "—"}
+        </p>
+      </section>
+    </div>
+  );
+}
+function AdminSettings({ data, api, refresh }) {
+  const c = data.config || {};
+  const [form, setForm] = useState(c);
+  async function save(e) {
+    e.preventDefault();
+    await api("/api/admin/config", {
+      method: "PATCH",
+      body: JSON.stringify(form),
+    });
+    refresh();
+  }
+  return (
+    <section className="admin-card">
+      <h2>Configurações globais</h2>
+      <form className="settings-global" onSubmit={save}>
+        <label>
+          Nome do produto
+          <input
+            value={form.productName || ""}
+            onChange={(e) => setForm({ ...form, productName: e.target.value })}
+          />
+        </label>
+        <label>
+          Duração padrão do teste
+          <input
+            type="number"
+            value={form.defaultTrialDays || 7}
+            onChange={(e) =>
+              setForm({ ...form, defaultTrialDays: Number(e.target.value) })
+            }
+          />
+        </label>
+        <Check
+          name="Teste grátis ativo"
+          value={form.trialEnabled}
+          change={(v) => setForm({ ...form, trialEnabled: v })}
+        />
+        <label>
+          Plano liberado no teste
+          <select
+            value={form.trialPlanCode || "PREMIUM"}
+            onChange={(e) =>
+              setForm({ ...form, trialPlanCode: e.target.value })
+            }
+          >
+            <option>FREE</option>
+            <option>PLUS</option>
+            <option>PREMIUM</option>
+          </select>
+        </label>
+        <label>
+          Plano padrão
+          <select
+            value={form.defaultPlanCode || "FREE"}
+            onChange={(e) =>
+              setForm({ ...form, defaultPlanCode: e.target.value })
+            }
+          >
+            <option>FREE</option>
+            <option>PLUS</option>
+            <option>PREMIUM</option>
+          </select>
+        </label>
+        <Check
+          name="Permitir novos cadastros"
+          value={form.registrationsOpen}
+          change={(v) => setForm({ ...form, registrationsOpen: v })}
+        />
+        <Check
+          name="Suporte habilitado"
+          value={form.supportEnabled}
+          change={(v) => setForm({ ...form, supportEnabled: v })}
+        />
+        <Check
+          name="Cupons habilitados"
+          value={form.couponsEnabled}
+          change={(v) => setForm({ ...form, couponsEnabled: v })}
+        />
+        <Check
+          name="Modo manutenção"
+          value={form.maintenanceMode}
+          change={(v) => setForm({ ...form, maintenanceMode: v })}
+        />
+        <label>
+          Mensagem de manutenção
+          <textarea
+            value={form.maintenanceMessage || ""}
+            onChange={(e) =>
+              setForm({ ...form, maintenanceMessage: e.target.value })
+            }
+          />
+        </label>
+        <Check
+          name="Aviso global"
+          value={form.globalNoticeEnabled}
+          change={(v) => setForm({ ...form, globalNoticeEnabled: v })}
+        />
+        <label>
+          Mensagem global
+          <input
+            value={form.globalNotice || ""}
+            onChange={(e) => setForm({ ...form, globalNotice: e.target.value })}
+          />
+        </label>
+        <button>Salvar configurações</button>
+      </form>
+      <h2>Backup administrativo</h2>
+      <div className="action-grid">
+        {["users", "plans", "subscriptions", "coupons", "audit", "config"].map(
+          (k) => (
+            <button
+              key={k}
+              onClick={async () =>
+                download(`finanflow-${k}`, await api(`/api/admin/export/${k}`))
+              }
+            >
+              Exportar {k}
+            </button>
+          ),
+        )}
+      </div>
+    </section>
+  );
+}
+function Check({ name, value, change }) {
+  return (
+    <label className="admin-check">
+      <span>{name}</span>
+      <button
+        type="button"
+        className={value ? "toggle on" : "toggle"}
+        onClick={() => change(!value)}
+      >
+        <i />
+      </button>
+    </label>
+  );
+}
+function GenericTable({ items, columns }) {
+  return (
+    <div className="admin-table generic">
+      <div className="thead">
+        {columns.map((c) => (
+          <span key={c}>{c}</span>
+        ))}
+      </div>
+      {items.map((x) => (
+        <div key={x._id}>
+          {columns.map((c) => (
+            <span key={c}>
+              {c.toLowerCase().includes("at")
+                ? date(x[c])
+                : String(x[c] ?? "—")}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
