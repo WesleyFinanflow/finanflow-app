@@ -31,8 +31,10 @@ test("calcula o saldo livre sem descontar lançamentos já pagos duas vezes", ()
     totalPaidDebt: 0,
     savedGoals: 0,
     balanceDelta: 400,
+    mealDelta: 0,
+    mealBalance: 0,
     commitments: 700,
-    free: 2900,
+    free: 1900,
   });
 });
 
@@ -77,6 +79,21 @@ test("mantém reservas independentes por espaço", () => {
   const accounts = [{ balance: 2000 }];
   assert.equal(calculateSummary(accounts, [], 300).free, 1700);
   assert.equal(calculateSummary(accounts, [], 800).free, 1200);
+});
+
+test("separa vale-refeição do saldo em dinheiro", () => {
+  const summary = calculateSummary(
+    [{ balance: 100 }],
+    [
+      { type: "receita", status: "pago", fundingSource: "meal", amount: 500 },
+      { type: "despesa", status: "pago", fundingSource: "meal", amount: 80 },
+      { type: "receita", status: "pendente", amount: 1000 },
+    ],
+    0
+  );
+  assert.equal(summary.balance, 100);
+  assert.equal(summary.mealBalance, 420);
+  assert.equal(summary.free, 100);
 });
 
 test("simulador compara a parcela mensal com o saldo livre", () => {

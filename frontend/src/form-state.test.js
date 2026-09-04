@@ -10,6 +10,7 @@ test("atalho de receita abre o tipo e a categoria corretos", () => {
     date: "2026-06-20",
     category: "Salário",
     status: "pendente",
+    fundingSource: "cash",
     accountId: "",
     recurrence: "none",
     installmentCount: "1",

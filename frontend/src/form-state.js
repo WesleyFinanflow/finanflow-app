@@ -6,6 +6,7 @@ export function createTransactionForm(type = "despesa", date = new Date().toISOS
     date,
     category: type === "receita" ? "Salário" : "",
     status: "pendente",
+    fundingSource: "cash",
     accountId: "",
     recurrence: "none",
     installmentCount: "1",

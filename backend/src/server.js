@@ -138,6 +138,7 @@ const transactionSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 0.01, max: 1000000000000 },
     date: { type: String, required: true },
     status: { type: String, enum: ["pendente", "pago"], default: "pendente" },
+    fundingSource: { type: String, enum: ["cash", "meal"], default: "cash" },
     category: { type: String, default: "Outro", maxlength: 50 },
     seriesId: { type: String, index: true },
     recurrence: { type: String, enum: ["none", "monthly"], default: "none" },
@@ -413,6 +414,7 @@ function transactionInput(body, accountId, user) {
     amount: moneyValue(body?.amount, { label: "Valor", min: 0.01 }),
     date: isoDate(body?.date, "Data"),
     status: oneOf(body?.status ?? "pendente", ["pendente", "pago"], "Status"),
+    fundingSource: oneOf(body?.fundingSource ?? "cash", ["cash", "meal"], "Origem do saldo"),
     category: optionalText(body?.category, "Outro", 50),
     createdBy: user._id,
     responsibleName: optionalText(body?.responsibleName, user.name, 80),
@@ -429,7 +431,7 @@ async function extendRecurringTransactions(spaceId) {
     let nextDate = addMonthsToIsoDate(last.date, 1);
     while (nextDate <= horizon && additions.length < 24) {
       additions.push({
-        spaceId: last.spaceId, accountId: last.accountId, type: last.type, description: last.description,
+        spaceId: last.spaceId, accountId: last.accountId, type: last.type, description: last.description, fundingSource: last.fundingSource || "cash",
         amount: last.amount, date: nextDate, status: "pendente", category: last.category,
         createdBy: last.createdBy, responsibleName: last.responsibleName, seriesId: last.seriesId, recurrence: "monthly",
       });

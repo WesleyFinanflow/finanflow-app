@@ -413,6 +413,7 @@ export default function App() {
       date: transaction.date || today,
       category: transaction.category || "Moradia",
       status: transaction.status || "pendente",
+      fundingSource: transaction.fundingSource || (transaction.type === "receita" && /vale[-\s]?(refei|alimenta)/i.test(transaction.description || "") ? "meal" : "cash"),
       accountId: transaction.accountId || "",
       recurrence: transaction.recurrence || "none",
       installmentCount: String(transaction.installmentCount || 1),
@@ -1071,6 +1072,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
     <>
       <section className="stats-grid">
         <StatCard title="Saldo atual" value={hasData ? money(summary.balance) : "Aguardando dados"} text="Contas cadastradas no espaço atual" tone="cyan" />
+        <StatCard title="Vale-refeição" value={hasData ? money(summary.mealBalance) : "Aguardando dados"} text="Uso exclusivo em alimentação" tone="green" />
         <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
         <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
         <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={`Limite protegido: ${money(reserve)}`} tone="blue" />
@@ -1137,10 +1139,11 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
           <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select></label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
+          <label>{txForm.type === "receita" ? "Destino do valor" : "Pagar com"}<select value={txForm.fundingSource || "cash"} onChange={(e) => setTxForm({ ...txForm, fundingSource: e.target.value })}><option value="cash">Dinheiro da conta principal</option><option value="meal">Vale-refeição</option></select></label>
           <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez ou parcelado</option><option value="monthly">Conta fixa todo mês</option></select></label>
           {txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "Somente uma vez" : `${count} parcelas`}</option>)}</select></label>}
           {isInstallment && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. Ao salvar, as parcelas serão atualizadas nos próximos meses.</small></span></div>}
-          <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{accounts[0]?.name || "Conta principal"}</strong><small>Este lançamento movimentará automaticamente esta conta quando for concluído.</small></span></div>
+          <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{txForm.fundingSource === "meal" ? "Saldo do vale-refeição" : accounts[0]?.name || "Conta principal"}</strong><small>{txForm.fundingSource === "meal" ? "Quando concluído, este lançamento movimentará somente o vale-refeição." : "Este lançamento movimentará automaticamente a conta principal quando for concluído."}</small></span></div>
         </div>
         <div className="action-row">
           <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
@@ -1163,7 +1166,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
               <div className="transaction-main">
                 <strong>{item.description}</strong>
                 {activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}
-                <span>{item.category}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
+                <span>{item.category}{item.fundingSource === "meal" ? " · vale-refeição" : ""}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
                 <span className="transaction-date">Vence em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span>
               </div>
               <div className="transaction-value"><b className="transaction-status">Pendente</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
@@ -1176,7 +1179,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
             {!!completedTransactions.length && <div className="transaction-group-title completed-title"><span>Pagos e recebidos</span><small>Concluídos</small></div>}
             {completedTransactions.map((item) => (
             <article className={`transaction-row ${item.type} completed-item`} key={item._id}>
-              <div className="transaction-main"><strong>{item.description}</strong>{activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}<span>{item.category}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span><span className="transaction-date">{item.type === "receita" ? "Recebido" : "Pago"} em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span></div>
+              <div className="transaction-main"><strong>{item.description}</strong>{activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}<span>{item.category}{item.fundingSource === "meal" ? " · vale-refeição" : ""}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span><span className="transaction-date">{item.type === "receita" ? "Recebido" : "Pago"} em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span></div>
               <div className="transaction-value"><b className="transaction-status completed">{item.type === "receita" ? "Recebido" : "Pago"}</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
               <div className="row-actions"><button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button><button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button></div>
             </article>))}
