@@ -479,16 +479,19 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
   );
 }
 
-function AdminAvatar({ user }) {
+function AdminAvatar({ user, large = false }) {
   const photo =
     user.profilePhoto ||
     (/^wesley\b/i.test(user.name || "") ? wesleyAvatar : "");
   return (
-    <span className="avatar">
-      {photo ? (
-        <img src={photo} alt="" />
-      ) : (
-        (user.name || "F").slice(0, 2).toUpperCase()
+    <span className={`avatar${large ? " large" : ""}`}>
+      {(user.name || "F").slice(0, 2).toUpperCase()}
+      {photo && (
+        <img
+          src={photo}
+          alt={`Foto de ${user.name || "usuário"}`}
+          onError={(event) => event.currentTarget.remove()}
+        />
       )}
     </span>
   );
@@ -850,13 +853,7 @@ function Clients({ data, api, refresh }) {
           </div>
           {users.map((u) => (
             <article key={u._id} onClick={() => setSelected(u)}>
-              <span className="avatar">
-                {u.profilePhoto ? (
-                  <img src={u.profilePhoto} />
-                ) : (
-                  u.name.slice(0, 2).toUpperCase()
-                )}
-              </span>
+              <AdminAvatar user={u} />
               <span>
                 <strong>{u.name}</strong>
                 <small>{u.email}</small>
@@ -1072,7 +1069,7 @@ function ClientModal({ user, close, api, refresh }) {
           <X />
         </button>
         <header>
-          <span className="avatar large">{user.name.slice(0, 2)}</span>
+          <AdminAvatar user={user} large />
           <div>
             <h2>{user.name}</h2>
             <p>{user.email}</p>
