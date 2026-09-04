@@ -476,7 +476,7 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const acceptedAt = new Date();
     const trialEnabled=platformConfig?.trialEnabled!==false;
-    const trialEndsAt=trialEnabled?new Date(Date.now()+Number(platformConfig?.defaultTrialDays||7)*86400000):undefined;
+    const trialEndsAt=trialEnabled?new Date(Date.now()+Number(platformConfig?.defaultTrialDays||30)*86400000):undefined;
     const user = await User.create({ name, email, passwordHash, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION,accessStatus:trialEnabled?"trial":"active",trialStartedAt:trialEnabled?acceptedAt:undefined,trialEndsAt,trialStatus:trialEnabled?"ACTIVE":"NOT_STARTED",planCode:trialEnabled?(platformConfig?.trialPlanCode||"PREMIUM"):(platformConfig?.defaultPlanCode||"FREE") });
     await createIndividualSpaceForUser(user);
     if(trialEnabled)await Subscription.create({userId:user._id,planCode:user.planCode,startsAt:acceptedAt,endsAt:trialEndsAt,status:"TRIAL",origin:"TRIAL"});

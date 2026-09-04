@@ -18,7 +18,7 @@ export const AdminAudit = model("AdminAudit", new Schema({ adminId:{type:Schema.
 export const Announcement = model("Announcement", new Schema({ title:String, message:String, startsAt:Date, endsAt:Date, audience:{type:String,enum:["ALL","FREE","PLUS","PREMIUM","TRIAL","ADMINS"],default:"ALL"}, active:{type:Boolean,default:true}, createdBy:{type:Schema.Types.ObjectId,ref:"User"} },{timestamps:true}));
 export const SupportTicket = model("SupportTicket", new Schema({ userId:{type:Schema.Types.ObjectId,ref:"User",index:true}, subject:String, message:String, category:{type:String,enum:["QUESTION","PROBLEM","SUGGESTION"],default:"QUESTION"}, status:{type:String,enum:["OPEN","IN_PROGRESS","RESOLVED","CLOSED"],default:"OPEN"}, adminReply:String, assignedTo:{type:Schema.Types.ObjectId,ref:"User"} },{timestamps:true}));
 export const AdminNote = model("AdminNote", new Schema({ userId:{type:Schema.Types.ObjectId,ref:"User",index:true}, text:String, authorId:{type:Schema.Types.ObjectId,ref:"User"}, authorName:String },{timestamps:true}));
-export const AppConfig = model("AppConfig", new Schema({ key:{type:String,unique:true,default:"global"}, productName:{type:String,default:"FinanFlow"}, trialEnabled:{type:Boolean,default:true}, defaultTrialDays:{type:Number,default:7}, trialPlanCode:{type:String,default:"PREMIUM"}, defaultPlanCode:{type:String,default:"FREE"}, registrationsOpen:{type:Boolean,default:true}, maintenanceMode:{type:Boolean,default:false}, maintenanceMessage:{type:String,default:"FinanFlow está em manutenção. Voltaremos em breve."}, globalNoticeEnabled:{type:Boolean,default:false}, globalNotice:{type:String,default:""}, supportEnabled:{type:Boolean,default:true}, couponsEnabled:{type:Boolean,default:true} },{timestamps:true}));
+export const AppConfig = model("AppConfig", new Schema({ key:{type:String,unique:true,default:"global"}, productName:{type:String,default:"FinanFlow"}, trialEnabled:{type:Boolean,default:true}, defaultTrialDays:{type:Number,default:30}, trialPlanCode:{type:String,default:"PREMIUM"}, defaultPlanCode:{type:String,default:"FREE"}, registrationsOpen:{type:Boolean,default:true}, maintenanceMode:{type:Boolean,default:false}, maintenanceMessage:{type:String,default:"FinanFlow está em manutenção. Voltaremos em breve."}, globalNoticeEnabled:{type:Boolean,default:false}, globalNotice:{type:String,default:""}, supportEnabled:{type:Boolean,default:true}, couponsEnabled:{type:Boolean,default:true} },{timestamps:true}));
 
 const daysFromNow = (days) => new Date(Date.now()+Number(days)*86400000);
 const startOf = (days) => new Date(Date.now()-Number(days)*86400000);
@@ -29,6 +29,7 @@ const couponView=(coupon)=>{const item=coupon.toObject?coupon.toObject():coupon;
 
 export async function seedAdminDefaults(){
   await AppConfig.updateOne({key:"global"},{$setOnInsert:{key:"global"}},{upsert:true});
+  await AppConfig.updateOne({key:"global",defaultTrialDays:7},{$set:{defaultTrialDays:30}});
   const plans=[
     {code:"FREE",name:"Gratuito",description:"Recursos essenciais para organização financeira.",referencePrice:0,features:["Lançamentos","Contas"]},
     {code:"PLUS",name:"Plus",description:"Planejamento e relatórios ampliados.",referencePrice:29.9,features:["Lançamentos","Contas","Planejamento","Relatórios"]},

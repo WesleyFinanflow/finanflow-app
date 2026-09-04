@@ -2582,7 +2582,7 @@ function AdminSettings({ data, api, refresh }) {
           Duração padrão do teste
           <input
             type="number"
-            value={form.defaultTrialDays || 7}
+            value={form.defaultTrialDays || 30}
             onChange={(e) =>
               setForm({ ...form, defaultTrialDays: Number(e.target.value) })
             }
