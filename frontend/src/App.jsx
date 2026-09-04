@@ -1038,6 +1038,7 @@ function PasswordInput({ id, label, value, onChange, visible, toggle, autoComple
 
 function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu, hideValues, toggleValuePrivacy }) {
   const isCouple = Boolean(coupleSpace);
+  const hasNegativeFreeBalance = hasData && summary.free < 0;
   const coupleMembers = (coupleSpace?.members?.slice(0, 2) || []).map((member) => String(member.id) === String(user?.id || user?._id) ? { ...member, profilePhoto: user?.profilePhoto || member.profilePhoto } : member);
   const coupleName = coupleMembers.length
     ? coupleMembers.map((member) => member.firstName || String(member.name || "Pessoa").split(/\s+/)[0]).join(" e ")
@@ -1058,16 +1059,17 @@ function Hero({ firstName, user, coupleSpace, summary, hasData, activeMenu, hide
         </p>
         </div>
       </div>
-      <div className={`balance-focus ${summary.free < 0 ? "negative" : ""}`}>
+      <div className={`balance-focus ${hasNegativeFreeBalance ? "negative" : ""}`}>
         <div className="balance-label"><span>Saldo livre seguro</span></div>
         <div className="balance-value"><button type="button" className="privacy-toggle" onClick={toggleValuePrivacy} aria-label={hideValues ? "Mostrar valores" : "Ocultar valores"} title={hideValues ? "Mostrar valores" : "Ocultar valores"}>{hideValues ? <EyeOff size={17} /> : <Eye size={17} />}</button><strong>{hasData ? money(summary.free) : "Aguardando dados"}</strong></div>
-        <small>{summary.free < 0 ? "Atenção: compromissos acima do saldo disponível." : "Protegido pela sua reserva financeira."}</small>
+        <small>{hasNegativeFreeBalance ? "Atenção: compromissos acima do saldo disponível." : "Protegido pela sua reserva financeira."}</small>
       </div>
     </section>
   );
 }
 
 function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, selectedMonthKey, activeMode }) {
+  const hasNegativeFreeBalance = hasData && summary.free < 0;
   return (
     <>
       <section className="stats-grid">
@@ -1075,7 +1077,7 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
         <StatCard title="Vale-refeição" value={hasData ? money(summary.mealBalance) : "Aguardando dados"} text="Uso exclusivo em alimentação" tone="green" />
         <StatCard title="Receitas previstas" value={hasData ? money(summary.income) : "Aguardando dados"} text="Entradas pendentes no mês" tone="green" />
         <StatCard title="Compromissos" value={hasData ? money(summary.commitments) : "Aguardando dados"} text="Despesas, dívidas e metas pendentes" tone="yellow" />
-        <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={summary.free < 0 ? `Faltam ${money(Math.abs(summary.free))} após proteger ${money(reserve)}` : `Limite protegido: ${money(reserve)}`} tone={summary.free < 0 ? "red" : "blue"} />
+        <StatCard title="Livre seguro" value={hasData ? money(summary.free) : "Aguardando dados"} text={hasNegativeFreeBalance ? `Faltam ${money(Math.abs(summary.free))} após proteger ${money(reserve)}` : `Limite protegido: ${money(reserve)}`} tone={hasNegativeFreeBalance ? "red" : "blue"} />
       </section>
 
       {activeMode === "couple" && <CoupleContributions transactions={transactions} selectedMonthKey={selectedMonthKey} />}
@@ -1520,10 +1522,15 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
 
       <section className="settings-card settings-protection">
         <SettingsTitle number="4" icon={ShieldCheck} title="Proteção financeira" />
-        <h3>Limite mínimo protegido</h3>
-        <p>Defina um valor mínimo que deve ficar livre para garantir sua segurança financeira.</p>
-        <label>Valor mínimo que deve ficar livre<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
-        <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar proteção"}</button>
+        {activeMode === "couple" ? <>
+          <h3>Proteção total do casal: {money(reserve)}</h3>
+          <p>Este valor é a soma da proteção individual das duas pessoas. Para alterar a sua parte, volte ao Meu espaço e ajuste o limite individual.</p>
+        </> : <>
+          <h3>Limite mínimo protegido</h3>
+          <p>Defina um valor mínimo que deve ficar livre para garantir sua segurança financeira.</p>
+          <label>Valor mínimo que deve ficar livre<input type="number" min="0" step="0.01" value={reserve} onChange={(e) => setReserve(Number(e.target.value || 0))} /></label>
+          <button type="button" disabled={loading} onClick={saveReserve}>{loading ? "Salvando..." : "Salvar proteção"}</button>
+        </>}
       </section>
 
       <section className="settings-card settings-couple">
