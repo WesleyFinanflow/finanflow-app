@@ -330,6 +330,10 @@ async function serializeSpaceForUser(member) {
     profilePhoto: item.userId.profilePhoto || "",
     role: item.role,
   }));
+  if (space.type === "couple" && members.length) {
+    const individualSpaces = await Space.find({ type: "individual", ownerId: { $in: members.map((item) => item.id) } }).select("reserve").lean();
+    space.reserve = individualSpaces.reduce((total, item) => total + Number(item.reserve || 0), 0);
+  }
   return { ...space, role: member.role, memberCount: members.length, members };
 }
 
@@ -643,12 +647,16 @@ app.patch("/api/spaces/:spaceId/settings", auth, async (req, res) => {
     if (!Number.isFinite(reserve) || reserve < 0 || reserve > 1000000000000) {
       return res.status(400).json({ message: "Informe uma reserva válida." });
     }
-    const before = await Space.findById(req.params.spaceId);
-    const space = await Space.findByIdAndUpdate(req.params.spaceId, { reserve }, { new: true, runValidators: true });
-    if (!space) return res.status(404).json({ message: "Espaço não encontrado." });
-    await recordAudit({ spaceId: space._id, user: req.user, action: "settings", entityType: "space", entityId: space._id, summary: "Proteção financeira atualizada", before, after: space });
-    const membership = await Member.findOne({ userId: req.user._id, spaceId: space._id });
-    res.json({ space: await serializeSpaceForUser({ spaceId: space, role: membership.role }) });
+    const requested = await Space.findById(req.params.spaceId);
+    if (!requested) return res.status(404).json({ message: "Espaço não encontrado." });
+    const target = requested.type === "couple" ? await Space.findOne({ type: "individual", ownerId: req.user._id }) : requested;
+    if (!target) return res.status(404).json({ message: "Espaço individual não encontrado." });
+    const before = target.toObject();
+    target.reserve = reserve;
+    await target.save();
+    await recordAudit({ spaceId: target._id, user: req.user, action: "settings", entityType: "space", entityId: target._id, summary: "Proteção financeira individual atualizada", before, after: target });
+    const membership = await Member.findOne({ userId: req.user._id, spaceId: requested._id });
+    res.json({ space: await serializeSpaceForUser({ spaceId: requested, role: membership.role }) });
   } catch (error) {
     res.status(500).json({ message: "Erro ao salvar configurações." });
   }
