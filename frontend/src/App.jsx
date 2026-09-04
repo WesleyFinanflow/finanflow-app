@@ -3,7 +3,6 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Calen
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
-import wesleyAvatar from "./assets/wesley-avatar.jpeg";
 import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
@@ -1419,7 +1418,7 @@ function AdminPanel() {
 
 function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, email, coupleSpace, coupleReady, setActiveMenu, activeMode, activeSpaceId, refreshSpaceData, leaveCoupleSpace, logout, resetSpaceData, deleteUserAccount, loading, installPrompt, isInstalled, installApp, accounts, transactions }) {
   const [confirmation, setConfirmation] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || localStorage.getItem("finanflow_profile_photo") || "");
+  const [photoPreview, setPhotoPreview] = useState(() => user?.profilePhoto || "");
   const [pendingPhoto, setPendingPhoto] = useState("");
   const [profileMessage, setProfileMessage] = useState("");
   const [profileName, setProfileName] = useState(user?.name || firstName);
@@ -1922,10 +1921,9 @@ function resizeProfilePhoto(file) {
 
 function Avatar({ name, photo = "", size = "small" }) {
   const initials = String(name || "F").trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-  const isWesley = /^wesley\b/i.test(String(name || "").trim());
   return (
     <span className={`user-avatar ${size}`} aria-hidden="true">
-      {photo ? <img src={photo} alt="" /> : isWesley ? <img src={wesleyAvatar} alt="" /> : initials || "F"}
+      {photo ? <img src={photo} alt="" /> : initials || "F"}
     </span>
   );
 }

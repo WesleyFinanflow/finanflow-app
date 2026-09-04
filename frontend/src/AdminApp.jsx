@@ -34,7 +34,6 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import wesleyAvatar from "./assets/wesley-avatar.jpeg";
 
 const NAV = [
   ["dashboard", "Painel", Home],
@@ -480,9 +479,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
 }
 
 function AdminAvatar({ user, large = false }) {
-  const photo =
-    user.profilePhoto ||
-    (/^wesley\b/i.test(user.name || "") ? wesleyAvatar : "");
+  const photo = user.profilePhoto || "";
   return (
     <span className={`avatar${large ? " large" : ""}`}>
       {(user.name || "F").slice(0, 2).toUpperCase()}
