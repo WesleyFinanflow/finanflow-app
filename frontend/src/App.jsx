@@ -841,7 +841,7 @@ export default function App() {
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
         {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
-        {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
+        {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} summary={summary} reserve={reserve} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {dueTransactions.length > 0 && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
@@ -1274,7 +1274,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, purchasePlans, sa
   );
 }
 
-function Relatorios({ transactions, selectedMonthKey, activeMode }) {
+function Relatorios({ transactions, selectedMonthKey, activeMode, summary, reserve }) {
   const [periodMonths, setPeriodMonths] = useState(6);
   const periodOptions = [{ value: "1", label: "Mês atual" }, { value: "3", label: "3 meses" }, { value: "6", label: "6 meses" }, { value: "12", label: "1 ano" }];
   const monthNumber = (key) => { const [year, month] = String(key).split("-").map(Number); return (year * 12) + month - 1; };
@@ -1322,6 +1322,22 @@ function Relatorios({ transactions, selectedMonthKey, activeMode }) {
     return map;
   }, new Map()).values());
   const periodLabel = periodMonths === 1 ? monthLabel(selectedMonthKey) : `${monthLabel(evolution[0].key, "short")} a ${monthLabel(selectedMonthKey, "short")}`;
+  const totalOutflow = currentTotals.expenses + currentTotals.debt;
+  const pendingTotal = pending.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const finalBalance = Number(summary?.balance || 0);
+  const initialBalance = finalBalance - net;
+  const safeBalance = Number(summary?.free || 0);
+  const expenseRatio = currentTotals.income > 0 ? (totalOutflow / currentTotals.income) * 100 : null;
+  const topCategory = categories[0] || null;
+  const generatedAt = new Date().toLocaleString("pt-BR");
+  const categoryColors = ["#079365", "#f3a62b", "#ef6b62", "#3978d4", "#8b61cc", "#36b7a0", "#cf5fa8"];
+  let categoryCursor = 0;
+  const categoryGradient = categories.length && totalOutflow > 0 ? `conic-gradient(${categories.slice(0, 7).map((item, index) => { const start = categoryCursor; categoryCursor += (item.amount / totalOutflow) * 100; return `${categoryColors[index]} ${start}% ${categoryCursor}%`; }).join(",")})` : "#edf4f0";
+  const linePoints = evolution.map((item, index) => {
+    const x = evolution.length === 1 ? 150 : 18 + (index * 264) / (evolution.length - 1);
+    const y = 112 - (Math.max(0, item.net) / Math.max(1, ...evolution.map((row) => Math.max(0, row.net)))) * 88;
+    return `${x},${y}`;
+  }).join(" ");
 
   function exportCsv() {
     const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth) && item.type !== "meta").map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, Number(item.amount || 0).toFixed(2).replace(".", ",")])];
@@ -1335,6 +1351,10 @@ function Relatorios({ transactions, selectedMonthKey, activeMode }) {
 
   return (
     <section className="reports-page">
+      <header className="report-print-header">
+        <div className="report-brand"><span className="report-brand-mark">≋</span><span><strong>FinanFlow</strong><small>Sua vida financeira em equilíbrio</small></span></div>
+        <div><strong>RELATÓRIO FINANCEIRO</strong><small>Planejar hoje. Conquistar amanhã.</small></div>
+      </header>
       <header className="reports-toolbar">
         <div><span className="eyebrow">Análise financeira</span><h2>Relatórios</h2><p>{activeMode === "couple" ? "Visão compartilhada, com cada lançamento identificado." : "Uma visão clara das suas finanças pessoais."}</p></div>
         <div className="reports-actions">
@@ -1344,25 +1364,43 @@ function Relatorios({ transactions, selectedMonthKey, activeMode }) {
         </div>
       </header>
 
-      <div className="report-period"><CalendarDays size={16} /><span>Período analisado</span><strong>{periodLabel}</strong></div>
+      <div className="report-meta-grid">
+        <div className="report-period"><CalendarDays size={16} /><span>Período analisado</span><strong>{periodLabel}</strong></div>
+        <div className="report-period"><CalendarDays size={16} /><span>Gerado em</span><strong>{generatedAt}</strong></div>
+        <div className="report-period"><UserRound size={16} /><span>Espaço</span><strong>{activeMode === "couple" ? "Casal" : "Individual"}</strong></div>
+      </div>
+      <div className="report-executive-title"><span><BarChart3 size={18}/></span><div><h2>Resumo executivo</h2><small>Principais números do período</small></div></div>
       <section className="report-summary-grid">
         <article className="report-kpi income"><span>Receitas recebidas</span><strong>{money(currentTotals.income)}</strong><small>{realized.filter((item) => item.type === "receita").length} lançamentos</small></article>
         <article className="report-kpi expense"><span>Despesas pagas</span><strong>{money(currentTotals.expenses)}</strong><small>{realized.filter((item) => item.type === "despesa").length} lançamentos</small></article>
         <article className="report-kpi debt"><span>Dívidas pagas</span><strong>{money(currentTotals.debt)}</strong><small>{realized.filter((item) => item.type === "divida").length} lançamentos</small></article>
         <article className={`report-kpi balance ${net < 0 ? "negative" : ""}`}><span>Resultado do período</span><strong>{money(net)}</strong><small>{change === null ? "Sem período anterior para comparar" : `${change >= 0 ? "+" : ""}${change.toFixed(1).replace(".", ",")}% sobre o período anterior`}</small></article>
+        <article className="report-kpi neutral"><span>Saldo inicial</span><strong>{money(initialBalance)}</strong><small>No início do período</small></article>
+        <article className="report-kpi income"><span>Saldo final</span><strong>{money(finalBalance)}</strong><small>Ao final do período</small></article>
+        <article className="report-kpi pending"><span>Compromissos pendentes</span><strong>{money(pendingTotal)}</strong><small>{pending.length} lançamentos pendentes</small></article>
+        <article className={`report-kpi safe ${safeBalance < 0 ? "negative" : ""}`}><span>Saldo livre seguro</span><strong>{money(safeBalance)}</strong><small>Após compromissos e reserva de {money(reserve)}</small></article>
       </section>
 
-      {activeMode === "couple" && <section className="panel report-people"><div className="report-section-head"><div><span className="eyebrow">Modo casal</span><h2>Movimentações por pessoa</h2></div><small>Somas combinadas no resumo acima</small></div>{people.length ? <div className="report-people-grid">{people.map((person) => <article key={person.name}><span className="contributor-avatar">{person.name.slice(0, 1).toUpperCase()}</span><strong>{person.name.split(/\s+/)[0]}</strong><dl><div><dt>Receitas</dt><dd>{money(person.income)}</dd></div><div><dt>Saídas</dt><dd>{money(person.outflow)}</dd></div></dl></article>)}</div> : <Empty title="Ainda não há movimentações do casal" text="Os lançamentos de cada pessoa aparecerão separados aqui." />}</section>}
+      {activeMode === "couple" && <section className="panel report-people"><div className="report-section-head"><div><span className="eyebrow">Modo casal</span><h2>Movimentações por pessoa</h2></div><small>Somas combinadas no resumo acima</small></div>{people.length ? <div className="report-people-grid">{people.map((person) => <article key={person.name}><span className="contributor-avatar">{person.name.slice(0, 1).toUpperCase()}</span><strong>{person.name.split(/\s+/)[0]}</strong><dl><div><dt>Receitas</dt><dd>{money(person.income)}</dd></div><div><dt>Saídas</dt><dd>{money(person.outflow)}</dd></div><div><dt>Resultado líquido</dt><dd className={person.income - person.outflow < 0 ? "negative" : ""}>{money(person.income - person.outflow)}</dd></div><div><dt>Participação nas saídas</dt><dd>{totalOutflow ? `${((person.outflow / totalOutflow) * 100).toFixed(1).replace(".", ",")}%` : "0%"}</dd></div></dl></article>)}</div> : <Empty title="Ainda não há movimentações do casal" text="Os lançamentos de cada pessoa aparecerão separados aqui." />}</section>}
 
-      <section className="reports-grid">
-        <article className="panel report-evolution"><div className="report-section-head"><div><span className="eyebrow">Evolução</span><h2>Entradas e saídas</h2></div><small>Valores realizados</small></div>{realized.length ? <div className="report-bars">{evolution.map((item) => <div className="report-month" key={item.key}><div className="report-bar-pair"><i className="income" style={{ height: `${Math.max(4, (item.income / maxEvolution) * 100)}%` }} title={`Receitas: ${money(item.income)}`} /><i className="outflow" style={{ height: `${Math.max(4, (item.outflow / maxEvolution) * 100)}%` }} title={`Saídas: ${money(item.outflow)}`} /></div><strong>{item.label.split(" ")[0]}</strong><small className={item.net < 0 ? "negative" : ""}>{money(item.net)}</small></div>)}</div> : <Empty title="Sem dados para este período" text="Os gráficos serão formados conforme você registrar lançamentos." />}</article>
+      <section className="reports-grid report-primary-charts">
+        <article className="panel report-line-card"><div className="report-section-head"><div><span className="eyebrow">Evolução financeira</span><h2>Resultado ao longo do período</h2></div><small>Receitas menos saídas</small></div>{realized.length ? <svg className="report-line-chart" viewBox="0 0 300 140" role="img" aria-label="Gráfico de evolução do resultado"><path d="M18 112H282 M18 68H282 M18 24H282" className="report-chart-grid"/><polyline points={linePoints} className="report-chart-area"/><polyline points={linePoints} className="report-chart-line"/>{evolution.map((item,index)=>{const [x,y]=linePoints.split(" ")[index].split(",");return <g key={item.key}><circle cx={x} cy={y} r="3.5"/><text x={x} y="132" textAnchor="middle">{item.label.split(" ")[0]}</text></g>})}</svg> : <Empty title="Sem dados para este período" text="A evolução aparecerá conforme houver lançamentos." />}</article>
 
-        <article className="panel report-categories"><div className="report-section-head"><div><span className="eyebrow">Distribuição</span><h2>Gastos por categoria</h2></div><small>{money(currentTotals.expenses + currentTotals.debt)}</small></div>{categories.length ? <div className="category-report-list">{categories.slice(0, 7).map((item) => <div key={item.name}><span><strong>{item.name}</strong><em>{money(item.amount)}</em></span><i><b style={{ width: `${(item.amount / maxCategory) * 100}%` }} /></i></div>)}</div> : <Empty title="Nenhum gasto realizado" text="As categorias aparecerão aqui quando houver despesas pagas." />}</article>
+        <article className="panel report-evolution"><div className="report-section-head"><div><span className="eyebrow">Comparativo mensal</span><h2>Receitas x despesas</h2></div><small>Valores realizados</small></div>{realized.length ? <div className="report-bars">{evolution.map((item) => <div className="report-month" key={item.key}><div className="report-bar-pair"><i className="income" style={{ height: `${Math.max(4, (item.income / maxEvolution) * 100)}%` }} title={`Receitas: ${money(item.income)}`} /><i className="outflow" style={{ height: `${Math.max(4, (item.outflow / maxEvolution) * 100)}%` }} title={`Saídas: ${money(item.outflow)}`} /></div><strong>{item.label.split(" ")[0]}</strong><small className={item.net < 0 ? "negative" : ""}>{money(item.net)}</small></div>)}</div> : <Empty title="Sem dados para este período" text="Os gráficos serão formados conforme você registrar lançamentos." />}</article>
+      </section>
+      <section className={`report-result-banner ${net < 0 ? "negative" : ""}`}><TrendingUp size={25}/><div><strong>{net < 0 ? "O período fechou negativo" : "O período fechou positivo"}</strong><p>O resultado entre receitas recebidas e saídas pagas foi de {money(net)}.</p></div><span>{money(net)}</span></section>
+
+      <section className="reports-grid report-secondary-grid">
+
+        <article className="panel report-categories"><div className="report-section-head"><div><span className="eyebrow">Distribuição</span><h2>Gastos por categoria</h2></div><small>{money(totalOutflow)}</small></div>{categories.length ? <div className="report-category-layout"><div className="report-donut" style={{background:categoryGradient}}><span><small>Total</small><strong>{money(totalOutflow)}</strong></span></div><div className="category-report-list">{categories.slice(0, 7).map((item,index) => <div key={item.name}><span><strong><i style={{background:categoryColors[index]}}/>{item.name}</strong><em>{((item.amount/totalOutflow)*100).toFixed(0)}% · {money(item.amount)}</em></span></div>)}</div></div> : <Empty title="Nenhum gasto realizado" text="As categorias aparecerão aqui quando houver despesas pagas." />}</article>
 
         <article className="panel report-largest"><div className="report-section-head"><div><span className="eyebrow">Destaques</span><h2>Maiores saídas</h2></div><small>Top 5 do período</small></div>{largestExpenses.length ? <div className="largest-expense-list">{largestExpenses.map((item, index) => <div key={item._id || `${item.date}-${index}`}><span className="expense-rank">{index + 1}</span><span><strong>{item.description}</strong><small>{activeMode === "couple" && `${item.responsibleName || "Casal"} · `}{item.category}</small></span><em>{money(item.amount)}</em></div>)}</div> : <Empty title="Nenhuma saída registrada" text="Despesas e dívidas pagas aparecerão nesta lista." />}</article>
 
-        <article className="panel report-comparison"><div className="report-section-head"><div><span className="eyebrow">Comparativo</span><h2>Período anterior</h2></div><small>{periodMonths} {periodMonths === 1 ? "mês" : "meses"}</small></div><div className="comparison-list"><DataRow label="Receitas anteriores" value={money(previousTotals.income)} /><DataRow label="Saídas anteriores" value={money(previousTotals.expenses + previousTotals.debt)} /><DataRow label="Resultado anterior" value={money(previousNet)} /><DataRow className="highlight-row" label="Pendências atuais" value={money(pending.reduce((sum, item) => sum + Number(item.amount || 0), 0))} /></div></article>
+        <article className="panel report-comparison"><div className="report-section-head"><div><span className="eyebrow">Comparativo</span><h2>Período anterior</h2></div><small>{periodMonths} {periodMonths === 1 ? "mês" : "meses"}</small></div><div className="comparison-list"><DataRow label="Receitas anteriores" value={money(previousTotals.income)} /><DataRow label="Saídas anteriores" value={money(previousTotals.expenses + previousTotals.debt)} /><DataRow label="Resultado anterior" value={money(previousNet)} /></div></article>
+        <article className="panel report-pending-card"><div className="report-section-head"><div><span className="eyebrow">Situação atual</span><h2>Pendências e compromissos</h2></div><small>{pending.length} itens</small></div><div className={pendingTotal > 0 ? "pending-summary alert" : "pending-summary"}><ReceiptText size={28}/><strong>{money(pendingTotal)}</strong><p>{pendingTotal > 0 ? "Valor total que ainda aguarda pagamento ou recebimento." : "Parabéns! Você não possui compromissos pendentes no período."}</p></div></article>
       </section>
+      <section className="panel report-insights"><div className="report-section-head"><div><span className="eyebrow">Leitura inteligente</span><h2>Insights do período</h2></div><small>Gerados somente com seus dados</small></div><div className="report-insight-grid"><article className={net < 0 ? "negative" : "positive"}><strong>{net < 0 ? "Período negativo" : "Período positivo"}</strong><p>O resultado financeiro foi de {money(net)} no período.</p></article><article className="orange"><strong>Peso das despesas</strong><p>{expenseRatio === null ? "Não houve receitas recebidas para calcular a proporção." : `As saídas representam ${expenseRatio.toFixed(1).replace(".", ",")}% das receitas.`}</p></article><article className="blue"><strong>Maior categoria</strong><p>{topCategory ? `${topCategory.name} concentrou ${((topCategory.amount / totalOutflow) * 100).toFixed(0)}% dos gastos (${money(topCategory.amount)}).` : "Não houve gastos pagos por categoria."}</p></article><article className={pendingTotal > 0 ? "orange" : "positive"}><strong>Pendências</strong><p>{pendingTotal > 0 ? `${money(pendingTotal)} ainda aguardam pagamento ou recebimento.` : "Não há compromissos pendentes no período."}</p></article></div></section>
+      <footer className="report-print-footer"><span>https://vitalflow.ia.br</span><strong>FinanFlow · organização financeira com tranquilidade</strong><span>{generatedAt}</span></footer>
     </section>
   );
 }
