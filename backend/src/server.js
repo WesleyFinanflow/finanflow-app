@@ -633,6 +633,7 @@ app.delete("/api/me", auth, async (req, res) => {
       if (space.type === "individual" || memberCount <= 1) {
         await Transaction.deleteMany({ spaceId: space._id });
         await Account.deleteMany({ spaceId: space._id });
+        await PurchasePlan.deleteMany({ spaceId: space._id });
         await Invite.deleteMany({ spaceId: space._id });
         await Member.deleteMany({ spaceId: space._id });
         await Space.deleteOne({ _id: space._id });
@@ -645,7 +646,11 @@ app.delete("/api/me", auth, async (req, res) => {
         if (nextOwner) await Space.updateOne({ _id: space._id }, { ownerId: nextOwner.userId });
       }
     }
-    await User.deleteOne({ _id: req.user._id });
+    await Promise.all([
+      MerchantCategoryMap.deleteMany({ userId: req.user._id }),
+      Subscription.deleteMany({ userId: req.user._id }),
+      User.deleteOne({ _id: req.user._id }),
+    ]);
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ message: "Erro ao apagar conta." });
@@ -778,6 +783,7 @@ app.delete("/api/spaces/:spaceId/members/me", auth, asyncHandler(async (req, res
       Invite.deleteMany({ spaceId: space._id }),
       Transaction.deleteMany({ spaceId: space._id }),
       Account.deleteMany({ spaceId: space._id }),
+      PurchasePlan.deleteMany({ spaceId: space._id }),
       Space.deleteOne({ _id: space._id }),
     ]);
   }
