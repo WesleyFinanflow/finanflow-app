@@ -4,11 +4,15 @@ export function createTransactionForm(type = "despesa", date = new Date().toISOS
     description: "",
     amount: "",
     date,
+    time: "",
     category: type === "receita" ? "Salário" : "",
+    paymentMethod: "Não informado",
+    notes: "",
     status: "pendente",
     fundingSource: "cash",
     accountId: "",
     recurrence: "none",
     installmentCount: "1",
+    origin: "manual",
   };
 }

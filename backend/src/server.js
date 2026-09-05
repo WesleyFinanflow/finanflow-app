@@ -138,9 +138,12 @@ const transactionSchema = new mongoose.Schema(
     description: { type: String, required: true, trim: true, maxlength: 160 },
     amount: { type: Number, required: true, min: 0.01, max: 1000000000000 },
     date: { type: String, required: true },
+    time: { type: String, default: "", maxlength: 5 },
     status: { type: String, enum: ["pendente", "pago"], default: "pendente" },
     fundingSource: { type: String, enum: ["cash", "meal"], default: "cash" },
     category: { type: String, default: "Outro", maxlength: 50 },
+    paymentMethod: { type: String, default: "Não informado", maxlength: 50 },
+    notes: { type: String, default: "", maxlength: 300 },
     seriesId: { type: String, index: true },
     recurrence: { type: String, enum: ["none", "monthly"], default: "none" },
     installmentNumber: { type: Number, min: 1, max: 120 },
@@ -154,6 +157,16 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 transactionSchema.index({ spaceId: 1, requestId: 1 }, { unique: true, sparse: true });
+
+const merchantCategoryMapSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  normalizedName: { type: String, required: true, maxlength: 160 },
+  displayName: { type: String, required: true, maxlength: 160 },
+  category: { type: String, required: true, maxlength: 50 },
+  usageCount: { type: Number, default: 1, min: 1 },
+}, { timestamps: true });
+merchantCategoryMapSchema.index({ userId: 1, normalizedName: 1 }, { unique: true });
+const MerchantCategoryMap = mongoose.model("MerchantCategoryMap", merchantCategoryMapSchema);
 
 const purchasePlanSchema = new mongoose.Schema(
   {
@@ -418,9 +431,12 @@ function transactionInput(body, accountId, user) {
     description: requiredText(body?.description, "Descrição", 160),
     amount: moneyValue(body?.amount, { label: "Valor", min: 0.01 }),
     date: isoDate(body?.date, "Data"),
+    time: optionalText(body?.time, "", 5),
     status: oneOf(body?.status ?? "pendente", ["pendente", "pago"], "Status"),
     fundingSource: oneOf(body?.fundingSource ?? "cash", ["cash", "meal"], "Origem do saldo"),
     category: optionalText(body?.category, "Outro", 50),
+    paymentMethod: optionalText(body?.paymentMethod, "Não informado", 50),
+    notes: optionalText(body?.notes, "", 300),
     createdBy: user._id,
     responsibleName: optionalText(body?.responsibleName, user.name, 80),
   };
@@ -846,6 +862,28 @@ app.delete("/api/spaces/:spaceId/purchase-plans/:planId", auth, asyncHandler(asy
   if (String(plan.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou este planejamento pode excluí-lo." });
   await plan.deleteOne();
   res.json({ ok: true });
+}));
+
+function normalizeMerchantName(value = "") {
+  return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+app.get("/api/merchant-category-map", auth, asyncHandler(async (req, res) => {
+  const items = await MerchantCategoryMap.find({ userId: req.user._id }).sort({ usageCount: -1 }).limit(300).lean();
+  res.json({ items: items.map((item) => ({ normalizedName: item.normalizedName, category: item.category })) });
+}));
+
+app.post("/api/merchant-category-map", auth, asyncHandler(async (req, res) => {
+  const displayName = requiredText(req.body?.displayName, "Estabelecimento", 160);
+  const normalizedName = normalizeMerchantName(displayName);
+  const category = requiredText(req.body?.category, "Categoria", 50);
+  if (normalizedName.length < 2) return res.status(400).json({ message: "Estabelecimento inválido." });
+  const item = await MerchantCategoryMap.findOneAndUpdate(
+    { userId: req.user._id, normalizedName },
+    { $set: { displayName, category }, $inc: { usageCount: 1 } },
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+  );
+  res.json({ item });
 }));
 
 app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {

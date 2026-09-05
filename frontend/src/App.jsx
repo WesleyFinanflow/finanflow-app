@@ -3,6 +3,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Calen
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
+import { findSimilarTransaction, parseReceiptText, prepareReceiptImage } from "./receipt-ocr.js";
 import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
@@ -384,6 +385,10 @@ export default function App() {
     if (Number(txForm.installmentCount || 1) > 1 && amount * Number(txForm.installmentCount) > MAX_MONEY) return setMessage("O valor total do parcelamento ultrapassa o limite permitido.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
     if (!txForm.category.trim()) return setMessage("Selecione uma categoria.");
+    if (!editingTransactionId && txForm.origin === "photo") {
+      const similar = findSimilarTransaction(transactions, txForm, activeMode);
+      if (similar && !window.confirm(`Encontramos um lançamento parecido: ${similar.description}, ${money(similar.amount)} em ${new Intl.DateTimeFormat("pt-BR").format(new Date(`${similar.date}T12:00:00`))}. Deseja continuar mesmo assim?`)) return;
+    }
     const requestId = txForm.requestId || crypto.randomUUID();
     if (!editingTransactionId && !txForm.requestId) setTxForm((current) => ({ ...current, requestId }));
     const payload = { ...txForm, requestId: editingTransactionId ? undefined : requestId, description: txForm.description.trim(), category: txForm.category.trim() || "Outro", amount, installmentCount: Number(txForm.installmentCount || 1), accountId: txForm.accountId || null, responsibleName: firstName };
@@ -391,6 +396,9 @@ export default function App() {
     setLoading(true);
     try {
       await api(path, { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
+      if (!editingTransactionId && txForm.origin === "photo" && txForm.ocrMerchant && txForm.category) {
+        api("/api/merchant-category-map", { method: "POST", body: JSON.stringify({ displayName: txForm.ocrMerchant, category: txForm.category }) }).catch(() => {});
+      }
       setEditingTransactionId("");
       setTxForm(createTransactionForm());
       setTransactionFormOpen(false);
@@ -416,6 +424,10 @@ export default function App() {
       accountId: transaction.accountId || "",
       recurrence: transaction.recurrence || "none",
       installmentCount: String(transaction.installmentCount || 1),
+      time: transaction.time || "",
+      paymentMethod: transaction.paymentMethod || "Não informado",
+      notes: transaction.notes || "",
+      origin: "manual",
     });
     setTransactionFormOpen(true);
     setActiveMenu("Lançamentos");
@@ -1107,8 +1119,41 @@ function Inicio({ summary, hasData, setActiveMenu, reserve, transactions, select
   );
 }
 
+function ReceiptPhotoFlow({ onReady, onBack }) {
+  const cameraRef = useRef(null), galleryRef = useRef(null);
+  const [stage, setStage] = useState("select"), [progress, setProgress] = useState(0), [error, setError] = useState("");
+  async function readFile(file) {
+    if (!file) return;
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) return setError("Use uma imagem JPG, PNG ou WEBP.");
+    if (file.size > 10 * 1024 * 1024) return setError("A imagem deve ter no máximo 10 MB.");
+    const preview = URL.createObjectURL(file);
+    setError(""); setStage("analyzing"); setProgress(5);
+    let worker;
+    try {
+      const image = await prepareReceiptImage(file);
+      const { createWorker, OEM } = await import("tesseract.js");
+      worker = await createWorker("por", OEM.LSTM_ONLY, { workerPath: "/ocr/worker.min.js", corePath: "/ocr", langPath: "/tessdata", logger: ({ status, progress: value }) => { if (status === "recognizing text") setProgress(35 + Math.round(value * 60)); } });
+      const result = await worker.recognize(image);
+      const learnedResponse = await api("/api/merchant-category-map").catch(() => ({ items: [] }));
+      const learnedCategories = Object.fromEntries((learnedResponse.items || []).map((item) => [item.normalizedName, item.category]));
+      const parsed = parseReceiptText(result.data.text, learnedCategories);
+      onReady(parsed, preview);
+    } catch {
+      onReady(parseReceiptText(""), preview, "Não conseguimos identificar todas as informações. Você pode preencher os dados manualmente.");
+    } finally { await worker?.terminate(); }
+  }
+  if (stage === "analyzing") return <section className="panel receipt-analyzing"><span className="receipt-scan-icon"><FileText size={42}/></span><h2>Analisando comprovante...</h2><p>Isso pode levar alguns segundos. A imagem é processada neste aparelho e não é enviada a serviços externos.</p><div className="receipt-progress"><i style={{width:`${progress}%`}}/></div><ul><li className={progress>10?"done":""}>Identificando texto</li><li className={progress>35?"done":""}>Extraindo informações</li><li className={progress>70?"done":""}>Reconhecendo estabelecimento</li><li className={progress>90?"done":""}>Sugerindo categoria</li></ul></section>;
+  return <section className="panel receipt-source"><div className="panel-head"><div><span className="eyebrow">Lançar por foto</span><h2>Escolha como enviar o comprovante</h2><p>A leitura acontece gratuitamente no seu aparelho.</p></div><button type="button" className="icon-close" onClick={onBack}><X size={18}/></button></div><div className="receipt-source-grid"><button type="button" onClick={()=>cameraRef.current?.click()}><Camera size={27}/><span><strong>Tirar foto</strong><small>Abra a câmera do celular</small></span></button><button type="button" onClick={()=>galleryRef.current?.click()}><FileText size={27}/><span><strong>Escolher da galeria</strong><small>JPG, PNG ou WEBP · até 10 MB</small></span></button></div>{error&&<div className="status-box">{error}</div>}<input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>readFile(e.target.files?.[0])}/><input ref={galleryRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readFile(e.target.files?.[0])}/></section>;
+}
+
 function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, setSelectedMonthKey, activeMode }) {
+  const [entryMode, setEntryMode] = useState("choice");
+  const [receiptPreview, setReceiptPreview] = useState("");
+  const [receiptNotice, setReceiptNotice] = useState("");
+  useEffect(()=>{ if(editingTransactionId) setEntryMode("manual"); },[editingTransactionId]);
   const resetForm = () => {
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptPreview(""); setReceiptNotice(""); setEntryMode("choice");
     setEditingTransactionId("");
     setTxForm(createTransactionForm());
     setFormOpen(false);
@@ -1124,9 +1169,11 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
     <section className={`transactions-layout ${formOpen ? "with-form" : ""}`}>
       <div className="transactions-toolbar">
         <div className="transactions-period"><span className="eyebrow">Movimentações</span><DashboardSelect compact label="Mês do extrato" icon={CalendarDays} value={selectedMonthKey} onChange={setSelectedMonthKey} options={monthOptions().map((item) => ({ value: item.key, label: item.label }))} /></div>
-        {!formOpen && <button type="button" onClick={() => { setTxForm(createTransactionForm()); setEditingTransactionId(""); setFormOpen(true); }}>Novo lançamento</button>}
+        {!formOpen && <button type="button" onClick={() => { setTxForm(createTransactionForm()); setEditingTransactionId(""); setEntryMode("choice"); setFormOpen(true); }}>Novo lançamento</button>}
       </div>
-      {formOpen && <form className="panel transaction-form-panel" onSubmit={addTransaction}>
+      {formOpen && !editingTransactionId && entryMode === "choice" && <section className="panel launch-choice"><div className="panel-head"><div><span className="eyebrow">Lançar movimentação</span><h2>Como você quer registrar?</h2></div><button type="button" className="icon-close" onClick={resetForm}><X size={18}/></button></div><div className="launch-choice-grid"><button type="button" className="featured" onClick={()=>setEntryMode("photo")}><Camera size={27}/><span><strong>Lançar por foto</strong><small>Tire uma foto ou envie um comprovante</small></span><b>›</b></button><button type="button" onClick={()=>setEntryMode("manual")}><FileText size={27}/><span><strong>Lançamento manual</strong><small>Preencha os dados manualmente</small></span><b>›</b></button><button type="button" onClick={()=>setEntryMode("photo")}><FileDown size={27}/><span><strong>Importar imagem</strong><small>Escolha um comprovante salvo</small></span><b>›</b></button></div></section>}
+      {formOpen && !editingTransactionId && entryMode === "photo" && <ReceiptPhotoFlow onBack={()=>setEntryMode("choice")} onReady={(data, preview, notice="")=>{setReceiptPreview(preview);setReceiptNotice(notice);setTxForm({...createTransactionForm("despesa",data.date||today),type:data.type||"despesa",description:data.description||"",amount:data.amount?String(data.amount):"",date:data.date||today,time:data.time||"",category:data.category||"",paymentMethod:data.paymentMethod||"Não informado",notes:[data.cpfCnpj&&`CPF/CNPJ: ${data.cpfCnpj}`,data.institution&&`Instituição: ${data.institution}`].filter(Boolean).join(" · "),status:"pago",origin:"photo",ocrMerchant:data.description||"",ocrConfidence:data.confidence});setEntryMode("manual");}}/>}
+      {formOpen && entryMode === "manual" && <form className="panel transaction-form-panel" onSubmit={addTransaction}>
         <div className="panel-head">
           <div>
             <span className="eyebrow">{editingTransactionId ? "Editar lançamento" : "Novo lançamento"}</span>
@@ -1134,13 +1181,17 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           </div>
           <button type="button" className="icon-close" aria-label="Fechar formulário" onClick={resetForm}><X size={18} /></button>
         </div>
+        {receiptPreview&&<div className="receipt-detected"><img src={receiptPreview} alt="Miniatura do comprovante"/><span><strong>Dados identificados</strong><small>Confira e ajuste as informações antes de salvar.</small>{receiptNotice&&<em>{receiptNotice}</em>}</span></div>}
         <div className="field-grid">
           <label>Tipo<select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, category: e.target.value === "receita" ? "Salário" : "" })}><option value="receita">Receita</option><option value="despesa">Despesa</option><option value="divida">Dívida</option></select></label>
-          <label>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} /></label>
-          <label>{isInstallment ? "Valor de cada parcela" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" /></label>
-          <label>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required /></label>
-          <label>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select></label>
+          <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.description==="low"?"ocr-low":""}>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} />{txForm.origin==="photo"&&txForm.ocrConfidence?.description==="low"&&<small>Confira este dado</small>}</label>
+          <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.amount==="low"?"ocr-low":""}>{isInstallment ? "Valor de cada parcela" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" />{txForm.origin==="photo"&&txForm.ocrConfidence?.amount==="low"&&<small>Confira este dado</small>}</label>
+          <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.date==="low"?"ocr-low":""}>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required />{txForm.origin==="photo"&&txForm.ocrConfidence?.date==="low"&&<small>Confira este dado</small>}</label>
+          <label>Hora<input type="time" value={txForm.time||""} onChange={(e) => setTxForm({ ...txForm, time: e.target.value })} /></label>
+          <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.category==="low"?"ocr-low":""}>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select>{txForm.origin==="photo"&&txForm.ocrConfidence?.category==="low"&&<small>Confira este dado</small>}</label>
           <label>Status<select value={txForm.status} onChange={(e) => setTxForm({ ...txForm, status: e.target.value })}><option value="pendente">Pendente</option><option value="pago">{txForm.type === "receita" ? "Recebido" : txForm.type === "meta" ? "Separado" : "Pago"}</option></select></label>
+          <label>Forma de pagamento<select value={txForm.paymentMethod||"Não informado"} onChange={(e)=>setTxForm({...txForm,paymentMethod:e.target.value})}><option>Não informado</option><option>Pix</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Dinheiro</option><option>Boleto</option><option>Transferência bancária</option></select></label>
+          <label className="field-wide">Observação (opcional)<input value={txForm.notes||""} onChange={(e)=>setTxForm({...txForm,notes:e.target.value})} maxLength={300} placeholder="Ex: compra do mês, medicamentos..." /></label>
           <label>{txForm.type === "receita" ? "Destino do valor" : "Pagar com"}<select value={txForm.fundingSource || "cash"} onChange={(e) => setTxForm({ ...txForm, fundingSource: e.target.value })}><option value="cash">Dinheiro da conta principal</option><option value="meal">Vale-refeição</option></select></label>
           <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez ou parcelado</option><option value="monthly">Conta fixa todo mês</option></select></label>
           {txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "Somente uma vez" : `${count} parcelas`}</option>)}</select></label>}
@@ -1148,7 +1199,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{txForm.fundingSource === "meal" ? "Saldo do vale-refeição" : accounts[0]?.name || "Conta principal"}</strong><small>{txForm.fundingSource === "meal" ? "Quando concluído, este lançamento movimentará somente o vale-refeição." : "Este lançamento movimentará automaticamente a conta principal quando for concluído."}</small></span></div>
         </div>
         <div className="action-row">
-          <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : "Salvar lançamento"}</button>
+          <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : txForm.origin === "photo" ? "Confirmar lançamento" : "Salvar lançamento"}</button>
           {editingTransactionId && <button type="button" className="ghost-button" onClick={resetForm}>Cancelar edição</button>}
         </div>
       </form>}

@@ -8,12 +8,16 @@ test("atalho de receita abre o tipo e a categoria corretos", () => {
     description: "",
     amount: "",
     date: "2026-06-20",
+    time: "",
     category: "Salário",
+    paymentMethod: "Não informado",
+    notes: "",
     status: "pendente",
     fundingSource: "cash",
     accountId: "",
     recurrence: "none",
     installmentCount: "1",
+    origin: "manual",
   });
 });
 
