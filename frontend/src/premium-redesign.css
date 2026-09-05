@@ -443,4 +443,24 @@ html body #root .profile-space-menu button{width:100%;color:#174638!important;bo
 @media print{.report-primary-charts{margin-top:4mm!important;padding-top:0!important;break-before:auto!important;page-break-before:auto!important}.report-primary-charts>.panel{min-height:54mm!important;max-height:56mm!important}.report-primary-charts .report-line-chart{height:38mm!important}.report-primary-charts .report-bars{height:37mm!important}.report-primary-charts .report-bar-pair{height:25mm!important}.report-secondary-grid{padding-top:8mm!important;break-before:page!important;page-break-before:always!important}.report-secondary-grid>.panel{min-height:72mm!important;max-height:74mm!important}.report-secondary-grid .report-donut{width:32mm}.report-secondary-grid .largest-expense-list>div{min-height:9.5mm}.report-secondary-grid .comparison-list .data-row{min-height:12mm!important}}
 .report-result-banner{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:13px;padding:15px 18px;border:1px solid #cce8da;border-radius:17px;color:#087451;background:linear-gradient(120deg,#e8f8f0,#f7fcf9)}.report-result-banner>svg{padding:8px;border-radius:12px;background:#d6f2e4}.report-result-banner strong{font-size:12px}.report-result-banner p{margin:3px 0 0;color:#55766a;font-size:9px}.report-result-banner>span{font-size:20px;font-weight:900}.report-result-banner.negative{border-color:#f0c8ca;color:#c8424b;background:linear-gradient(120deg,#fff0f1,#fffafa)}.pending-summary{min-height:180px;display:grid;place-content:center;justify-items:center;text-align:center;border-radius:15px;color:#087653;background:#edf9f3}.pending-summary.alert{color:#b46e00;background:#fff5e4}.pending-summary strong{margin-top:10px;font-size:24px}.pending-summary p{max-width:260px;margin:7px 0 0;color:#657b72;font-size:9px;line-height:1.5}
 @media print{.report-result-banner{box-sizing:border-box;min-height:24mm;margin-top:4mm;padding:3mm 5mm;break-inside:avoid}.report-result-banner>span{font-size:16px}.report-secondary-grid>.panel{min-height:68mm!important;max-height:70mm!important}.pending-summary{min-height:49mm}.report-insights{margin-top:3mm!important}}
+@media print{
+  /* O detalhamento por pessoa adiciona conteúdo ao modo casal; compacte só esse PDF para mantê-lo em duas páginas. */
+  .reports-page:has(.report-people){font-size:9px!important}
+  .reports-page:has(.report-people) .report-print-header{margin-bottom:3mm;padding-block:2.5mm 3mm}
+  .reports-page:has(.report-people) .report-meta-grid{margin-bottom:2.5mm}
+  .reports-page:has(.report-people) .report-period{min-height:12mm;padding:2mm 2.5mm!important}
+  .reports-page:has(.report-people) .report-executive-title{margin-bottom:1mm}
+  .reports-page:has(.report-people) .report-summary-grid{gap:2mm!important}
+  .reports-page:has(.report-people) .report-kpi{min-height:23mm!important;padding:3mm!important}
+  .reports-page:has(.report-people) .report-kpi strong{font-size:14px!important}
+  .reports-page:has(.report-people) .report-people{margin-top:2.5mm;padding:3mm!important}
+  .reports-page:has(.report-people) .report-people-grid article{padding:2.5mm!important}
+  .reports-page:has(.report-people) .report-primary-charts{margin-top:2.5mm!important}
+  .reports-page:has(.report-people) .report-primary-charts>.panel{min-height:48mm!important;max-height:50mm!important;padding:3mm!important}
+  .reports-page:has(.report-people) .report-primary-charts .report-line-chart{height:33mm!important}
+  .reports-page:has(.report-people) .report-primary-charts .report-bars{height:32mm!important}
+  .reports-page:has(.report-people) .report-primary-charts .report-bar-pair{height:21mm!important}
+  .reports-page:has(.report-people) .report-result-banner{min-height:20mm;margin-top:2.5mm;padding:2.5mm 4mm}
+  .reports-page:has(.report-people) .report-result-banner p{margin-top:1px;font-size:8px}
+}
 @media screen{.report-print-header,.report-executive-title,.report-meta-grid>.report-period:nth-child(n+2),.report-summary-grid>.report-kpi:nth-child(n+5),.report-line-card,.report-result-banner,.report-insights,.report-pending-card,.report-print-footer{display:none!important}.report-meta-grid{display:block}.report-primary-charts{display:block}.report-primary-charts>.report-evolution{min-height:310px}.report-secondary-grid{margin-top:14px}}
