@@ -70,6 +70,34 @@ export function findSimilarTransaction(transactions, candidate, spaceMode = "") 
   }) || null;
 }
 
+export async function pdfFirstPageToImage(file, maxSide = 2200) {
+  const [{ getDocument, GlobalWorkerOptions }, workerModule] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf.mjs"),
+    import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"),
+  ]);
+  GlobalWorkerOptions.workerSrc = workerModule.default;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const documentTask = getDocument({ data: bytes });
+  const pdf = await documentTask.promise;
+  try {
+    if (!pdf.numPages) throw new Error("O PDF não possui páginas para leitura.");
+    const page = await pdf.getPage(1);
+    const initialViewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(3, maxSide / Math.max(initialViewport.width, initialViewport.height));
+    const viewport = page.getViewport({ scale: Math.max(1, scale) });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(viewport.width));
+    canvas.height = Math.max(1, Math.round(viewport.height));
+    const context = canvas.getContext("2d", { alpha: false, willReadFrequently: true });
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    return await new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Não foi possível converter o PDF.")), "image/jpeg", .92));
+  } finally {
+    await pdf.destroy();
+  }
+}
+
 export async function prepareReceiptImage(file, maxSide = 1800) {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));

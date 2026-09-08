@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Calen
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
-import { findSimilarTransaction, parseReceiptText, prepareReceiptImage } from "./receipt-ocr.js";
+import { findSimilarTransaction, parseReceiptText, pdfFirstPageToImage, prepareReceiptImage } from "./receipt-ocr.js";
 import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
@@ -1124,13 +1124,15 @@ function ReceiptPhotoFlow({ onReady, onBack }) {
   const [stage, setStage] = useState("select"), [progress, setProgress] = useState(0), [error, setError] = useState("");
   async function readFile(file) {
     if (!file) return;
-    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) return setError("Use uma imagem JPG, PNG ou WEBP.");
-    if (file.size > 10 * 1024 * 1024) return setError("A imagem deve ter no máximo 10 MB.");
-    const preview = URL.createObjectURL(file);
+    const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+    if (!isPdf && !['image/jpeg','image/png','image/webp'].includes(file.type)) return setError("Use JPG, PNG, WEBP ou PDF.");
+    if (file.size > 10 * 1024 * 1024) return setError("O arquivo deve ter no máximo 10 MB.");
     setError(""); setStage("analyzing"); setProgress(5);
-    let worker;
+    let worker, preview = "";
     try {
-      const image = await prepareReceiptImage(file);
+      const source = isPdf ? await pdfFirstPageToImage(file) : file;
+      preview = URL.createObjectURL(source);
+      const image = await prepareReceiptImage(source);
       const { createWorker, OEM } = await import("tesseract.js");
       worker = await createWorker("por", OEM.LSTM_ONLY, { workerPath: "/ocr/worker.min.js", corePath: "/ocr", langPath: "/tessdata", logger: ({ status, progress: value }) => { if (status === "recognizing text") setProgress(35 + Math.round(value * 60)); } });
       const result = await worker.recognize(image);
@@ -1138,12 +1140,13 @@ function ReceiptPhotoFlow({ onReady, onBack }) {
       const learnedCategories = Object.fromEntries((learnedResponse.items || []).map((item) => [item.normalizedName, item.category]));
       const parsed = parseReceiptText(result.data.text, learnedCategories);
       onReady(parsed, preview);
-    } catch {
-      onReady(parseReceiptText(""), preview, "Não conseguimos identificar todas as informações. Você pode preencher os dados manualmente.");
+    } catch (reason) {
+      if (preview) onReady(parseReceiptText(""), preview, "Não conseguimos identificar todas as informações. Você pode preencher os dados manualmente.");
+      else { setStage("select"); setError(reason?.message || "Não foi possível ler este arquivo."); }
     } finally { await worker?.terminate(); }
   }
   if (stage === "analyzing") return <section className="panel receipt-analyzing"><span className="receipt-scan-icon"><FileText size={42}/></span><h2>Analisando comprovante...</h2><p>Isso pode levar alguns segundos. A imagem é processada neste aparelho e não é enviada a serviços externos.</p><div className="receipt-progress"><i style={{width:`${progress}%`}}/></div><ul><li className={progress>10?"done":""}>Identificando texto</li><li className={progress>35?"done":""}>Extraindo informações</li><li className={progress>70?"done":""}>Reconhecendo estabelecimento</li><li className={progress>90?"done":""}>Sugerindo categoria</li></ul></section>;
-  return <section className="panel receipt-source"><div className="panel-head"><div><span className="eyebrow">Lançar por foto</span><h2>Escolha como enviar o comprovante</h2><p>A leitura acontece gratuitamente no seu aparelho.</p></div><button type="button" className="icon-close" onClick={onBack}><X size={18}/></button></div><div className="receipt-source-grid"><button type="button" onClick={()=>cameraRef.current?.click()}><Camera size={27}/><span><strong>Tirar foto</strong><small>Abra a câmera do celular</small></span></button><button type="button" onClick={()=>galleryRef.current?.click()}><FileText size={27}/><span><strong>Escolher da galeria</strong><small>JPG, PNG ou WEBP · até 10 MB</small></span></button></div>{error&&<div className="status-box">{error}</div>}<input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>readFile(e.target.files?.[0])}/><input ref={galleryRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readFile(e.target.files?.[0])}/></section>;
+  return <section className="panel receipt-source"><div className="panel-head"><div><span className="eyebrow">Lançar por foto</span><h2>Escolha como enviar o comprovante</h2><p>A leitura acontece gratuitamente no seu aparelho. Em PDF, usamos a primeira página.</p></div><button type="button" className="icon-close" onClick={onBack}><X size={18}/></button></div><div className="receipt-source-grid"><button type="button" onClick={()=>cameraRef.current?.click()}><Camera size={27}/><span><strong>Tirar foto</strong><small>Abra a câmera do celular</small></span></button><button type="button" onClick={()=>galleryRef.current?.click()}><FileText size={27}/><span><strong>Escolher arquivo</strong><small>JPG, PNG, WEBP ou PDF · até 10 MB</small></span></button></div>{error&&<div className="status-box">{error}</div>}<input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>readFile(e.target.files?.[0])}/><input ref={galleryRef} hidden type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" onChange={e=>readFile(e.target.files?.[0])}/></section>;
 }
 
 function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, setSelectedMonthKey, activeMode }) {

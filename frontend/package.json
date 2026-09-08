@@ -12,6 +12,7 @@
     "@tesseract.js-data/por": "^1.0.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.33.0",
+    "pdfjs-dist": "^5.4.149",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tesseract.js": "^7.0.0",
