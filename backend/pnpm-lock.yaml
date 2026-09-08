@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  qs: ^6.16.0
+
 importers:
 
   .:
@@ -19,7 +22,7 @@ importers:
         version: 16.6.1
       express:
         specifier: ^4.22.2
-        version: 4.22.2(supports-color@5.5.0)
+        version: 4.22.2
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
@@ -28,7 +31,7 @@ importers:
         version: 9.0.3
       mongoose:
         specifier: ^8.24.3
-        version: 8.24.3(supports-color@5.5.0)
+        version: 8.24.3
     devDependencies:
       nodemon:
         specifier: ^3.1.9
@@ -442,8 +445,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  qs@6.15.3:
-    resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
+  qs@6.16.0:
+    resolution: {integrity: sha512-h6fhOIaRrID2CbEY2fqs+7t+UXZo+MLAnU5gRIq85uFtdiUPCdsApMlHhXogKVM4HM2DVbIjGNTTYH2OcmP1vA==}
     engines: {node: '>=0.6'}
 
   range-parser@1.2.1:
@@ -592,17 +595,17 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
-  body-parser@1.20.6(supports-color@5.5.0):
+  body-parser@1.20.6:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
-      debug: 2.6.9(supports-color@5.5.0)
+      debug: 2.6.9
       depd: 2.0.0
       destroy: 1.2.0
       http-errors: 2.0.1
       iconv-lite: 0.4.24
       on-finished: 2.4.1
-      qs: 6.15.3
+      qs: 6.16.0
       raw-body: 2.5.3
       type-is: 1.6.18
       unpipe: 1.0.0
@@ -660,11 +663,9 @@ snapshots:
       object-assign: 4.1.1
       vary: 1.1.2
 
-  debug@2.6.9(supports-color@5.5.0):
+  debug@2.6.9:
     dependencies:
       ms: 2.0.0
-    optionalDependencies:
-      supports-color: 5.5.0
 
   debug@4.4.3(supports-color@5.5.0):
     dependencies:
@@ -704,21 +705,21 @@ snapshots:
 
   etag@1.8.1: {}
 
-  express@4.22.2(supports-color@5.5.0):
+  express@4.22.2:
     dependencies:
       accepts: 1.3.8
       array-flatten: 1.1.1
-      body-parser: 1.20.6(supports-color@5.5.0)
+      body-parser: 1.20.6
       content-disposition: 0.5.4
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.0.7
-      debug: 2.6.9(supports-color@5.5.0)
+      debug: 2.6.9
       depd: 2.0.0
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 1.3.2(supports-color@5.5.0)
+      finalhandler: 1.3.2
       fresh: 0.5.2
       http-errors: 2.0.1
       merge-descriptors: 1.0.3
@@ -727,11 +728,11 @@ snapshots:
       parseurl: 1.3.3
       path-to-regexp: 0.1.13
       proxy-addr: 2.0.7
-      qs: 6.15.3
+      qs: 6.16.0
       range-parser: 1.2.1
       safe-buffer: 5.2.1
-      send: 0.19.2(supports-color@5.5.0)
-      serve-static: 1.16.3(supports-color@5.5.0)
+      send: 0.19.2
+      serve-static: 1.16.3
       setprototypeof: 1.2.0
       statuses: 2.0.2
       type-is: 1.6.18
@@ -744,9 +745,9 @@ snapshots:
     dependencies:
       to-regex-range: 5.0.1
 
-  finalhandler@1.3.2(supports-color@5.5.0):
+  finalhandler@1.3.2:
     dependencies:
-      debug: 2.6.9(supports-color@5.5.0)
+      debug: 2.6.9
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -902,13 +903,13 @@ snapshots:
       bson: 6.10.4
       mongodb-connection-string-url: 3.0.2
 
-  mongoose@8.24.3(supports-color@5.5.0):
+  mongoose@8.24.3:
     dependencies:
       bson: 6.10.4
       kareem: 2.6.3
       mongodb: 6.20.0
       mpath: 0.9.0
-      mquery: 5.0.0(supports-color@5.5.0)
+      mquery: 5.0.0
       ms: 2.1.3
       sift: 17.1.3
     transitivePeerDependencies:
@@ -923,7 +924,7 @@ snapshots:
 
   mpath@0.9.0: {}
 
-  mquery@5.0.0(supports-color@5.5.0):
+  mquery@5.0.0:
     dependencies:
       debug: 4.4.3(supports-color@5.5.0)
     transitivePeerDependencies:
@@ -973,7 +974,7 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  qs@6.15.3:
+  qs@6.16.0:
     dependencies:
       es-define-property: 1.0.1
       side-channel: 1.1.1
@@ -999,9 +1000,9 @@ snapshots:
 
   semver@7.8.5: {}
 
-  send@0.19.2(supports-color@5.5.0):
+  send@0.19.2:
     dependencies:
-      debug: 2.6.9(supports-color@5.5.0)
+      debug: 2.6.9
       depd: 2.0.0
       destroy: 1.2.0
       encodeurl: 2.0.0
@@ -1017,12 +1018,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  serve-static@1.16.3(supports-color@5.5.0):
+  serve-static@1.16.3:
     dependencies:
       encodeurl: 2.0.0
       escape-html: 1.0.3
       parseurl: 1.3.3
-      send: 0.19.2(supports-color@5.5.0)
+      send: 0.19.2
     transitivePeerDependencies:
       - supports-color
 

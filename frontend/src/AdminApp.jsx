@@ -116,20 +116,24 @@ const toCsv = (rows) => {
   ].join("\n");
 };
 const downloadExcel = async (rows) => {
-  const { utils: sheetUtils, writeFileXLSX } = await import("xlsx");
-  const sheet = sheetUtils.json_to_sheet(rows),
-    book = sheetUtils.book_new();
-  sheet["!cols"] = [
-    { wch: 28 },
-    { wch: 34 },
-    { wch: 16 },
-    { wch: 20 },
-    { wch: 14 },
-    { wch: 22 },
-    { wch: 22 },
-  ];
-  sheetUtils.book_append_sheet(book, sheet, "Clientes");
-  writeFileXLSX(book, "finanflow-relatorio-administrativo.xlsx");
+  const ExcelJS = await import("exceljs");
+  const Workbook = ExcelJS.Workbook || ExcelJS.default?.Workbook;
+  const book = new Workbook();
+  const sheet = book.addWorksheet("Clientes", { views: [{ state: "frozen", ySplit: 1 }] });
+  const keys = rows?.length ? Object.keys(rows[0]) : ["Mensagem"];
+  sheet.columns = keys.map((key, index) => ({ header: key, key, width: [28, 34, 16, 20, 14, 22, 22][index] || 20 }));
+  if (rows?.length) rows.forEach((row) => sheet.addRow(row));
+  else sheet.addRow({ Mensagem: "Nenhum dado no período selecionado." });
+  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF087552" } };
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: keys.length } };
+  const buffer = await book.xlsx.writeBuffer();
+  const href = URL.createObjectURL(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = "finanflow-relatorio-administrativo.xlsx";
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(href), 1000);
 };
 const downloadReportPdf = async (data, period) => {
   const { jsPDF } = await import("jspdf");

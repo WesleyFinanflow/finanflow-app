@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import helmet from "helmet";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
-import { AppConfig, Subscription, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
+import { AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
 import { canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
 
 dotenv.config();
@@ -647,8 +647,15 @@ app.delete("/api/me", auth, async (req, res) => {
       }
     }
     await Promise.all([
+      AuditLog.deleteMany({ userId: req.user._id }),
+      BackupSnapshot.deleteMany({ createdBy: req.user._id }),
+      Invite.deleteMany({ createdBy: req.user._id }),
       MerchantCategoryMap.deleteMany({ userId: req.user._id }),
       Subscription.deleteMany({ userId: req.user._id }),
+      CouponUsage.deleteMany({ userId: req.user._id }),
+      SupportTicket.deleteMany({ $or: [{ userId: req.user._id }, { assignedTo: req.user._id }] }),
+      AdminNote.deleteMany({ $or: [{ userId: req.user._id }, { authorId: req.user._id }] }),
+      AdminAudit.deleteMany({ $or: [{ adminId: req.user._id }, { targetUserId: req.user._id }] }),
       User.deleteOne({ _id: req.user._id }),
     ]);
     res.json({ ok: true });
