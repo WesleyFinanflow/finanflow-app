@@ -1315,13 +1315,13 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, purchasePlans, sa
             </div>
           </div>
           <div className="summary-list">
-            <DataRow label="Receitas pendentes" value={moneyOrWaiting(summary.income, hasData)} />
-            <DataRow label="Receitas já recebidas" value={moneyOrWaiting(summary.received, hasData)} />
-            <DataRow label="Despesas pendentes" value={moneyOrWaiting(summary.expenses, hasData)} />
-            <DataRow label="Despesas já pagas" value={moneyOrWaiting(summary.paidExpenses, hasData)} />
-            <DataRow label="Dívidas pendentes" value={moneyOrWaiting(summary.debt, hasData)} />
-            <DataRow label="Objetivos pendentes" value={moneyOrWaiting(summary.goals, hasData)} />
-            <DataRow className="highlight-row" label="Saldo livre seguro" value={moneyOrWaiting(summary.free, hasData)} />
+            <DataRow label="Receitas pendentes" description="Ainda não recebidas" value={moneyOrWaiting(summary.income, hasData)} />
+            <DataRow label="Receitas já recebidas" description="Entradas confirmadas" value={moneyOrWaiting(summary.received, hasData)} />
+            <DataRow label="Despesas pendentes" description="Ainda não pagas" value={moneyOrWaiting(summary.expenses, hasData)} />
+            <DataRow label="Despesas já pagas" description="Saídas confirmadas" value={moneyOrWaiting(summary.paidExpenses, hasData)} />
+            <DataRow label="Dívidas pendentes" description="Ainda não quitadas" value={moneyOrWaiting(summary.debt, hasData)} />
+            <DataRow label="Objetivos pendentes" description="Valores ainda planejados" value={moneyOrWaiting(summary.goals, hasData)} />
+            <DataRow className="highlight-row" label="Saldo livre seguro" description="Após compromissos e reserva" value={moneyOrWaiting(summary.free, hasData)} />
           </div>
         </section>
       </section>
@@ -1451,7 +1451,7 @@ function Relatorios({ transactions, selectedMonthKey, activeMode, summary, reser
 
         <article className="panel report-largest"><div className="report-section-head"><div><span className="eyebrow">Destaques</span><h2>Maiores saídas</h2></div><small>Top 5 do período</small></div>{largestExpenses.length ? <div className="largest-expense-list">{largestExpenses.map((item, index) => <div key={item._id || `${item.date}-${index}`}><span className="expense-rank">{index + 1}</span><span><strong>{item.description}</strong><small>{activeMode === "couple" && `${item.responsibleName || "Casal"} · `}{item.category}</small></span><em>{money(item.amount)}</em></div>)}</div> : <Empty title="Nenhuma saída registrada" text="Despesas e dívidas pagas aparecerão nesta lista." />}</article>
 
-        <article className="panel report-comparison"><div className="report-section-head"><div><span className="eyebrow">Comparativo</span><h2>Período anterior</h2></div><small>{periodMonths} {periodMonths === 1 ? "mês" : "meses"}</small></div><div className="comparison-list"><DataRow label="Receitas anteriores" value={money(previousTotals.income)} /><DataRow label="Saídas anteriores" value={money(previousTotals.expenses + previousTotals.debt)} /><DataRow label="Resultado anterior" value={money(previousNet)} /></div></article>
+        <article className="panel report-comparison"><div className="report-section-head"><div><span className="eyebrow">Comparativo</span><h2>Período anterior</h2></div><small>{periodMonths} {periodMonths === 1 ? "mês" : "meses"}</small></div><div className="comparison-list"><DataRow label="Receitas anteriores" description="Entradas do período anterior" value={money(previousTotals.income)} /><DataRow label="Saídas anteriores" description="Despesas e dívidas anteriores" value={money(previousTotals.expenses + previousTotals.debt)} /><DataRow label="Resultado anterior" description="Balanço do período anterior" value={money(previousNet)} /></div></article>
         <article className="panel report-pending-card"><div className="report-section-head"><div><span className="eyebrow">Situação atual</span><h2>Pendências e compromissos</h2></div><small>{pending.length} itens</small></div><div className={pendingTotal > 0 ? "pending-summary alert" : "pending-summary"}><ReceiptText size={28}/><strong>{money(pendingTotal)}</strong><p>{pendingTotal > 0 ? "Valor total que ainda aguarda pagamento ou recebimento." : "Parabéns! Você não possui compromissos pendentes no período."}</p></div></article>
       </section>
       <section className="panel report-insights"><div className="report-section-head"><div><span className="eyebrow">Leitura inteligente</span><h2>Insights do período</h2></div><small>Gerados somente com seus dados</small></div><div className="report-insight-grid"><article className={net < 0 ? "negative" : "positive"}><strong>{net < 0 ? "Período negativo" : "Período positivo"}</strong><p>O resultado financeiro foi de {money(net)} no período.</p></article><article className="orange"><strong>Peso das despesas</strong><p>{expenseRatio === null ? "Não houve receitas recebidas para calcular a proporção." : `As saídas representam ${expenseRatio.toFixed(1).replace(".", ",")}% das receitas.`}</p></article><article className="blue"><strong>Maior categoria</strong><p>{topCategory ? `${topCategory.name} concentrou ${((topCategory.amount / totalOutflow) * 100).toFixed(0)}% dos gastos (${money(topCategory.amount)}).` : "Não houve gastos pagos por categoria."}</p></article><article className={pendingTotal > 0 ? "orange" : "positive"}><strong>Pendências</strong><p>{pendingTotal > 0 ? `${money(pendingTotal)} ainda aguardam pagamento ou recebimento.` : "Não há compromissos pendentes no período."}</p></article></div></section>
@@ -2021,10 +2021,10 @@ function Avatar({ name, photo = "", size = "small" }) {
   );
 }
 
-function DataRow({ label, value, className = "" }) {
+function DataRow({ label, description, value, className = "" }) {
   return (
     <div className={`data-row ${className}`}>
-      <span className="data-row-copy"><span className="data-row-icon"><ReceiptText size={17} aria-hidden="true" /></span><span>{label}<small>Compromisso pendente</small></span></span>
+      <span className="data-row-copy"><span className="data-row-icon"><ReceiptText size={17} aria-hidden="true" /></span><span>{label}{description && <small>{description}</small>}</span></span>
       <strong>{value}</strong>
     </div>
   );
