@@ -1,0 +1,280 @@
+/* FinanFlow Dark Premium — visual-only override.
+   Loaded last so it can theme the current UI without touching finance/business logic. */
+:root{
+  --df-bg:#08110f;
+  --df-bg-2:#0b1417;
+  --df-sidebar:#031f19;
+  --df-sidebar-2:#052a21;
+  --df-surface:#111918;
+  --df-surface-2:#16201e;
+  --df-surface-3:#1a2522;
+  --df-border:rgba(255,255,255,.085);
+  --df-border-strong:rgba(34,211,238,.24);
+  --df-text:#f5f8f7;
+  --df-muted:#9aa9a5;
+  --df-muted-2:#71827d;
+  --df-green:#18d89b;
+  --df-green-2:#0ea874;
+  --df-cyan:#22d3ee;
+  --df-purple:#a855f7;
+  --df-blue:#38bdf8;
+  --df-warning:#fbbf24;
+  --df-danger:#fb7185;
+  --df-shadow:0 18px 44px rgba(0,0,0,.30);
+  --p-ink:var(--df-text);
+  --p-green:var(--df-green);
+  --p-deep:var(--df-sidebar);
+  --p-soft:var(--df-surface-2);
+  --p-line:var(--df-border);
+  --p-muted:var(--df-muted);
+  --bg:var(--df-bg);
+  --panel:var(--df-surface);
+  --panel-soft:var(--df-surface-2);
+  --line:var(--df-border);
+  --line-strong:var(--df-border-strong);
+  --text:var(--df-text);
+  --muted:var(--df-muted);
+  --cyan:var(--df-cyan);
+  --green:var(--df-green);
+  --yellow:var(--df-warning);
+  --red:var(--df-danger);
+  --blue:var(--df-blue);
+  color-scheme:dark;
+}
+
+html,body,#root{background:var(--df-bg)!important;color:var(--df-text)!important}
+html body{
+  background:
+    radial-gradient(circle at 82% -5%,rgba(34,211,238,.10),transparent 28%),
+    radial-gradient(circle at 12% 10%,rgba(24,216,155,.07),transparent 28%),
+    linear-gradient(145deg,var(--df-bg) 0%,var(--df-bg-2) 55%,#070d0c 100%)!important;
+}
+body{color:var(--df-text)!important}
+
+/* Layout */
+.finanflow-app{background:transparent!important;color:var(--df-text)!important}
+.main-content,.admin-workspace{color:var(--df-text)!important}
+
+/* Sidebar */
+.sidebar,.admin-sidebar{
+  color:#fff!important;
+  border-right:1px solid rgba(34,211,238,.10)!important;
+  background:
+    radial-gradient(circle at 50% 0,rgba(34,211,238,.08),transparent 25%),
+    linear-gradient(180deg,var(--df-sidebar-2),var(--df-sidebar) 72%,#021713)!important;
+  box-shadow:12px 0 40px rgba(0,0,0,.20)!important;
+}
+.brand,.admin-brand{border-color:rgba(255,255,255,.09)!important}
+.brand strong,.admin-brand strong{color:#fff!important}
+.brand span,.admin-brand small{color:#8ddfc3!important}
+.brand-icon{color:var(--df-green)!important;background:rgba(24,216,155,.10)!important;border-color:rgba(24,216,155,.22)!important;box-shadow:inset 0 0 20px rgba(24,216,155,.05)!important}
+.sidebar-profile,.admin-sidebar footer>span{background:rgba(255,255,255,.035)!important;border-color:rgba(255,255,255,.07)!important}
+.sidebar-nav button,.admin-sidebar nav button{color:rgba(239,248,245,.72)!important}
+.sidebar-nav button:hover,.admin-sidebar nav button:hover{color:#fff!important;background:rgba(34,211,238,.055)!important}
+.sidebar-nav button.active,.admin-sidebar nav button.active{
+  color:#fff!important;
+  border-color:rgba(34,211,238,.18)!important;
+  background:linear-gradient(135deg,rgba(24,216,155,.16),rgba(34,211,238,.08))!important;
+  box-shadow:inset 3px 0 0 var(--df-cyan),0 10px 26px rgba(0,0,0,.16)!important;
+}
+.mode-button{background:rgba(255,255,255,.045)!important;border-color:rgba(255,255,255,.08)!important;color:#fff!important}
+
+/* Hero / dashboard */
+.hero{
+  color:var(--df-text)!important;
+  border-color:var(--df-border)!important;
+  background:
+    radial-gradient(circle at 92% 20%,rgba(34,211,238,.11),transparent 31%),
+    radial-gradient(circle at 8% 10%,rgba(24,216,155,.07),transparent 32%),
+    linear-gradient(135deg,#101918,#0c1416)!important;
+  box-shadow:var(--df-shadow)!important;
+}
+.hero h1,.panel h2,.panel h3,.quick-start h2,.settings-title h2{color:var(--df-text)!important}
+.hero p,.panel p,.quick-start p,.panel-head p{color:var(--df-muted)!important}
+.eyebrow,.panel-head span{color:var(--df-green)!important}
+.balance-focus{
+  border-color:rgba(34,211,238,.18)!important;
+  background:radial-gradient(circle at 90% 10%,rgba(34,211,238,.16),transparent 35%),linear-gradient(135deg,#073c32,#073128)!important;
+  box-shadow:0 18px 42px rgba(0,0,0,.25)!important;
+}
+
+/* Cards / panels */
+.panel,.quick-start,.stat-card,.settings-card,.admin-card,.admin-stat,.admin-plan,
+.account-row,.transaction-row,.data-row,.upcoming-list article,.planning-lines div,
+.detail-grid>article,.ticket-detail>p,.notes p,.announcement{
+  color:var(--df-text)!important;
+  border-color:var(--df-border)!important;
+  background:linear-gradient(145deg,rgba(20,30,28,.98),rgba(14,22,21,.98))!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+.stat-card span,.stat-card p,.admin-card p,.admin-stat small,.admin-top p,
+.account-row small,.transaction-row small,.data-row small,.settings-history-item small,
+.admin-client-list small{color:var(--df-muted)!important}
+.stat-card strong,.admin-stat strong,.account-row em,.transaction-row em,.data-row strong{color:var(--df-text)!important}
+.stat-icon,.settings-title>span,.admin-stat>i{
+  color:var(--df-green)!important;
+  background:rgba(24,216,155,.10)!important;
+  border:1px solid rgba(24,216,155,.10)!important;
+}
+.stat-card.yellow .stat-icon,.admin-stat.orange>i{color:var(--df-warning)!important;background:rgba(251,191,36,.11)!important}
+.stat-card.blue .stat-icon{color:var(--df-blue)!important;background:rgba(56,189,248,.10)!important}
+.admin-stat.purple>i{color:var(--df-purple)!important;background:rgba(168,85,247,.10)!important}
+.admin-stat.red>i{color:var(--df-danger)!important;background:rgba(251,113,133,.10)!important}
+
+/* Inputs */
+input,select,textarea,
+.buy-grid input,.buy-grid select,.field-grid input,.field-grid select,
+.account-edit-grid input,.account-edit-grid select,
+.profile-fields input,.settings-protection input,.preference-list select,
+.admin-section-head input,.admin-filters select,.admin-inline-form select,.admin-inline-form input,
+.note-form textarea,.admin-form input,.admin-form textarea,.admin-form select,
+.settings-global input,.settings-global textarea,.settings-global select,
+.admin-report-bar select,.feature-list select{
+  color:var(--df-text)!important;
+  border-color:rgba(255,255,255,.10)!important;
+  background:#0d1615!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02)!important;
+}
+input::placeholder,textarea::placeholder{color:#62736e!important}
+input:focus,select:focus,textarea:focus{border-color:rgba(34,211,238,.65)!important;box-shadow:0 0 0 3px rgba(34,211,238,.08)!important}
+label,.field-grid label,.profile-fields label,.settings-protection label{color:#b8c7c2!important}
+select{color-scheme:dark}
+
+/* Buttons */
+button:not(.password-toggle):not(.auth-forgot):not(.sidebar-nav button):not(.admin-sidebar nav button):not(.mode-button):not(.danger-button):not(.ghost-button):not(.admin-plain):not(.admin-mobile-nav button){
+  color:#06110e!important;
+  border-color:rgba(24,216,155,.55)!important;
+  background:linear-gradient(135deg,var(--df-green),#20c997)!important;
+  box-shadow:0 8px 20px rgba(24,216,155,.14)!important;
+}
+button:hover{filter:brightness(1.04)}
+.ghost-button,.settings-outline,.profile-photo-actions button,.admin-link-btn,.admin-section-head button,.admin-card>button{
+  color:#b8fff0!important;
+  border-color:rgba(24,216,155,.20)!important;
+  background:rgba(24,216,155,.055)!important;
+  box-shadow:none!important;
+}
+.danger-button,.inline-danger,.danger,.settings-remove{
+  color:#ffc0ca!important;
+  border-color:rgba(251,113,133,.26)!important;
+  background:rgba(251,113,133,.08)!important;
+  box-shadow:none!important;
+}
+
+/* Rows / statuses */
+.account-row,.transaction-row,.data-row,.mode-inline,.upcoming-list article,.planning-lines div,
+.settings-history-item,.admin-client-list>article,.admin-table>div,.admin-rows>div,.audit-list article,
+.feature-list article,.ticket-list>button,.announcement{
+  border-color:rgba(255,255,255,.07)!important;
+}
+.transaction-row.receita em{color:var(--df-green)!important}
+.transaction-row.despesa em,.transaction-row.divida em{color:var(--df-danger)!important}
+.transaction-row{border-left-color:rgba(24,216,155,.55)!important}
+.transaction-row.despesa,.transaction-row.divida{border-left-color:rgba(251,113,133,.70)!important}
+.transaction-row.meta{border-left-color:rgba(168,85,247,.70)!important}
+.pill,.admin-status{background:#1a2522!important;color:#b7c6c1!important}
+.pill.active,.admin-status:not(.status-blocked):not(.status-trial):not(.status-admin){background:rgba(24,216,155,.11)!important;color:#75f0c5!important}
+.pill.trial,.status-trial{background:rgba(251,191,36,.10)!important;color:#ffd66b!important}
+.pill.blocked,.status-blocked{background:rgba(251,113,133,.10)!important;color:#ff9cac!important}
+.status-admin{background:rgba(56,189,248,.10)!important;color:#8fddff!important}
+
+/* Planning / empty / decision states */
+.empty-state,.invite-warning,.status-box,.invite-placeholder,.decision-box.ok,.highlight-row{
+  color:var(--df-text)!important;
+  border-color:rgba(24,216,155,.14)!important;
+  background:rgba(24,216,155,.045)!important;
+}
+.decision-box.bad{color:#ffd78a!important;border-color:rgba(251,191,36,.20)!important;background:rgba(251,191,36,.06)!important}
+.danger-zone{border-color:rgba(251,113,133,.18)!important;background:rgba(251,113,133,.035)!important}
+
+/* Settings */
+.settings-avatar{border-color:#25332f!important;background:#0d1715!important;box-shadow:0 10px 26px rgba(0,0,0,.30)!important}
+.profile-fields p,.settings-protection>p,.settings-app-content p{color:var(--df-muted)!important}
+.settings-history-item{background:#0f1817!important}
+.active-sessions,.settings-couple-box,.settings-app-panel{border-color:var(--df-border)!important;background:#0f1817!important}
+
+/* Auth + modals */
+.auth-page,.legal-page,.maintenance-page{
+  color:var(--df-text)!important;
+  background:radial-gradient(circle at 20% 8%,rgba(24,216,155,.09),transparent 30%),linear-gradient(145deg,#07100f,#0b1315)!important;
+}
+.auth-card,.modal-card,.confirmation-modal,.admin-modal,.legal-document{
+  color:var(--df-text)!important;
+  border-color:var(--df-border)!important;
+  background:linear-gradient(145deg,#141d1b,#0e1716)!important;
+  box-shadow:0 28px 80px rgba(0,0,0,.42)!important;
+}
+.auth-card p,.modal-card p,.legal-document p,.legal-document .legal-lead,.maintenance-page p{color:var(--df-muted)!important}
+.confirmation-backdrop,.admin-modal-bg{background:rgba(1,7,6,.78)!important;backdrop-filter:blur(10px)}
+.confirmation-modal .confirmation-icon{color:var(--df-danger)!important;background:rgba(251,113,133,.08)!important;box-shadow:inset 0 0 0 1px rgba(251,113,133,.16)!important}
+.confirmation-modal>p{color:var(--df-muted)!important}
+.confirmation-note{color:#c4d5d0!important;border-color:var(--df-border)!important;background:#0d1715!important}
+.confirmation-actions .ghost-button{color:#d7e4e0!important;border-color:var(--df-border)!important;background:#121c1a!important}
+
+/* Admin */
+.admin-shell{--ag:var(--df-sidebar);--al:var(--df-green);--ab:var(--df-bg);background:var(--df-bg)!important;color:var(--df-text)!important}
+.admin-top h1,.admin-card h2,.admin-plan>strong{color:var(--df-text)!important}
+.admin-top button,.admin-section-head button,.admin-card>button,.admin-link-btn,
+.inline-actions button,.action-grid button,.admin-user-actions button,.admin-client-list button,.admin-plan button{
+  color:#b7fff0!important;
+  border-color:rgba(24,216,155,.18)!important;
+  background:rgba(24,216,155,.055)!important;
+  box-shadow:none!important;
+}
+.admin-chart>div{border-color:rgba(255,255,255,.08)!important}
+.admin-chart i{background:linear-gradient(180deg,var(--df-cyan),var(--df-green))!important;box-shadow:0 0 20px rgba(34,211,238,.12)}
+.admin-client-list>article:hover,.ticket-list>button.active{background:rgba(24,216,155,.045)!important}
+.ticket-list>button,.admin-more-menu,.admin-more-menu button{color:var(--df-text)!important;background:#111a18!important}
+.admin-denied{background:var(--df-bg)!important;color:var(--df-text)!important}
+.admin-mobile-nav{
+  color:var(--df-text)!important;
+  border:1px solid var(--df-border)!important;
+  background:rgba(11,20,18,.94)!important;
+  box-shadow:0 10px 34px rgba(0,0,0,.45)!important;
+  backdrop-filter:blur(16px);
+}
+.admin-mobile-nav button{color:#82948e!important}
+.admin-mobile-nav button.active{color:var(--df-green)!important;background:rgba(24,216,155,.07)!important}
+.platform-notice{color:#e7d7ff!important;background:rgba(168,85,247,.09)!important;border:1px solid rgba(168,85,247,.18)!important}
+.settings-global .admin-check{background:#0f1817!important;border:1px solid var(--df-border)!important}
+
+/* Table-like content */
+.admin-table>.thead{color:#82948e!important}
+.admin-table strong small{color:var(--df-muted)!important}
+.admin-table>div,.admin-client-list>article,.audit-list article,.feature-list article{background:transparent!important}
+
+/* Onboarding - keep the approved dark cinematic direction */
+.finanflow-onboarding-backdrop,[class*="onboarding"][class*="backdrop"]{background:rgba(0,0,0,.84)!important;backdrop-filter:blur(8px)}
+.finanflow-onboarding-card,[class*="onboarding"][class*="card"]{
+  color:var(--df-text)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+  background:linear-gradient(145deg,#171b1d,#101416)!important;
+  box-shadow:0 30px 90px rgba(0,0,0,.60)!important;
+}
+
+/* Scrollbars */
+*{scrollbar-color:#214039 #0b1311}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#0a1210}
+::-webkit-scrollbar-thumb{background:#214039;border:2px solid #0a1210;border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:#2a5449}
+
+/* Mobile */
+@media(max-width:700px){
+  .main-content,.admin-workspace{background:transparent!important}
+  .admin-more-menu{border:1px solid var(--df-border)!important}
+  .admin-more-menu button{border-bottom:1px solid rgba(255,255,255,.05)!important}
+}
+
+/* Print/PDF must remain light and economical. */
+@media print{
+  :root{color-scheme:light}
+  html,body,#root{background:#fff!important;color:#102f27!important}
+  body{background:#fff!important;color:#102f27!important}
+  .print-report,.print-only,.report-print,.pdf-report,[data-print-report="true"]{
+    color:#102f27!important;background:#fff!important;
+  }
+  .print-report *, .print-only *, .report-print *, .pdf-report *, [data-print-report="true"] *{
+    box-shadow:none!important;text-shadow:none!important;
+  }
+}
