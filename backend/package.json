@@ -25,6 +25,12 @@
     "mongodb-memory-server": "10.2.3",
     "nodemon": "^3.1.9"
   },
+  "pnpm": {
+    "overrides": {
+      "qs": "^6.16.0",
+      "brace-expansion": "^5.0.9"
+    }
+  },
   "engines": {
     "node": ">=18"
   }
