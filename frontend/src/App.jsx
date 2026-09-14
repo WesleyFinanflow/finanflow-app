@@ -14,6 +14,7 @@ import navAccountsIcon from "./assets/navigation/accounts.webp";
 import navPlanningIcon from "./assets/navigation/planning.webp";
 import navReportsIcon from "./assets/navigation/reports.webp";
 import AdminApp from "./AdminApp.jsx";
+import DebtPlanPage, { DebtPlanReport } from "./DebtPlan.jsx";
 
 function getApiUrl() {
   const host = window.location.hostname;
@@ -169,7 +170,10 @@ export default function App() {
   const [user, setUser] = useState(() => readStoredUser());
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "", acceptLegal: false });
-  const [activeMenu, setActiveMenu] = useState("Início");
+  const [activeMenu, setActiveMenu] = useState(() => window.location.pathname === "/planejamento/dividas" ? "Planejamento" : "Início");
+  const [debtPlanOpen, setDebtPlanOpen] = useState(() => window.location.pathname === "/planejamento/dividas");
+  const openDebtPlan = (open) => { setDebtPlanOpen(open); window.history.pushState({}, "", open ? "/planejamento/dividas" : "/"); };
+  useEffect(() => { const onPop = () => { setDebtPlanOpen(window.location.pathname === "/planejamento/dividas"); setActiveMenu("Planejamento"); }; window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
   const [activeMode, setActiveMode] = useState(() => localStorage.getItem(ACTIVE_MODE_KEY) === "couple" ? "couple" : "individual");
   const [spaces, setSpaces] = useState([]);
   const [activeSpaceId, setActiveSpaceId] = useState("");
@@ -852,8 +856,9 @@ export default function App() {
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && <Planejamento summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
-        {activeMenu === "Relatórios" && <Relatorios transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} summary={summary} reserve={reserve} />}
+        {activeMenu === "Planejamento" && debtPlanOpen && <DebtPlanPage key={activeSpaceId} api={api} spaceId={activeSpaceId} currentUserId={user?.id || user?._id} back={() => openDebtPlan(false)} />}
+        {activeMenu === "Planejamento" && !debtPlanOpen && <Planejamento openDebtPlan={() => openDebtPlan(true)} summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
+        {activeMenu === "Relatórios" && <Relatorios spaceId={activeSpaceId} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} summary={summary} reserve={reserve} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
         {dueTransactions.length > 0 && !transactionFormOpen && <DueReminder transactions={dueTransactions} open={dueReminderOpen} setOpen={setDueReminderOpen} markPaid={markTransactionPaid} snooze={snoozeTransaction} loading={loading} currentUserId={user?.id || user?._id} activeMode={activeMode} />}
@@ -1284,11 +1289,12 @@ function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loa
   );
 }
 
-function Planejamento({ summary, hasData, buyForm, setBuyForm, purchasePlans, savePurchasePlan, deletePurchasePlan, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId, reserve }) {
+function Planejamento({ openDebtPlan, summary, hasData, buyForm, setBuyForm, purchasePlans, savePurchasePlan, deletePurchasePlan, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId, reserve }) {
   const goals = transactions.filter((item) => item.type === "meta" && item.status === "pago");
   return (
     <>
-      <section className="panel planning-wallet">
+      <nav className="dp-planning-nav" aria-label="Opções de planejamento"><a href="#metas-reservas">Metas e reservas</a><a href="#planejar-compra">Planejar uma compra / Posso comprar?</a><button type="button" onClick={openDebtPlan}>Plano para sair das dívidas</button></nav>
+      <section id="metas-reservas" className="panel planning-wallet">
         <div className="panel-head">
           <div><span className="eyebrow">Dinheiro separado</span><h2>Metas, reservas e sonhos</h2><p>Valores separados deixam a conta principal, mas continuam sendo seus.</p></div>
         </div>
@@ -1306,7 +1312,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, purchasePlans, sa
         })}</div> : <div className="planning-empty"><ShieldCheck size={26} aria-hidden="true" /><span><strong>Nenhum valor separado ainda</strong><small>Crie uma reserva, um sonho ou outro objetivo.</small></span></div>}
       </section>
       <section className="grid-two">
-        <Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} transactions={transactions} plans={purchasePlans} savePlan={savePurchasePlan} deletePlan={deletePurchasePlan} loading={loading} activeMode={activeMode} currentUserId={currentUserId} reserve={reserve} />
+        <div id="planejar-compra"><Decision buyForm={buyForm} setBuyForm={setBuyForm} ready={hasData} free={summary.free} transactions={transactions} plans={purchasePlans} savePlan={savePurchasePlan} deletePlan={deletePurchasePlan} loading={loading} activeMode={activeMode} currentUserId={currentUserId} reserve={reserve} /></div>
         <section className="panel">
           <div className="panel-head">
             <div>
@@ -1329,7 +1335,7 @@ function Planejamento({ summary, hasData, buyForm, setBuyForm, purchasePlans, sa
   );
 }
 
-function Relatorios({ transactions, selectedMonthKey, activeMode, summary, reserve }) {
+function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summary, reserve }) {
   const [periodMonths, setPeriodMonths] = useState(6);
   const periodOptions = [{ value: "1", label: "Mês atual" }, { value: "3", label: "3 meses" }, { value: "6", label: "6 meses" }, { value: "12", label: "1 ano" }];
   const monthNumber = (key) => { const [year, month] = String(key).split("-").map(Number); return (year * 12) + month - 1; };
@@ -1455,6 +1461,7 @@ function Relatorios({ transactions, selectedMonthKey, activeMode, summary, reser
         <article className="panel report-pending-card"><div className="report-section-head"><div><span className="eyebrow">Situação atual</span><h2>Pendências e compromissos</h2></div><small>{pending.length} itens</small></div><div className={pendingTotal > 0 ? "pending-summary alert" : "pending-summary"}><ReceiptText size={28}/><strong>{money(pendingTotal)}</strong><p>{pendingTotal > 0 ? "Valor total que ainda aguarda pagamento ou recebimento." : "Parabéns! Você não possui compromissos pendentes no período."}</p></div></article>
       </section>
       <section className="panel report-insights"><div className="report-section-head"><div><span className="eyebrow">Leitura inteligente</span><h2>Insights do período</h2></div><small>Gerados somente com seus dados</small></div><div className="report-insight-grid"><article className={net < 0 ? "negative" : "positive"}><strong>{net < 0 ? "Período negativo" : "Período positivo"}</strong><p>O resultado financeiro foi de {money(net)} no período.</p></article><article className="orange"><strong>Peso das despesas</strong><p>{expenseRatio === null ? "Não houve receitas recebidas para calcular a proporção." : `As saídas representam ${expenseRatio.toFixed(1).replace(".", ",")}% das receitas.`}</p></article><article className="blue"><strong>Maior categoria</strong><p>{topCategory ? `${topCategory.name} concentrou ${((topCategory.amount / totalOutflow) * 100).toFixed(0)}% dos gastos (${money(topCategory.amount)}).` : "Não houve gastos pagos por categoria."}</p></article><article className={pendingTotal > 0 ? "orange" : "positive"}><strong>Pendências</strong><p>{pendingTotal > 0 ? `${money(pendingTotal)} ainda aguardam pagamento ou recebimento.` : "Não há compromissos pendentes no período."}</p></article></div></section>
+      <DebtPlanReport key={spaceId} api={api} spaceId={spaceId} />
       <footer className="report-print-footer"><span>https://vitalflow.ia.br</span><strong>FinanFlow · organização financeira com tranquilidade</strong><span>{generatedAt}</span></footer>
     </section>
   );

@@ -1,0 +1,1 @@
+export default [{ ignores: ["node_modules/**"] }, { files: ["src/**/*.js"], languageOptions: { ecmaVersion: "latest", sourceType: "module" }, rules: { "no-dupe-args": "error", "no-dupe-keys": "error", "no-unreachable": "error", "valid-typeof": "error" } }, { files: ["src/debt-*.js"], rules: { "no-unused-vars": ["error", { argsIgnorePattern: "^_" }] } }];

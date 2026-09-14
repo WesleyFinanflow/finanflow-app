@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "test": "node --test src/*.test.js"
+    "test": "node --test src/*.test.js",
+    "lint": "eslint src",
+    "build": "node --check src/server.js && node --check src/debt-plan.js && node --check src/debt-engine.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -19,6 +21,8 @@
     "mongoose": "^8.24.3"
   },
   "devDependencies": {
+    "eslint": "^10.10.0",
+    "mongodb-memory-server": "10.2.3",
     "nodemon": "^3.1.9"
   },
   "engines": {
