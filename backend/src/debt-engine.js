@@ -1,3 +1,4 @@
+import { debtMarkers, PRIORITY_WEIGHTS as W } from "./debt-config.js";
 // All monetary operations use integer cents. Rates use millionths of a percent.
 // This module never writes transactions, accounts or the protected reserve.
 export const STRATEGIES = ["recommended", "avalanche", "snowball"];
@@ -8,21 +9,25 @@ export const monthAt = (date, offset) => {
   return new Date(Date.UTC(y, m - 1 + offset, 1)).toISOString().slice(0, 7);
 };
 export function overdueDays(debt, today) {
-  return debt.currentBalance > 0 && debt.dueDate < today
-    ? Math.max(0, Math.floor((Date.parse(today) - Date.parse(debt.dueDate)) / 86400000)) : 0;
+  return debtMarkers(debt, today).daysOverdue;
 }
-export function priorityScore(debt, today) {
-  // 0..100: arrears 40 (20 + up to 20 at 90 days), known interest 30
-  // (saturates at 15% monthly), installment/balance 20, small balance 10.
-  // Arrears are the observable proxy for exposure to late fees; no fee is invented.
-  const days = overdueDays(debt, today);
-  return Math.round((days ? 20 + Math.min(days / 90, 1) * 20 : 0)
-    + Math.min((debt.interestRateMonthly ?? 0) / 15, 1) * 30
-    + Math.min(debt.minimumPayment / Math.max(1, debt.currentBalance), 1) * 20
-    + 10 / (1 + debt.currentBalance / 100000));
+export function priorityScore(debt, today, monthlyBudget = 0) {
+  // Sum of seven documented terms, max 100; all weights live in debt-config.js.
+  // User-declared restrictions only. Missing overdue amount/rate adds no points.
+  // Budget after financial protection determines installment impact/affordability.
+  const m = debtMarkers(debt, today);
+  if (debt.status === "PAID" || debt.currentBalance === 0) return 0;
+  const score = Math.min((debt.interestRateMonthly ?? 0) / W.interestSaturation, 1) * W.interest
+    + Math.min(m.daysOverdue / W.overdueDaysSaturation, 1) * W.overdueDays
+    + Math.min((debt.amountOverdue ?? 0) / Math.max(1, debt.currentBalance), 1) * W.overdueAmount
+    + (m.isNegativeListed ? W.negativeListing : 0) + (m.isProtested ? W.protest : 0) + (m.isActiveDebt ? W.activeDebt : 0)
+    + Math.min(debt.minimumPayment / Math.max(1, monthlyBudget || debt.currentBalance), 1) * W.monthlyCommitment
+    + W.balance / (1 + debt.currentBalance / Math.max(10000, monthlyBudget));
+  const oldWithoutRestriction = m.isOldDebt && debt.negativeListingActive === "NO" && !m.isProtested && !m.isActiveDebt;
+  return Math.round(score * (oldWithoutRestriction ? W.oldWithoutRestrictionMultiplier : 1));
 }
-export function orderDebts(debts, strategy, today) {
-  return debts.filter(d => d.currentBalance > 0 && d.status !== "PAID").map(d => ({ ...d, priorityScore: priorityScore(d, today) })).sort((a, b) => {
+export function orderDebts(debts, strategy, today, monthlyBudget = 0) {
+  return debts.filter(d => d.currentBalance > 0 && d.status !== "PAID").map(d => ({ ...d, priorityScore: priorityScore(d, today, monthlyBudget) })).sort((a, b) => {
     const difference = strategy === "avalanche"
       ? (b.interestRateMonthly ?? -1) - (a.interestRateMonthly ?? -1)
       : strategy === "snowball" ? a.currentBalance - b.currentBalance : b.priorityScore - a.priorityScore;
@@ -34,10 +39,10 @@ function interest(balance, rate) {
   const numerator = BigInt(balance) * BigInt(Math.round(rate * 1000000));
   return Number((numerator + 50000000n) / 100000000n);
 }
-export function simulate(debts, extra, strategy, today, { rollover = true, limit = 600 } = {}) {
-  const ordered = orderDebts(debts, strategy, today);
+export function simulate(debts, extra, strategy, today, { rollover = true, limit = 600, monthlyBudget = null } = {}) {
+  const ordered = orderDebts(debts, strategy, today, monthlyBudget || 0);
   const balances = new Map(ordered.map(d => [d.id, d.currentBalance]));
-  const budget = sum(ordered.map(d => d.minimumPayment)) + extra;
+  const budget = monthlyBudget ?? sum(ordered.map(d => d.minimumPayment)) + extra;
   const months = [], payoffDates = {};
   let totalInterest = 0, complete = !ordered.length, reason = null;
   for (let index = 0; !complete && index < limit; index++) {
@@ -49,6 +54,14 @@ export function simulate(debts, extra, strategy, today, { rollover = true, limit
       return { debtId: d.id, name: d.name, openingBalance, interest: d.interestRateMonthly == null ? null : charge, normal: Math.min(d.minimumPayment, openingBalance + charge), extra: 0, closingBalance: openingBalance + charge };
     });
     if (rows.some(r => !Number.isSafeInteger(r.closingBalance) || r.closingBalance > 100000000000000)) { reason = "balance_limit"; break; }
+    // Insufficient user budget: split minimum payments proportionally in cents,
+    // assigning remainder cents in priority order. Never spend above that budget.
+    const normalTotal = sum(rows.map(r => r.normal));
+    if (normalTotal > budget) {
+      for (const row of rows) row.normal = Number(BigInt(row.normal) * BigInt(budget) / BigInt(normalTotal));
+      let remainder = budget - sum(rows.map(r => r.normal));
+      for (const row of rows) if (remainder > 0) { row.normal++; remainder--; }
+    }
     let available = (rollover ? budget : sum(active.map(d => d.minimumPayment)) + extra) - sum(rows.map(r => r.normal));
     for (const row of rows) row.closingBalance -= row.normal;
     for (const row of rows) {
@@ -98,7 +111,9 @@ export function capacity(accounts, transactions, reserve, debts, today) {
   const monthlySurplus = Math.max(0, received - paid - pending - unlinkedMinimums);
   const nextMonthBuffer = Math.max(0, future + unlinkedMinimums - pending - unlinkedMinimums);
   const recommended = Math.max(0, Math.min(safeFree - nextMonthBuffer, monthlySurplus));
-  return { recommended, safeFree, protectedAmount, received, paid, pending, future, unlinkedMinimums };
+  const minimums = sum(debts.filter(d => d.currentBalance > 0 && d.status !== "PAID").map(d => Math.min(d.minimumPayment, d.currentBalance)));
+  const safePaymentCapacity = Math.max(0, balance - protectedAmount - pending - unlinkedMinimums - nextMonthBuffer + minimums);
+  return { recommended, safeFree, safePaymentCapacity, protectedAmount, received, paid, pending, future, unlinkedMinimums };
 }
 
 export function sourceDebts(transactions, today) {
@@ -129,28 +144,41 @@ export function effectiveDebts(items, sources) {
     const source = byKey.get(d.sourceKey);
     if (!d.sourceKey || d.balanceOverride) return d;
     if (!source) return { ...d, sourceMissing: true };
-    return { ...d, originalBalance: source.originalBalance, currentBalance: source.currentBalance, minimumPayment: source.minimumPayment, dueDate: source.dueDate, remainingInstallments: source.remainingInstallments, status: source.status, sourceRecurring: source.sourceRecurring };
+    return { ...d, originalBalance: source.originalBalance, currentBalance: source.currentBalance, minimumPayment: source.minimumPayment, dueDate: source.dueDate, remainingInstallments: source.remainingInstallments, status: source.currentBalance === 0 ? "PAID" : d.status, sourceRecurring: source.sourceRecurring };
   }), ...sources.filter(d => !linked.has(d.sourceKey))];
 }
 
 export function buildPlan(debts, plan, financialCapacity, today) {
   const strategy = plan.strategy || "recommended";
+  const minimums = sum(debts.filter(d => d.currentBalance > 0 && d.status !== "PAID").map(d => Math.min(d.minimumPayment, d.currentBalance)));
+  const suggestedPayment = Math.min(minimums + financialCapacity.recommended, financialCapacity.safePaymentCapacity ?? Infinity);
+  // Explicit amount is a TOTAL monthly budget, not an extra. Never replace it
+  // with the suggestion. Nothing in this module executes financial payments.
+  const legacyExtra = plan.monthlyExtraAmount == null ? null : Math.min(plan.monthlyExtraAmount, financialCapacity.recommended);
+  const userPayment = plan.monthlyPaymentAmount ?? (legacyExtra == null ? null : minimums + legacyExtra);
+  const monthlyBudget = userPayment ?? suggestedPayment;
   const requestedExtra = plan.monthlyExtraAmount ?? financialCapacity.recommended;
-  const extra = Math.min(requestedExtra, financialCapacity.recommended);
-  const normalized = debts.map(d => ({ ...d, overdueDays: overdueDays(d, today), status: d.currentBalance === 0 ? "PAID" : overdueDays(d, today) ? "OVERDUE" : d.status === "OVERDUE" ? "ACTIVE" : d.status }));
-  const simulation = simulate(normalized, extra, strategy, today);
+  const extra = Math.max(0, monthlyBudget - minimums);
+  const normalized = debts.map(d => ({ ...d, ...debtMarkers(d, today), status: d.currentBalance === 0 ? "PAID" : d.status }));
+  const simulation = simulate(normalized, 0, strategy, today, { monthlyBudget });
+  const suggestedSimulation = simulate(normalized, 0, strategy, today, { monthlyBudget: suggestedPayment });
   const baseline = simulate(normalized, 0, strategy, today, { rollover: false });
-  const faster = simulate(normalized, extra + 10000, strategy, today);
+  const faster = simulate(normalized, 0, strategy, today, { monthlyBudget: monthlyBudget + 10000 });
   const original = sum(normalized.map(d => d.originalBalance)), remaining = sum(normalized.map(d => d.currentBalance));
   const negotiatedDiscount = sum(normalized.flatMap(d => d.negotiations || []).map(n => n.discountAmount));
   const paid = Math.max(0, original - remaining - negotiatedDiscount);
-  const ordered = orderDebts(normalized, strategy, today);
-  return { strategy, requestedExtra, extra, capacity: financialCapacity, simulation,
+  const ordered = orderDebts(normalized, strategy, today, Math.min(monthlyBudget, financialCapacity.safePaymentCapacity ?? monthlyBudget));
+  return { strategy, requestedExtra, extra, suggestedPayment, userPayment, monthlyBudget, generated: Boolean(plan.generatedAt),
+    budgetWarning: monthlyBudget > (financialCapacity.safePaymentCapacity ?? Infinity), belowMinimums: monthlyBudget < minimums,
+    comparison: { suggestedEndDate: suggestedSimulation.endDate, suggestedMonths: suggestedSimulation.monthsRemaining, userEndDate: simulation.endDate, userMonths: simulation.monthsRemaining },
+    capacity: financialCapacity, simulation,
     savings: simulation.estimatedInterest != null && baseline.estimatedInterest != null ? Math.max(0, baseline.estimatedInterest - simulation.estimatedInterest) : null,
     fasterBy100: simulation.complete && faster.complete ? simulation.monthsRemaining - faster.monthsRemaining : null,
     debts: [...ordered, ...normalized.filter(d => d.currentBalance === 0)].map(d => ({ ...d, payoffDate: simulation.payoffDates[d.id] || null })),
     summary: { original, remaining, paid, negotiatedDiscount, progress: original ? Math.min(100, Math.max(0, (original - remaining) / original * 100)) : 0,
-      active: ordered.length, overdue: normalized.filter(d => d.status === "OVERDUE").length,
+      active: ordered.length, overdue: normalized.filter(d => d.isOverdue).length,
+      negativeListed: normalized.filter(d => d.isNegativeListed).length, protested: normalized.filter(d => d.isProtested).length,
+      activeDebt: normalized.filter(d => d.isActiveDebt).length, oldDebt: normalized.filter(d => d.isOldDebt).length,
       monthlyCommitment: sum(ordered.map(d => Math.min(d.minimumPayment, d.currentBalance))), paidCount: normalized.length - ordered.length },
     status: normalized.length === 0 ? "EMPTY" : ordered.length === 0 ? "COMPLETED" : "ACTIVE" };
 }

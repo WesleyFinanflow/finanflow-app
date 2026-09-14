@@ -13,7 +13,7 @@ test("snowball chooses the smaller balance with stable ties", () => {
 test("recommended uses overdue risk and known interest deterministically", () => {
   const late = debt("late", { dueDate: "2026-06-01" });
   assert.equal(orderDebts([debt("normal"), late], "recommended", today)[0].id, "late");
-  assert.equal(priorityScore(late, today), 47);
+  assert.equal(priorityScore(late, today), 8);
   assert.equal(overdueDays(late, today), 104);
   assert.equal(overdueDays(debt("paid", { currentBalance: 0, dueDate: "2020-01-01" }), today), 0);
 });

@@ -50,7 +50,9 @@ test("shared CRUD persists negotiation, recalculates and keeps balances unchange
   assert.equal(result.status, 200, JSON.stringify(result.body)); const id = result.body.debts[0].id;
   result = await call(couple, `/debts/${id}/negotiate`, bob, { revision: result.body.revision, currentBalance: "800", minimumPayment: "200", dueDate: date, interestRateMonthly: "0", negotiatedAt: date, remainingInstallments: 4 });
   assert.equal(result.status, 200, JSON.stringify(result.body)); assert.equal(result.body.debts[0].negotiations.length, 1); assert.equal(result.body.summary.negotiatedDiscount, 20000);
-  assert.equal(result.body.simulation.monthsRemaining, 4);
+  // No amount was manually supplied for this isolated couple plan, so there is
+  // no invented payment capacity or payoff date.
+  assert.equal(result.body.simulation.monthsRemaining, null);
   const updated = await call(couple, "/debt-plan/recalculate", bob, {});
   assert.equal(updated.body.summary.remaining, 80000);
   result = await call(couple, `/debts/${id}/mark-paid`, bob, { revision: result.body.revision });
