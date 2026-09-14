@@ -273,6 +273,10 @@ export default function App() {
       localStorage.removeItem("finanflow_token");
       localStorage.removeItem("finanflow_user");
       clearUserState();
+      if (window.location.pathname === "/planejamento/dividas") {
+        setDebtPlanOpen(true);
+        setActiveMenu("Planejamento");
+      }
       setAuthMode("login");
       setUser(null);
       setMessage("Sua sessão expirou. Entre novamente.");
