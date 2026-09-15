@@ -44,3 +44,7 @@ html body #root .debt-plan .dp-select-menu{position:absolute!important;z-index:2
 html body #root .debt-plan .dp-select-menu button{display:flex!important;align-items:center!important;justify-content:space-between!important;min-height:36px!important;padding:0 10px!important;border:0!important;border-radius:8px!important;color:#244b3e!important;background:#fff!important;background-image:none!important;font-size:12px!important;font-weight:600!important;text-align:left!important;box-shadow:none!important}
 html body #root .debt-plan .dp-select-menu button:hover,html body #root .debt-plan .dp-select-menu button.selected{color:#087d55!important;background:#eaf8f1!important}
 @media(max-width:700px){html body #root .debt-plan .dp-select{width:100%!important;min-width:0!important}html body #root .debt-plan .dp-select-menu{position:static!important;margin-top:3px!important}}
+
+/* Impede que o cartão de ordem de ataque recorte os menus dos filtros. */
+html body #root .debt-plan .panel:has(.dp-select){overflow:visible!important;position:relative!important;z-index:2!important}
+html body #root .debt-plan .dp-select.is-open{z-index:30!important}
