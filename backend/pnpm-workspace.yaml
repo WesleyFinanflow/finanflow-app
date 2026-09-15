@@ -1,6 +1,10 @@
 packages:
   - "."
 
+allowBuilds:
+  mongodb-memory-server: false
+
 overrides:
   qs: ^6.16.0
   brace-expansion: ^5.0.9
+

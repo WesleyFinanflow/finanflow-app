@@ -10,6 +10,7 @@ import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, req
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
 import { AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
 import { canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
+import { registerDebtPlanRoutes } from "./debt-plan.js";
 
 dotenv.config();
 
@@ -1108,6 +1109,7 @@ app.patch("/api/admin/users/:userId/access", auth, adminOnly, asyncHandler(async
 }));
 
 registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,sendRecovery:sendRecoveryForUser});
+registerDebtPlanRoutes(app, { auth, Space, Member, Account, Transaction });
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
 
