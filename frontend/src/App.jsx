@@ -44,6 +44,10 @@ const menu = [
   { label: "Relatórios", shortLabel: "Relatórios", icon: ChartPie },
 ];
 
+function CoupleHeartsIcon({ size = 22, ...props }) {
+  return <svg viewBox="0 0 64 54" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}><path d="M31 43 10 24C2 17 3 5 12 3c6-1 11 2 14 7 3-5 8-8 14-7 9 2 10 14 2 21L31 34" /><path d="M36 50 27 39c-6-7-4-17 4-21 6-3 12 0 15 5 3-5 9-8 15-5 8 4 10 14 4 21L47 54" transform="translate(-3,-2)" /></svg>;
+}
+
 function getInviteFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
@@ -841,7 +845,7 @@ export default function App() {
 
         <div className="sidebar-footer">
           <button className="mode-button" aria-label={activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"} onClick={activeCoupleSpace ? goToIndividual : goToCouple}>
-            <HeartHandshake size={18} aria-hidden="true" />
+            <CoupleHeartsIcon size={24} />
             <span>{activeCoupleSpace ? "Ir para individual" : coupleSpace && !coupleReady ? "Ver convite" : "Ir para casal"}</span>
           </button>
         </div>
