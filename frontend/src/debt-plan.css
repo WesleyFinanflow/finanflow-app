@@ -30,3 +30,9 @@ html body #root .debt-plan .dp-next-step .eyebrow{display:block!important;margin
 html body #root .debt-plan .dp-next-step h2{margin:0!important;font-size:16px!important}.debt-plan .dp-next-step p{margin:3px 0 0!important;color:#60778b!important;font-size:13px!important}
 html body #root .debt-plan .dp-next-step>button{min-width:230px!important;min-height:52px!important;font-size:15px!important;border-radius:13px!important}
 @media(max-width:700px){html body #root .debt-plan .dp-next-step{align-items:stretch!important;flex-direction:column!important}html body #root .debt-plan .dp-next-step>button{width:100%!important;min-width:0!important}}
+
+html body #root .debt-plan .dp-strategies button{display:grid!important;grid-template-columns:48px minmax(0,1fr)!important;align-items:center!important;gap:13px!important;text-align:left!important}
+html body #root .debt-plan .dp-strategy-icon{display:grid!important;place-items:center!important;width:44px!important;height:44px!important;border-radius:50%!important;color:#087d55!important;background:#e6f8ef!important}
+html body #root .debt-plan .dp-strategies button>span:last-child{display:grid!important;gap:4px!important;min-width:0!important}.debt-plan .dp-strategies strong{display:block!important}.debt-plan .dp-section-subtitle{margin:2px 0 0!important;color:#60778b!important;font-size:13px!important}
+html body #root .debt-plan .dp-next-step>button{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:10px!important;box-shadow:0 10px 24px rgba(7,125,85,.18)!important}
+@media(max-width:700px){html body #root .debt-plan .dp-strategies button{grid-template-columns:42px minmax(0,1fr)!important}.debt-plan .dp-strategy-icon{width:40px!important;height:40px!important}}
