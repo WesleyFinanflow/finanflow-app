@@ -860,8 +860,8 @@ export default function App() {
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
         {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
-        {activeMenu === "Planejamento" && debtPlanOpen && <DebtPlanPage key={activeSpaceId} api={api} spaceId={activeSpaceId} currentUserId={user?.id || user?._id} back={() => openDebtPlan(false)} />}
-        {activeMenu === "Planejamento" && !debtPlanOpen && <Planejamento openDebtPlan={() => openDebtPlan(true)} summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
+        {activeMenu === "Planejamento" && debtPlanOpen && <DebtPlanPage key={activeSpaceId} api={api} spaceId={activeSpaceId} currentUserId={user?.id || user?._id} back={() => openDebtPlan(false)} monthlyOnly />}
+        {activeMenu === "Planejamento" && !debtPlanOpen && <Planejamento openDebtPlan={() => openDebtPlan(true)} api={api} spaceId={activeSpaceId} summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
         {activeMenu === "Relatórios" && <Relatorios spaceId={activeSpaceId} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} summary={summary} reserve={reserve} />}
         {activeMenu === "Configurações" && <Config reserve={reserve} setReserve={setReserve} saveReserve={saveReserve} user={user} setUser={setUser} firstName={firstName} email={user.email} coupleSpace={coupleSpace} coupleReady={coupleReady} setActiveMenu={setActiveMenu} activeMode={activeMode} activeSpaceId={activeSpaceId} refreshSpaceData={() => loadSpaceData(activeSpaceId)} leaveCoupleSpace={leaveCoupleSpace} logout={logout} resetSpaceData={resetSpaceData} deleteUserAccount={deleteUserAccount} loading={loading} installPrompt={installPrompt} isInstalled={isInstalled} installApp={installApp} accounts={accounts} transactions={transactions} />}
         {activeMenu === "Casal" && <Casal coupleSpace={coupleSpace} coupleReady={coupleReady} coupleInvite={coupleInvite} createCouple={createCouple} goToCouple={goToCouple} refreshCoupleStatus={refreshCoupleStatus} setMessage={setMessage} firstName={firstName} loading={loading} />}
@@ -1293,11 +1293,10 @@ function Contas({ accounts, setAccounts, updateAccount, summary, activeMode, loa
   );
 }
 
-function Planejamento({ openDebtPlan, summary, hasData, buyForm, setBuyForm, purchasePlans, savePurchasePlan, deletePurchasePlan, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId, reserve }) {
+function Planejamento({ openDebtPlan, api, spaceId, summary, hasData, buyForm, setBuyForm, purchasePlans, savePurchasePlan, deletePurchasePlan, transactions, goalForm, setGoalForm, saveGoal, editGoal, deleteGoal, editingGoalId, cancelGoalEdit, loading, activeMode, currentUserId, reserve }) {
   const goals = transactions.filter((item) => item.type === "meta" && item.status === "pago");
   return (
     <>
-      <nav className="dp-planning-nav" aria-label="Opções de planejamento"><a href="#metas-reservas">Metas e reservas</a><a href="#planejar-compra">Planejar uma compra / Posso comprar?</a><button type="button" onClick={openDebtPlan}>Plano para sair das dívidas</button></nav>
       <section id="metas-reservas" className="panel planning-wallet">
         <div className="panel-head">
           <div><span className="eyebrow">Dinheiro separado</span><h2>Metas, reservas e sonhos</h2><p>Valores separados deixam a conta principal, mas continuam sendo seus.</p></div>
@@ -1335,6 +1334,7 @@ function Planejamento({ openDebtPlan, summary, hasData, buyForm, setBuyForm, pur
           </div>
         </section>
       </section>
+      <DebtPlanPage api={api} spaceId={spaceId} currentUserId={currentUserId} embedded openMonthly={openDebtPlan} />
     </>
   );
 }
