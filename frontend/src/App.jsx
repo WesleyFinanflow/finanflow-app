@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -45,7 +45,7 @@ const menu = [
 ];
 
 function CoupleHeartsIcon({ size = 22, ...props }) {
-  return <svg viewBox="0 0 64 54" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}><path d="M31 43 10 24C2 17 3 5 12 3c6-1 11 2 14 7 3-5 8-8 14-7 9 2 10 14 2 21L31 34" /><path d="M36 50 27 39c-6-7-4-17 4-21 6-3 12 0 15 5 3-5 9-8 15-5 8 4 10 14 4 21L47 54" transform="translate(-3,-2)" /></svg>;
+  return <span className="couple-hearts-icon" style={{ width: size, height: size }} {...props}><Heart /><Heart /></span>;
 }
 
 function getInviteFromUrl() {
