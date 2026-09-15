@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
@@ -8,11 +8,6 @@ import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
 import safeShieldIcon from "./assets/financial-icons/safe-shield.webp";
-import navHomeIcon from "./assets/navigation/home.webp";
-import navTransactionsIcon from "./assets/navigation/transactions.webp";
-import navAccountsIcon from "./assets/navigation/accounts.webp";
-import navPlanningIcon from "./assets/navigation/planning.webp";
-import navReportsIcon from "./assets/navigation/reports.webp";
 import AdminApp from "./AdminApp.jsx";
 import DebtPlanPage, { DebtPlanReport } from "./DebtPlan.jsx";
 
@@ -42,11 +37,11 @@ const transactionCategories = {
   divida: ["Cartão de crédito", "Empréstimo", "Financiamento", "Moradia", "Veículo", "Impostos", "Educação", "Saúde", "Outras dívidas"],
 };
 const menu = [
-  { label: "Início", shortLabel: "Início", icon: House, iconImage: navHomeIcon },
-  { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight, iconImage: navTransactionsIcon },
-  { label: "Contas", shortLabel: "Contas", icon: Wallet, iconImage: navAccountsIcon },
-  { label: "Planejamento", shortLabel: "Planejar", icon: ChartPie, iconImage: navPlanningIcon },
-  { label: "Relatórios", shortLabel: "Relatórios", icon: BarChart3, iconImage: navReportsIcon },
+  { label: "Início", shortLabel: "Início", icon: House },
+  { label: "Lançamentos", shortLabel: "Lançar", icon: ArrowLeftRight },
+  { label: "Contas", shortLabel: "Contas", icon: CreditCard },
+  { label: "Planejamento", shortLabel: "Planejar", icon: TrendingUp },
+  { label: "Relatórios", shortLabel: "Relatórios", icon: ChartPie },
 ];
 
 function getInviteFromUrl() {
@@ -802,9 +797,9 @@ export default function App() {
         </div>
 
         <nav className="sidebar-nav">
-          {menu.filter(({label})=>{const key={Planejamento:"planejamento","Relatórios":"relatorios"}[label];return !key||platformFeatures[key]!==false;}).map(({ label, shortLabel, icon: Icon, iconImage }) => (
+          {menu.filter(({label})=>{const key={Planejamento:"planejamento","Relatórios":"relatorios"}[label];return !key||platformFeatures[key]!==false;}).map(({ label, shortLabel, icon: Icon }) => (
             <button key={label} className={activeMenu === label ? "active" : ""} onClick={() => setActiveMenu(label)} aria-label={label}>
-              {iconImage ? <img className="premium-nav-icon" src={iconImage} alt="" aria-hidden="true" /> : <Icon size={18} strokeWidth={2} aria-hidden="true" />}
+              <Icon size={20} strokeWidth={2.4} aria-hidden="true" />
               <span className="nav-label-full">{label}</span>
               <span className="nav-label-short">{shortLabel}</span>
             </button>
