@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import helmet from "helmet";
+import { OAuth2Client } from "google-auth-library";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
 import { AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
@@ -21,6 +22,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const EMAIL_FROM = process.env.EMAIL_FROM;
 const FRONTEND_URL = String(process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+const GOOGLE_CLIENT_SECRET = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+const GOOGLE_REDIRECT_URI = String(process.env.GOOGLE_REDIRECT_URI || "").trim();
+const googleOAuthClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI) : null;
+const googleOAuthConfigured = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
 const LEGAL_VERSION = "2026-09-03";
 const ADMIN_EMAILS = new Set(String(process.env.ADMIN_EMAILS || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean));
 const CORS_ORIGINS = String(process.env.CORS_ORIGIN || "http://localhost:5173")
@@ -78,7 +84,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254 },
     profilePhoto: { type: String, default: "", maxlength: 120000 },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: function passwordRequired() { return !this.googleId; } },
+    googleId: { type: String, unique: true, sparse: true, trim: true },
     passwordChangedAt: { type: Date },
     passwordVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, select: false },
@@ -236,6 +243,32 @@ const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(re
 
 function createToken(user) {
   return jwt.sign({ userId: user._id.toString(), email: user.email, passwordVersion: Number(user.passwordVersion || 0) }, JWT_SECRET, { expiresIn: "7d" });
+}
+
+function googleAuthRedirect(res, params = {}) {
+  return res.redirect(FRONTEND_URL + "/#" + new URLSearchParams(params).toString());
+}
+
+function readCookie(req, name) {
+  const prefix = name + "=";
+  const value = String(req.headers.cookie || "").split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix));
+  return value ? decodeURIComponent(value.slice(prefix.length)) : "";
+}
+
+function clearGoogleAuthCookies(res) {
+  const options = { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/api/auth/google" };
+  res.clearCookie("finanflow_google_state", options);
+  res.clearCookie("finanflow_google_intent", options);
+}
+
+function googleAuthCookieOptions() {
+  return { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/api/auth/google", maxAge: 10 * 60 * 1000 };
+}
+
+function safeStateEquals(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 function validatePassword(value, label = "A senha") {
@@ -479,6 +512,60 @@ app.get("/api/ready", (_req, res) => {
   res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString(),environment:process.env.RAILWAY_ENVIRONMENT_NAME||process.env.NODE_ENV||"local",version:process.env.RAILWAY_GIT_COMMIT_SHA||"development" });
 });
 
+app.get("/api/auth/providers", (_req, res) => {
+  res.json({ google: googleOAuthConfigured });
+});
+
+app.get("/api/auth/google", authLimiter, (req, res) => {
+  if (!googleOAuthConfigured) return res.status(503).json({ message: "O login com Google ainda não está configurado." });
+  const intent = req.query?.intent === "register" ? "register" : "login";
+  const state = crypto.randomBytes(32).toString("base64url");
+  const cookieOptions = googleAuthCookieOptions();
+  res.cookie("finanflow_google_state", state, cookieOptions);
+  res.cookie("finanflow_google_intent", intent, cookieOptions);
+  const query = new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, redirect_uri: GOOGLE_REDIRECT_URI, response_type: "code", scope: "openid email profile", state, prompt: "select_account" });
+  return res.redirect("https://accounts.google.com/o/oauth2/v2/auth?" + query);
+});
+
+app.get("/api/auth/google/callback", authLimiter, async (req, res) => {
+  const savedState = readCookie(req, "finanflow_google_state");
+  const intent = readCookie(req, "finanflow_google_intent");
+  clearGoogleAuthCookies(res);
+  try {
+    if (!googleOAuthConfigured || !googleOAuthClient) throw new InputError("O login com Google ainda não está configurado.");
+    if (!req.query?.code || !safeStateEquals(req.query?.state, savedState)) throw new InputError("A confirmação do login com Google expirou. Tente novamente.");
+    const tokens = await googleOAuthClient.getToken({ code: req.query.code, redirect_uri: GOOGLE_REDIRECT_URI });
+    if (!tokens.tokens.id_token) throw new InputError("Não foi possível confirmar sua conta Google.");
+    const ticket = await googleOAuthClient.verifyIdToken({ idToken: tokens.tokens.id_token, audience: GOOGLE_CLIENT_ID });
+    const profile = ticket.getPayload();
+    const email = emailAddress(profile?.email);
+    if (!profile?.sub || profile.email_verified !== true) throw new InputError("Confirme seu e-mail no Google antes de continuar.");
+    let user = await User.findOne({ googleId: profile.sub });
+    if (!user) user = await User.findOne({ email });
+    if (!user) {
+      if (intent !== "register") throw new InputError("Não encontramos uma conta com este Google. Escolha Criar conta para começar.");
+      const platformConfig = await AppConfig.findOne({ key: "global" }).lean();
+      if (platformConfig?.registrationsOpen === false) throw new InputError("Novos cadastros estão temporariamente fechados.");
+      const acceptedAt = new Date();
+      const trialEnabled = platformConfig?.trialEnabled !== false;
+      const trialEndsAt = trialEnabled ? new Date(Date.now() + Number(platformConfig?.defaultTrialDays || 30) * 86400000) : undefined;
+      user = await User.create({ name: requiredText(profile.name || email.split("@")[0], "Nome", 80), email, googleId: profile.sub, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION, accessStatus: trialEnabled ? "trial" : "active", trialStartedAt: trialEnabled ? acceptedAt : undefined, trialEndsAt, trialStatus: trialEnabled ? "ACTIVE" : "NOT_STARTED", planCode: trialEnabled ? (platformConfig?.trialPlanCode || "PREMIUM") : (platformConfig?.defaultPlanCode || "FREE") });
+      await createIndividualSpaceForUser(user);
+      if (trialEnabled) await Subscription.create({ userId: user._id, planCode: user.planCode, startsAt: acceptedAt, endsAt: trialEndsAt, status: "TRIAL", origin: "TRIAL" });
+    } else {
+      const deniedMessage = accessDenied(user);
+      if (deniedMessage) throw new InputError(deniedMessage);
+      if (user.googleId && user.googleId !== profile.sub) throw new InputError("Este e-mail já está vinculado a outra conta Google.");
+      if (!user.googleId) user.googleId = profile.sub;
+      user.lastLoginAt = new Date();
+      await user.save();
+    }
+    return googleAuthRedirect(res, { google_auth_token: createToken(user) });
+  } catch (error) {
+    return googleAuthRedirect(res, { google_auth_error: error instanceof InputError ? error.message : "Não foi possível entrar com Google. Tente novamente." });
+  }
+});
+
 app.post("/api/auth/register", registerLimiter, async (req, res) => {
   try {
     const platformConfig=await AppConfig.findOne({key:"global"}).lean();
@@ -564,6 +651,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     if (!user) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     const deniedMessage = accessDenied(user);
     if (deniedMessage) return res.status(403).json({ message: deniedMessage });
+    if (!user.passwordHash) return res.status(400).json({ message: "Esta conta usa Google. Entre com o botão Continuar com Google." });
     if (user.loginLockedUntil && user.loginLockedUntil > new Date()) return res.status(429).json({ message: "Acesso temporariamente bloqueado. Tente novamente em 15 minutos." });
     const valid = await bcrypt.compare(password || "", user.passwordHash);
     if (!valid) {
@@ -609,6 +697,7 @@ app.patch("/api/me/password", auth, async (req, res) => {
     const newPassword = validatePassword(req.body?.newPassword, "A nova senha");
     if (currentPassword === newPassword) return res.status(400).json({ message: "A nova senha deve ser diferente da atual." });
     const user = await User.findById(req.user._id);
+    if (user && !user.passwordHash) return res.status(400).json({ message: "Sua conta usa Google e ainda não possui senha. Use a recuperação de senha para criar uma." });
     const valid = user && await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) return res.status(400).json({ message: "A senha atual está incorreta." });
     user.passwordHash = await bcrypt.hash(newPassword, 10);

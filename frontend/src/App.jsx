@@ -61,6 +61,15 @@ function getPasswordResetFromUrl() {
   return window.location.pathname === "/recuperar-senha" && token ? token : "";
 }
 
+function consumeGoogleAuthResult() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get("google_auth_token");
+  const error = params.get("google_auth_error");
+  if (!token && !error) return { token: "", error: "" };
+  window.history.replaceState({}, "", window.location.pathname + window.location.search);
+  return { token: token || "", error: error || "" };
+}
+
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -166,6 +175,7 @@ async function api(path, options = {}) {
 }
 
 export default function App() {
+  const [googleAuthResult] = useState(() => consumeGoogleAuthResult());
   const [user, setUser] = useState(() => readStoredUser());
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "", acceptLegal: false });
@@ -255,6 +265,12 @@ export default function App() {
   }
 
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
+  useEffect(() => {
+    if (!googleAuthResult.token) { if (googleAuthResult.error) setMessage(googleAuthResult.error); return; }
+    localStorage.setItem("finanflow_token", googleAuthResult.token);
+    api("/api/me").then((data) => { clearUserState(); localStorage.setItem("finanflow_token", googleAuthResult.token); localStorage.setItem("finanflow_user", JSON.stringify(data.user)); setUser(data.user); setMessage("Acesso realizado com Google."); }).catch((error) => { localStorage.removeItem("finanflow_token"); setMessage(error.message); });
+  }, [googleAuthResult]);
+
 
   useEffect(()=>{api("/api/platform/config").then(setPlatformConfig).catch(()=>undefined);},[]);
   useEffect(()=>{if(user)Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id]);
@@ -909,6 +925,16 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState("");
   const isLogin = authMode === "login";
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+
+  useEffect(() => { api("/api/auth/providers").then((data) => setGoogleAvailable(Boolean(data.google))).catch(() => setGoogleAvailable(false)); }, []);
+
+  function continueWithGoogle() {
+    if (!isLogin && !authForm.acceptLegal) { setMessage("Aceite os Termos de Uso e a Política de Privacidade para criar sua conta com Google."); return; }
+    const baseUrl = API_URL || window.location.origin;
+    window.location.assign(baseUrl + "/api/auth/google?intent=" + (isLogin ? "login" : "register"));
+  }
+
 
   function changeMode() {
     setShowPassword(false);
@@ -959,6 +985,7 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
           {isLogin && <button className="auth-forgot" type="button" onClick={forgotPassword}>Esqueci minha senha</button>}
           <button className="auth-submit" disabled={loading}>{loading ? "Aguarde..." : isLogin ? "Entrar" : "Criar conta"}</button>
         </form>
+        {googleAvailable && <><div className="auth-divider"><span>ou</span></div><button type="button" className="google-auth-button" onClick={continueWithGoogle} disabled={loading}><span className="google-mark" aria-hidden="true">G</span>{isLogin ? "Continuar com Google" : "Criar conta com Google"}</button></>}
         <button className="ghost-button auth-switch" onClick={changeMode}>{isLogin ? "Ainda não tenho conta" : "Já tenho conta"}</button>
         <p className="auth-legal-links"><a href="/termos">Termos</a><span>•</span><a href="/privacidade">Privacidade</a></p>
         {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
