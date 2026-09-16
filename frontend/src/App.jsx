@@ -931,6 +931,7 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
 
   function continueWithGoogle() {
     if (!isLogin && !authForm.acceptLegal) { setMessage("Aceite os Termos de Uso e a Política de Privacidade para criar sua conta com Google."); return; }
+    if (!googleAvailable) { setMessage("O login com Google está sendo configurado. Use e-mail e senha por enquanto."); return; }
     const baseUrl = API_URL || window.location.origin;
     window.location.assign(baseUrl + "/api/auth/google?intent=" + (isLogin ? "login" : "register"));
   }
@@ -985,7 +986,7 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
           {isLogin && <button className="auth-forgot" type="button" onClick={forgotPassword}>Esqueci minha senha</button>}
           <button className="auth-submit" disabled={loading}>{loading ? "Aguarde..." : isLogin ? "Entrar" : "Criar conta"}</button>
         </form>
-        {googleAvailable && <><div className="auth-divider"><span>ou</span></div><button type="button" className="google-auth-button" onClick={continueWithGoogle} disabled={loading}><svg className="google-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.35 12.23c0-.71-.06-1.22-.2-1.75H12v3.49h5.37c-.11.87-.72 2.18-2.08 3.06l-.02.12 3.02 2.29.21.02c1.93-1.74 3.05-4.31 3.05-7.23Z"/><path fill="#34A853" d="M12 21.5c2.63 0 4.84-.85 6.45-2.31l-3.07-2.43c-.82.56-1.92.95-3.38.95a5.86 5.86 0 0 1-5.54-3.97l-.12.01-3.14 2.38-.04.11A9.75 9.75 0 0 0 12 21.5Z"/><path fill="#FBBC05" d="M6.46 13.74A5.72 5.72 0 0 1 6.15 12c0-.61.11-1.2.3-1.74v-.13L3.27 7.71l-.11.05A9.5 9.5 0 0 0 2.5 12c0 1.52.37 2.96.66 4.24l3.3-2.5Z"/><path fill="#EA4335" d="M12 6.29c1.84 0 3.08.78 3.79 1.42l2.76-2.64C16.83 3.5 14.63 2.5 12 2.5a9.75 9.75 0 0 0-8.84 5.26l3.3 2.5A5.86 5.86 0 0 1 12 6.29Z"/></svg>{isLogin ? "Entrar com Google" : "Criar conta com Google"}</button></>}
+        <><div className="auth-divider"><span>ou</span></div><button type="button" className="google-auth-button" onClick={continueWithGoogle} disabled={loading}><svg className="google-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.35 12.23c0-.71-.06-1.22-.2-1.75H12v3.49h5.37c-.11.87-.72 2.18-2.08 3.06l-.02.12 3.02 2.29.21.02c1.93-1.74 3.05-4.31 3.05-7.23Z"/><path fill="#34A853" d="M12 21.5c2.63 0 4.84-.85 6.45-2.31l-3.07-2.43c-.82.56-1.92.95-3.38.95a5.86 5.86 0 0 1-5.54-3.97l-.12.01-3.14 2.38-.04.11A9.75 9.75 0 0 0 12 21.5Z"/><path fill="#FBBC05" d="M6.46 13.74A5.72 5.72 0 0 1 6.15 12c0-.61.11-1.2.3-1.74v-.13L3.27 7.71l-.11.05A9.5 9.5 0 0 0 2.5 12c0 1.52.37 2.96.66 4.24l3.3-2.5Z"/><path fill="#EA4335" d="M12 6.29c1.84 0 3.08.78 3.79 1.42l2.76-2.64C16.83 3.5 14.63 2.5 12 2.5a9.75 9.75 0 0 0-8.84 5.26l3.3 2.5A5.86 5.86 0 0 1 12 6.29Z"/></svg>{isLogin ? "Entrar com Google" : "Criar conta com Google"}</button></>
         <button className="ghost-button auth-switch" onClick={changeMode}>{isLogin ? "Ainda não tenho conta" : "Já tenho conta"}</button>
         <p className="auth-legal-links"><a href="/termos">Termos</a><span>•</span><a href="/privacidade">Privacidade</a></p>
         {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
