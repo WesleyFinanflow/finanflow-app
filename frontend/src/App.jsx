@@ -22,7 +22,7 @@ function getApiUrl() {
   if (envUrl) return envUrl;
 
   if (host === "localhost" || host === "127.0.0.1") return "http://localhost:3000";
-  return null;
+  return "https://finanflow-api.onrender.com";
 }
 
 const API_URL = getApiUrl();
