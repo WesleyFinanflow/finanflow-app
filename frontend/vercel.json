@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    {
+      "source": "/backend/:path*",
+      "destination": "https://finanflow-api-production.up.railway.app/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

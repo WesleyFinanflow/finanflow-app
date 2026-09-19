@@ -7,6 +7,7 @@ import "./product-fix.css";
 import "./green-wallet-theme.css";
 import "./premium-redesign.css";
 import "./admin.css";
+import "./dark-premium-theme.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
