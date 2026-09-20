@@ -20,7 +20,13 @@ const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
 const JWT_SECRET = process.env.JWT_SECRET;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const EMAIL_FROM = process.env.EMAIL_FROM;
+const configuredEmailFrom = String(process.env.EMAIL_FROM || "").trim();
+// The Resend onboarding address only sends to the account owner.  Production
+// recovery links must always use our verified domain so every user can reset
+// their password.
+const EMAIL_FROM = configuredEmailFrom && !configuredEmailFrom.includes("@resend.dev")
+  ? configuredEmailFrom
+  : "FinanFlow <nao-responda@vitalflow.ia.br>";
 const FRONTEND_URL = String(process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
 const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
 const GOOGLE_CLIENT_SECRET = String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
