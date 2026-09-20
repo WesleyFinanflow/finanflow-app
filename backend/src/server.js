@@ -96,6 +96,9 @@ const userSchema = new mongoose.Schema(
     passwordVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationTokenHash: { type: String, select: false },
+    emailVerificationExpiresAt: { type: Date, select: false },
     failedLoginAttempts: { type: Number, default: 0, select: false },
     loginLockedUntil: { type: Date, select: false },
     termsAcceptedAt: { type: Date },
@@ -305,6 +308,15 @@ async function sendPasswordResetEmail(email, token) {
   if (!response.ok) throw new Error("Falha ao enviar e-mail de recuperação.");
 }
 
+async function sendEmailVerificationEmail(email, token) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: EMAIL_FROM, to: [email], subject: "Confirme seu e-mail no FinanFlow", html: `<p>Confirme que este e-mail é seu para reforçar a segurança da sua conta.</p><p><a href="${FRONTEND_URL}/verificar-email?token=${encodeURIComponent(token)}">Confirmar meu e-mail</a></p><p>Este link expira em 24 horas. Se você não criou uma conta no FinanFlow, ignore este e-mail.</p>` }),
+  });
+  if (!response.ok) throw new Error("Falha ao enviar e-mail de confirmação.");
+}
+
 async function auth(req, res, next) {
   try {
     const header = req.headers.authorization || "";
@@ -334,7 +346,7 @@ async function userCanAccessSpace(userId, spaceId) {
 
 function publicUser(user) {
   const role = effectiveRole(user,ADMIN_EMAILS);
-  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE" };
+  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", emailVerified: Boolean(user.emailVerified), role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE" };
 }
 
 function accessDenied(user) {
@@ -356,6 +368,22 @@ function superAdminOnly(req,res,next){adminOnly(req,res,()=>canAccessSuperAdmin(
 async function sendRecoveryForUser(user){
   if(!RESEND_API_KEY||!EMAIL_FROM) throw new InputError("Envio de e-mail ainda não configurado.");
   const token=crypto.randomBytes(32).toString("base64url");user.passwordResetTokenHash=hashResetToken(token);user.passwordResetExpiresAt=new Date(Date.now()+30*60*1000);await user.save();await sendPasswordResetEmail(user.email,token);
+}
+
+async function sendVerificationForUser(user) {
+  if (!RESEND_API_KEY || !EMAIL_FROM) throw new InputError("Envio de e-mail ainda não configurado.");
+  if (user.emailVerified) return false;
+  const token = crypto.randomBytes(32).toString("base64url");
+  user.emailVerificationTokenHash = hashResetToken(token);
+  user.emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await user.save();
+  try { await sendEmailVerificationEmail(user.email, token); } catch (error) {
+    user.emailVerificationTokenHash = undefined;
+    user.emailVerificationExpiresAt = undefined;
+    await user.save();
+    throw error;
+  }
+  return true;
 }
 
 async function spaceViewIds(spaceId) {
@@ -518,6 +546,11 @@ app.get("/api/ready", (_req, res) => {
   res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString(),environment:process.env.RAILWAY_ENVIRONMENT_NAME||process.env.NODE_ENV||"local",version:process.env.RAILWAY_GIT_COMMIT_SHA||"development" });
 });
 
+app.get("/api/status", (_req, res) => {
+  const databaseOnline = mongoose.connection.readyState === 1;
+  res.status(databaseOnline ? 200 : 503).json({ ok: databaseOnline, services: { api: "operational", database: databaseOnline ? "operational" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "operational" : "not_configured" }, checkedAt: new Date().toISOString() });
+});
+
 app.get("/api/auth/providers", (_req, res) => {
   res.json({ google: googleOAuthConfigured });
 });
@@ -555,7 +588,7 @@ app.get("/api/auth/google/callback", authLimiter, async (req, res) => {
       const acceptedAt = new Date();
       const trialEnabled = platformConfig?.trialEnabled !== false;
       const trialEndsAt = trialEnabled ? new Date(Date.now() + Number(platformConfig?.defaultTrialDays || 30) * 86400000) : undefined;
-      user = await User.create({ name: requiredText(profile.name || email.split("@")[0], "Nome", 80), email, googleId: profile.sub, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION, accessStatus: trialEnabled ? "trial" : "active", trialStartedAt: trialEnabled ? acceptedAt : undefined, trialEndsAt, trialStatus: trialEnabled ? "ACTIVE" : "NOT_STARTED", planCode: trialEnabled ? (platformConfig?.trialPlanCode || "PREMIUM") : (platformConfig?.defaultPlanCode || "FREE") });
+      user = await User.create({ name: requiredText(profile.name || email.split("@")[0], "Nome", 80), email, googleId: profile.sub, emailVerified: true, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION, accessStatus: trialEnabled ? "trial" : "active", trialStartedAt: trialEnabled ? acceptedAt : undefined, trialEndsAt, trialStatus: trialEnabled ? "ACTIVE" : "NOT_STARTED", planCode: trialEnabled ? (platformConfig?.trialPlanCode || "PREMIUM") : (platformConfig?.defaultPlanCode || "FREE") });
       await createIndividualSpaceForUser(user);
       if (trialEnabled) await Subscription.create({ userId: user._id, planCode: user.planCode, startsAt: acceptedAt, endsAt: trialEndsAt, status: "TRIAL", origin: "TRIAL" });
     } else {
@@ -563,6 +596,7 @@ app.get("/api/auth/google/callback", authLimiter, async (req, res) => {
       if (deniedMessage) throw new InputError(deniedMessage);
       if (user.googleId && user.googleId !== profile.sub) throw new InputError("Este e-mail já está vinculado a outra conta Google.");
       if (!user.googleId) user.googleId = profile.sub;
+      user.emailVerified = true;
       user.lastLoginAt = new Date();
       await user.save();
     }
@@ -590,6 +624,7 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     const user = await User.create({ name, email, passwordHash, termsAcceptedAt: acceptedAt, privacyAcceptedAt: acceptedAt, legalVersion: LEGAL_VERSION,accessStatus:trialEnabled?"trial":"active",trialStartedAt:trialEnabled?acceptedAt:undefined,trialEndsAt,trialStatus:trialEnabled?"ACTIVE":"NOT_STARTED",planCode:trialEnabled?(platformConfig?.trialPlanCode||"PREMIUM"):(platformConfig?.defaultPlanCode||"FREE") });
     await createIndividualSpaceForUser(user);
     if(trialEnabled)await Subscription.create({userId:user._id,planCode:user.planCode,startsAt:acceptedAt,endsAt:trialEndsAt,status:"TRIAL",origin:"TRIAL"});
+    try { await sendVerificationForUser(user); } catch { /* The account remains available; the user can resend from Settings. */ }
     res.status(201).json({ token: createToken(user), user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
@@ -646,6 +681,33 @@ app.post("/api/auth/reset-password", authLimiter, async (req, res) => {
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
     res.status(500).json({ message: "Erro ao redefinir senha." });
+  }
+});
+
+app.post("/api/auth/verify-email", authLimiter, async (req, res) => {
+  try {
+    const token = requiredText(req.body?.token, "Token", 100);
+    const user = await User.findOne({ emailVerificationTokenHash: hashResetToken(token), emailVerificationExpiresAt: { $gt: new Date() } }).select("+emailVerificationTokenHash +emailVerificationExpiresAt");
+    if (!user) return res.status(400).json({ message: "Este link é inválido ou expirou. Solicite um novo link nas Configurações." });
+    user.emailVerified = true;
+    user.emailVerificationTokenHash = undefined;
+    user.emailVerificationExpiresAt = undefined;
+    await user.save();
+    res.json({ ok: true, message: "E-mail confirmado com sucesso." });
+  } catch (error) {
+    if (error instanceof InputError) return res.status(400).json({ message: error.message });
+    res.status(500).json({ message: "Não foi possível confirmar seu e-mail agora." });
+  }
+});
+
+app.post("/api/auth/resend-verification", authLimiter, auth, async (req, res) => {
+  try {
+    if (req.user.emailVerified) return res.json({ ok: true, alreadyVerified: true, message: "Seu e-mail já está confirmado." });
+    await sendVerificationForUser(req.user);
+    res.json({ ok: true, message: "Enviamos um novo link de confirmação para seu e-mail." });
+  } catch (error) {
+    if (error instanceof InputError) return res.status(503).json({ message: error.message });
+    res.status(502).json({ message: "Não foi possível enviar o e-mail agora. Tente novamente." });
   }
 });
 

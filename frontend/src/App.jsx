@@ -61,6 +61,12 @@ function getPasswordResetFromUrl() {
   return window.location.pathname === "/recuperar-senha" && token ? token : "";
 }
 
+function getEmailVerificationFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  return window.location.pathname === "/verificar-email" && token ? token : "";
+}
+
 function consumeGoogleAuthResult() {
   const params = new URLSearchParams(window.location.hash.slice(1));
   const token = params.get("google_auth_token");
@@ -204,6 +210,7 @@ export default function App() {
   const [pendingInvite, setPendingInvite] = useState(() => getInviteFromUrl());
   const [inviteInfo, setInviteInfo] = useState(null);
   const [passwordResetToken, setPasswordResetToken] = useState(() => getPasswordResetFromUrl());
+  const [emailVerificationToken, setEmailVerificationToken] = useState(() => getEmailVerificationFromUrl());
   const [installPrompt, setInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(() => window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -765,6 +772,16 @@ export default function App() {
     return <LegalPage type={window.location.pathname === "/privacidade" ? "privacy" : "terms"} />;
   }
 
+  if (window.location.pathname === "/status") return <StatusPage />;
+
+  if (emailVerificationToken) {
+    return <VerifyEmailScreen token={emailVerificationToken} onComplete={() => {
+      window.history.replaceState({}, "", "/");
+      setEmailVerificationToken("");
+      if (user) api("/api/me").then((data) => { localStorage.setItem("finanflow_user", JSON.stringify(data.user)); setUser(data.user); }).catch(() => undefined);
+    }} />;
+  }
+
   if (passwordResetToken) {
     return <ResetPasswordScreen token={passwordResetToken} onComplete={() => {
       window.history.replaceState({}, "", "/");
@@ -916,6 +933,25 @@ function LegalPage({ type }) {
       <footer><a href={privacy ? "/termos" : "/privacidade"}>{privacy ? "Ler os Termos de Uso" : "Ler a Política de Privacidade"}</a></footer>
     </article></main>
   );
+}
+
+function StatusPage() {
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => { api("/api/status").then(setStatus).catch((requestError) => setError(requestError.message)); }, []);
+  const services = status?.services || {};
+  const serviceNames = { api: "Aplicativo", database: "Banco de dados", email: "E-mail" };
+  return <main className="legal-page"><article className="legal-document status-document">
+    <a className="legal-back" href="/">← Voltar ao FinanFlow</a><span className="eyebrow">Status do serviço</span><h1>FinanFlow está {status?.ok ? "operando normalmente" : "com instabilidade"}</h1><p className="legal-lead">Acompanhe em tempo real os serviços essenciais do FinanFlow.</p>
+    {error ? <div className="status-box">Não foi possível consultar o status agora. {error}</div> : !status ? <p>Consultando serviços…</p> : <section className="service-status-list">{Object.entries(services).map(([name, value]) => <div key={name}><span className={value === "operational" ? "service-ok" : "service-alert"} /><strong>{serviceNames[name]}</strong><small>{value === "operational" ? "Operacional" : "Indisponível"}</small></div>)}<p>Última atualização: {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" }).format(new Date(status.checkedAt))}</p></section>}
+  </article></main>;
+}
+
+function VerifyEmailScreen({ token, onComplete }) {
+  const [state, setState] = useState("confirming");
+  const [message, setMessage] = useState("");
+  useEffect(() => { api("/api/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }).then((data) => { setState("success"); setMessage(data.message); }).catch((error) => { setState("error"); setMessage(error.message); }); }, [token]);
+  return <main className="auth-page"><section className="auth-card"><span className="eyebrow">Segurança da conta</span><h1>{state === "confirming" ? "Confirmando…" : state === "success" ? "E-mail confirmado" : "Não foi possível confirmar"}</h1><p>{message || "Validando seu link de segurança."}</p><a className="auth-submit verify-return" href="/" onClick={onComplete}>{state === "success" ? "Continuar para o FinanFlow" : "Voltar ao FinanFlow"}</a></section></main>;
 }
 
 function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthForm, handleAuth, loading, message, setMessage }) {
@@ -1555,6 +1591,8 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
   const [profileName, setProfileName] = useState(user?.name || firstName);
   const [history, setHistory] = useState([]);
   const [historyMessage, setHistoryMessage] = useState("");
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
   const photoInputRef = useRef(null);
 
   async function loadHistory() {
@@ -1616,6 +1654,19 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
     }
   }
 
+  async function resendVerification() {
+    setVerificationLoading(true);
+    setVerificationMessage("");
+    try {
+      const data = await api("/api/auth/resend-verification", { method: "POST" });
+      setVerificationMessage(data.message);
+    } catch (error) {
+      setVerificationMessage(error.message);
+    } finally {
+      setVerificationLoading(false);
+    }
+  }
+
   function exportData() {
     const payload = { exportedAt: new Date().toISOString(), space: activeMode, accounts, transactions, protectedAmount: reserve };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
@@ -1641,6 +1692,7 @@ function Config({ reserve, setReserve, saveReserve, user, setUser, firstName, em
           <div className="profile-fields">
             <label>Seu nome<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={80} required /></label>
             <label>E-mail<input value={email || ""} readOnly /></label>
+            <div className={`email-verification ${user.emailVerified ? "is-verified" : ""}`}><strong>{user.emailVerified ? "E-mail confirmado" : "Confirme seu e-mail"}</strong><small>{user.emailVerified ? "Sua conta está protegida por um e-mail verificado." : "Enviaremos um link seguro para este endereço."}</small>{!user.emailVerified && <button type="button" className="settings-outline" disabled={verificationLoading} onClick={resendVerification}>{verificationLoading ? "Enviando..." : "Enviar link de confirmação"}</button>}{verificationMessage && <small className="settings-inline-message">{verificationMessage}</small>}</div>
             <p>Use uma foto sua para personalizar a conta. Nome e e-mail permanecem vinculados ao seu acesso.</p>
             <button type="button" onClick={saveProfile}>Salvar perfil</button>
             {profileMessage && <small className="settings-inline-message">{profileMessage}</small>}
