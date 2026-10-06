@@ -150,11 +150,24 @@ function readStoredUser() {
   }
 }
 
+// The API host sleeps when idle and can take up to a minute to wake up, so
+// read-only requests get a second, longer attempt instead of failing at once.
 async function api(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const canRetry = method === "GET" || method === "HEAD";
+  try {
+    return await apiAttempt(path, options, 15000);
+  } catch (error) {
+    if (!canRetry || !error.retryable) throw error;
+    return apiAttempt(path, options, 60000);
+  }
+}
+
+async function apiAttempt(path, options, timeoutMs) {
   if (!API_URL) throw new Error("API não configurada. Defina VITE_API_URL no ambiente do frontend.");
   const token = localStorage.getItem("finanflow_token");
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 12000);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -172,12 +185,18 @@ async function api(path, options = {}) {
     }
     return data;
   } catch (error) {
-    if (error.name === "AbortError") throw new Error("A API demorou para responder. Tente novamente.");
-    if (error instanceof TypeError) throw new Error("Não foi possível conectar à API. Verifique sua internet e tente novamente.");
+    if (error.name === "AbortError") throw retryableError("A API demorou para responder. Tente novamente.");
+    if (error instanceof TypeError) throw retryableError("Não foi possível conectar à API. Verifique sua internet e tente novamente.");
     throw error;
   } finally {
     window.clearTimeout(timeout);
   }
+}
+
+function retryableError(message) {
+  const error = new Error(message);
+  error.retryable = true;
+  return error;
 }
 
 export default function App() {
