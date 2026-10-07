@@ -9,6 +9,7 @@ import helmet from "helmet";
 import { OAuth2Client } from "google-auth-library";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
+import { ensureTransactionRequestIndex, requestIndexKey, requestIndexOptions } from "./transaction-index.js";
 import { AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
 import { canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
 import { registerDebtPlanRoutes } from "./debt-plan.js";
@@ -173,7 +174,7 @@ const transactionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-transactionSchema.index({ spaceId: 1, requestId: 1 }, { unique: true, sparse: true });
+transactionSchema.index(requestIndexKey, requestIndexOptions);
 
 const merchantCategoryMapSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -1286,6 +1287,7 @@ async function start() {
     process.exit(1);
   }
   await mongoose.connect(MONGODB_URI);
+  await ensureTransactionRequestIndex(Transaction.collection);
   console.log("MongoDB conectado.");
   const automaticReserveCutoff = new Date("2026-09-04T20:00:00.000Z");
   await Space.updateMany(
