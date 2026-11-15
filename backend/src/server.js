@@ -9,8 +9,9 @@ import helmet from "helmet";
 import { OAuth2Client } from "google-auth-library";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
+import { ensureTransactionRequestIndex, requestIndexKey, requestIndexOptions } from "./transaction-index.js";
 import { AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
-import { canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
+import { accessDenied as policyAccessDenied, canManageUser, canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
 import { registerDebtPlanRoutes } from "./debt-plan.js";
 
 dotenv.config();
@@ -79,7 +80,7 @@ const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5 });
 app.use(cors({
   origin(origin, callback) {
     if (!origin || CORS_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("Origem não permitida pelo CORS."));
+    return callback(Object.assign(new Error("Origem não permitida pelo CORS."), { status: 403 }));
   },
   credentials: true,
 }));
@@ -93,6 +94,8 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: function passwordRequired() { return !this.googleId; } },
     googleId: { type: String, unique: true, sparse: true, trim: true },
     passwordChangedAt: { type: Date },
+    oauthExchangeHash: { type: String, select: false },
+    oauthExchangeExpiresAt: { type: Date, select: false },
     passwordVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
@@ -173,7 +176,7 @@ const transactionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-transactionSchema.index({ spaceId: 1, requestId: 1 }, { unique: true, sparse: true });
+transactionSchema.index(requestIndexKey, requestIndexOptions);
 
 const merchantCategoryMapSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -251,7 +254,14 @@ const BackupSnapshot = mongoose.model("BackupSnapshot", backupSnapshotSchema);
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 function createToken(user) {
-  return jwt.sign({ userId: user._id.toString(), email: user.email, passwordVersion: Number(user.passwordVersion || 0) }, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ userId: user._id.toString(), email: user.email, passwordVersion: Number(user.passwordVersion || 0) }, JWT_SECRET, { expiresIn: effectiveRole(user, ADMIN_EMAILS) === "USER" ? "8h" : "1h", issuer: "finanflow" });
+}
+
+const SESSION_COOKIE = process.env.NODE_ENV === "production" ? "__Host-finanflow_session" : "finanflow_session";
+const sessionOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" };
+function setSession(res, user) {
+  res.cookie(SESSION_COOKIE, createToken(user), { ...sessionOptions, maxAge: (effectiveRole(user, ADMIN_EMAILS) === "USER" ? 8 : 1) * 3600000 });
+  res.set("Cache-Control", "no-store");
 }
 
 function googleAuthRedirect(res, params = {}) {
@@ -282,7 +292,7 @@ function safeStateEquals(left, right) {
 
 function validatePassword(value, label = "A senha") {
   if (typeof value !== "string" || !value) throw new InputError(`${label} é obrigatória.`);
-  if (value.length < 6) throw new InputError(`${label} precisa ter pelo menos 6 caracteres.`);
+  if (value.length < 12) throw new InputError(`${label} precisa ter pelo menos 12 caracteres.`);
   if (value.length > 128) throw new InputError(`${label} deve ter até 128 caracteres.`);
   return value;
 }
@@ -320,14 +330,18 @@ async function sendEmailVerificationEmail(email, token) {
 async function auth(req, res, next) {
   try {
     const header = req.headers.authorization || "";
-    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+    const bearer = header.startsWith("Bearer ") ? header.slice(7) : null;
+    const token = bearer || readCookie(req, SESSION_COOKIE);
+    if (!bearer && token && !["GET", "HEAD", "OPTIONS"].includes(req.method) && !CORS_ORIGINS.includes(req.headers.origin)) return res.status(403).json({ message: "Origem da solicitação inválida." });
     if (!token) return res.status(401).json({ message: "Token não informado." });
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"], issuer: "finanflow" });
+    res.set("Cache-Control", "no-store");
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
     const config=await AppConfig.findOne({key:"global"}).select("maintenanceMode maintenanceMessage").lean();
-    const effectiveRole=ADMIN_EMAILS.has(String(user.email).toLowerCase())?"SUPER_ADMIN":user.role||"USER";
-    if(config?.maintenanceMode&&effectiveRole==="USER")return res.status(503).json({message:config.maintenanceMessage||"FinanFlow está em manutenção. Voltaremos em breve."});
+    user.role = effectiveRole(user, ADMIN_EMAILS);
+    const currentRole = user.role;
+    if(config?.maintenanceMode&&currentRole==="USER")return res.status(503).json({message:config.maintenanceMessage||"FinanFlow está em manutenção. Voltaremos em breve."});
     const deniedMessage = accessDenied(user);
     if (deniedMessage) return res.status(403).json({ message: deniedMessage });
     if (Number(decoded.passwordVersion || 0) !== Number(user.passwordVersion || 0)) {
@@ -350,10 +364,7 @@ function publicUser(user) {
 }
 
 function accessDenied(user) {
-  if (ADMIN_EMAILS.has(String(user?.email || "").toLowerCase())) return "";
-  if (user?.accessStatus === "blocked") return "Seu acesso foi bloqueado. Entre em contato com o suporte.";
-  if (user?.accessStatus === "trial" && user.trialEndsAt && user.trialEndsAt <= new Date()) return "Seu período de teste terminou. Entre em contato com o suporte para continuar.";
-  return "";
+  return policyAccessDenied(user, ADMIN_EMAILS);
 }
 
 function adminOnly(req, res, next) {
@@ -543,7 +554,7 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/ready", (_req, res) => {
   const ready = mongoose.connection.readyState === 1;
-  res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString(),environment:process.env.RAILWAY_ENVIRONMENT_NAME||process.env.NODE_ENV||"local",version:process.env.RAILWAY_GIT_COMMIT_SHA||"development" });
+  res.status(ready ? 200 : 503).json({ ok: ready, database: ready ? "connected" : "unavailable", email: RESEND_API_KEY && EMAIL_FROM ? "configured" : "not_configured", timestamp: new Date().toISOString(),environment:process.env.RAILWAY_ENVIRONMENT_NAME||process.env.NODE_ENV||"local",version:process.env.RENDER_GIT_COMMIT||process.env.RAILWAY_GIT_COMMIT_SHA||process.env.APP_VERSION||"local" });
 });
 
 app.get("/api/status", (_req, res) => {
@@ -600,7 +611,11 @@ app.get("/api/auth/google/callback", authLimiter, async (req, res) => {
       user.lastLoginAt = new Date();
       await user.save();
     }
-    return googleAuthRedirect(res, { google_auth_token: createToken(user) });
+    const exchange = crypto.randomBytes(32).toString("base64url");
+    user.oauthExchangeHash = hashResetToken(exchange);
+    user.oauthExchangeExpiresAt = new Date(Date.now() + 60000);
+    await user.save();
+    return googleAuthRedirect(res, { google_auth_code: exchange });
   } catch (error) {
     return googleAuthRedirect(res, { google_auth_error: error instanceof InputError ? error.message : "Não foi possível entrar com Google. Tente novamente." });
   }
@@ -625,7 +640,8 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     await createIndividualSpaceForUser(user);
     if(trialEnabled)await Subscription.create({userId:user._id,planCode:user.planCode,startsAt:acceptedAt,endsAt:trialEndsAt,status:"TRIAL",origin:"TRIAL"});
     try { await sendVerificationForUser(user); } catch { /* The account remains available; the user can resend from Settings. */ }
-    res.status(201).json({ token: createToken(user), user: publicUser(user) });
+    setSession(res, user);
+    res.status(201).json({ user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
     if (error?.code === 11000) return res.status(409).json({ message: "Este e-mail já está cadastrado." });
@@ -717,9 +733,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     const email = emailAddress(rawEmail);
     const user = await User.findOne({ email }).select("+failedLoginAttempts +loginLockedUntil");
     if (!user) return res.status(401).json({ message: "E-mail ou senha inválidos." });
-    const deniedMessage = accessDenied(user);
-    if (deniedMessage) return res.status(403).json({ message: deniedMessage });
-    if (!user.passwordHash) return res.status(400).json({ message: "Esta conta usa Google. Entre com o botão Continuar com Google." });
+    if (!user.passwordHash) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     if (user.loginLockedUntil && user.loginLockedUntil > new Date()) return res.status(429).json({ message: "Acesso temporariamente bloqueado. Tente novamente em 15 minutos." });
     const valid = await bcrypt.compare(password || "", user.passwordHash);
     if (!valid) {
@@ -731,16 +745,29 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
       await user.save();
       return res.status(401).json({ message: "E-mail ou senha inválidos." });
     }
+    const deniedMessage = accessDenied(user);
+    if (deniedMessage) return res.status(403).json({ message: deniedMessage });
     user.failedLoginAttempts = 0;
     user.loginLockedUntil = undefined;
     user.lastLoginAt = new Date();
     await user.save();
-    res.json({ token: createToken(user), user: publicUser(user) });
+    setSession(res, user);
+    res.json({ user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     res.status(500).json({ message: "Erro ao fazer login." });
   }
 });
+
+app.post("/api/auth/session", authLimiter, async (req, res) => {
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (!code || code.length > 100) return res.status(401).json({ message: "Confirmação de login inválida." });
+  const user = await User.findOneAndUpdate({ oauthExchangeHash: hashResetToken(code), oauthExchangeExpiresAt: { $gt: new Date() } }, { $unset: { oauthExchangeHash: 1, oauthExchangeExpiresAt: 1 } }, { new: true });
+  if (!user || accessDenied(user)) return res.status(401).json({ message: "Confirmação de login expirada." });
+  setSession(res, user);
+  res.json({ user: publicUser(user) });
+});
+app.post("/api/auth/logout", (req, res) => { if (!CORS_ORIGINS.includes(req.headers.origin)) return res.status(403).json({message:"Origem inválida."}); res.clearCookie(SESSION_COOKIE, sessionOptions); res.json({ ok: true }); });
 
 app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: publicUser(req.user) })));
 
@@ -1249,7 +1276,7 @@ app.patch("/api/admin/users/:userId/access", auth, adminOnly, asyncHandler(async
   const target = await User.findById(req.params.userId);
   if (!target) return res.status(404).json({ message: "Usuário não encontrado." });
   const action = oneOf(req.body?.action, ["trial", "activate", "block", "unblock"], "Ação");
-  if (ADMIN_EMAILS.has(String(target.email).toLowerCase()) && action === "block") return res.status(400).json({ message: "O administrador principal não pode bloquear a própria conta." });
+  if (!canManageUser(req.user, target, ADMIN_EMAILS)) return res.status(403).json({ message: "Esta conta administrativa está protegida." });
   if (action === "trial") {
     const months = Number(req.body?.months);
     if (![1, 2, 3].includes(months)) throw new InputError("Escolha um teste de 1, 2 ou 3 meses.");
@@ -1265,15 +1292,16 @@ app.patch("/api/admin/users/:userId/access", auth, adminOnly, asyncHandler(async
   res.json({ message: action === "trial" ? "Período de teste aplicado." : action === "block" ? "Usuário bloqueado e sessões encerradas." : "Acesso liberado." });
 }));
 
-registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,sendRecovery:sendRecoveryForUser});
+registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,canManageUser:(actor,target)=>canManageUser(actor,target,ADMIN_EMAILS),sendRecovery:sendRecoveryForUser});
 registerDebtPlanRoutes(app, { auth, Space, Member, Account, Transaction });
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
 
 app.use((error, _req, res, _next) => {
-  console.error("Erro na API:", error);
+  if (!error.status || error.status >= 500) console.error("Erro na API:", error.name, error.message);
   const invalidInput = error.status === 400 || error.name === "ValidationError" || error.name === "CastError";
-  res.status(invalidInput ? 400 : 500).json({ message: invalidInput ? error.message || "Dados inválidos." : "Erro interno da API." });
+  const status = invalidInput ? 400 : error.status >= 400 && error.status < 500 ? error.status : 500;
+  res.status(status).json({ message: status < 500 ? error.message || "Dados inválidos." : "Erro interno da API." });
 });
 
 async function start() {
@@ -1286,6 +1314,7 @@ async function start() {
     process.exit(1);
   }
   await mongoose.connect(MONGODB_URI);
+  await ensureTransactionRequestIndex(Transaction.collection);
   console.log("MongoDB conectado.");
   const automaticReserveCutoff = new Date("2026-09-04T20:00:00.000Z");
   await Space.updateMany(
