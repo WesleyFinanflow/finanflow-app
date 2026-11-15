@@ -191,6 +191,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
   const [tab, setTabState] = useState(
       NAV.some((x) => x[0] === initial) ? initial : "dashboard",
     ),
+    [page, setPage] = useState(1),
     [data, setData] = useState(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -207,7 +208,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
     refreshingRef.current = true;
     if (!silent) setLoading(true);
     try {
-      setData(await api("/api/admin/bootstrap"));
+      setData(await api(`/api/admin/bootstrap?page=${page}`));
       setError("");
     } catch (e) {
       setError(e.message);
@@ -230,7 +231,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", update);
     };
-  }, []);
+  }, [page]);
   if (error && !data)
     return (
       <main className="admin-denied">
@@ -243,6 +244,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
   const title = NAV.find((x) => x[0] === tab)?.[1] || "Administração";
   return (
     <main className="admin-shell">
+
       <header className="admin-mobile-header">
         <div className="admin-mobile-brand">
           <svg
@@ -394,7 +396,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
           )}
           <button
             className="admin-profile-trigger admin-plain"
-            aria-label="Abrir menu do perfil de Wesley"
+            aria-label="Abrir menu do perfil"
             aria-expanded={profileOpen}
             onClick={() => setProfileOpen(!profileOpen)}
           >
@@ -407,6 +409,11 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
         </footer>
       </aside>
       <section className="admin-workspace">
+      {data?.pagination?.pages > 1 && <section className="admin-card admin-pagination" aria-label="Paginação dos clientes">
+        <button disabled={loading || page === 1} onClick={() => setPage(page - 1)}>Página anterior</button>
+        <span>Clientes: página {page} de {data.pagination.pages}. Pesquise ou exporte os clientes exibidos nesta página.</span>
+        <button disabled={loading || page >= data.pagination.pages} onClick={() => setPage(page + 1)}>Próxima página</button>
+      </section>}
         <header className="admin-top">
           <div>
             <h1>{tab === "dashboard" ? "Painel administrativo" : title}</h1>

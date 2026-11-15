@@ -3,8 +3,8 @@ services:
     name: finanflow-api
     runtime: node
     rootDir: backend
-    buildCommand: npm ci
-    startCommand: npm start
+    buildCommand: npx --yes pnpm@12.11.2 install --frozen-lockfile
+    startCommand: node src/server.js
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:

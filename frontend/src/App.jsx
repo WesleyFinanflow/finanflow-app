@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
@@ -8,21 +8,11 @@ import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
 import safeShieldIcon from "./assets/financial-icons/safe-shield.webp";
-import AdminApp from "./AdminApp.jsx";
+const AdminApp = lazy(() => import("./AdminApp.jsx"));
 import DebtPlanPage, { DebtPlanReport } from "./DebtPlan.jsx";
 
 function getApiUrl() {
-  const host = window.location.hostname;
-
-  if (host.endsWith("app.github.dev") && host.includes("-5173")) {
-    return "";
-  }
-
-  const envUrl = import.meta.env.VITE_API_URL;
-  if (envUrl) return envUrl;
-
-  if (host === "localhost" || host === "127.0.0.1") return "http://localhost:3000";
-  return "https://finanflow-api.onrender.com";
+  return import.meta.env.DEV ? (import.meta.env.VITE_API_URL || "") : "";
 }
 
 const API_URL = getApiUrl();
@@ -69,7 +59,7 @@ function getEmailVerificationFromUrl() {
 
 function consumeGoogleAuthResult() {
   const params = new URLSearchParams(window.location.hash.slice(1));
-  const token = params.get("google_auth_token");
+  const token = params.get("google_auth_code");
   const error = params.get("google_auth_error");
   if (!token && !error) return { token: "", error: "" };
   window.history.replaceState({}, "", window.location.pathname + window.location.search);
@@ -164,23 +154,21 @@ async function api(path, options = {}) {
 }
 
 async function apiAttempt(path, options, timeoutMs) {
-  if (!API_URL) throw new Error("API não configurada. Defina VITE_API_URL no ambiente do frontend.");
-  const token = localStorage.getItem("finanflow_token");
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
       signal: controller.signal,
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      if (response.status === 401 && token) window.dispatchEvent(new Event("finanflow:unauthorized"));
+      if (response.status === 401 && readStoredUser() && path !== "/api/auth/login") window.dispatchEvent(new Event("finanflow:unauthorized"));
       throw new Error(data.message || "A API não conseguiu concluir esta operação.");
     }
     return data;
@@ -201,7 +189,7 @@ function retryableError(message) {
 
 export default function App() {
   const [googleAuthResult] = useState(() => consumeGoogleAuthResult());
-  const [user, setUser] = useState(() => readStoredUser());
+  const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "", acceptLegal: false });
   const [activeMenu, setActiveMenu] = useState(() => window.location.pathname === "/planejamento/dividas" ? "Planejamento" : "Início");
@@ -293,8 +281,7 @@ export default function App() {
   useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
   useEffect(() => {
     if (!googleAuthResult.token) { if (googleAuthResult.error) setMessage(googleAuthResult.error); return; }
-    localStorage.setItem("finanflow_token", googleAuthResult.token);
-    api("/api/me").then((data) => { clearUserState(); localStorage.setItem("finanflow_token", googleAuthResult.token); localStorage.setItem("finanflow_user", JSON.stringify(data.user)); setUser(data.user); setMessage("Acesso realizado com Google."); }).catch((error) => { localStorage.removeItem("finanflow_token"); setMessage(error.message); });
+    api("/api/auth/session", { method: "POST", body: JSON.stringify({ code: googleAuthResult.token }) }).then((data) => { clearUserState(); localStorage.setItem("finanflow_user", JSON.stringify(data.user)); setUser(data.user); setMessage("Acesso realizado com Google."); }).catch((error) => { localStorage.removeItem("finanflow_token"); setMessage(error.message); });
   }, [googleAuthResult]);
 
 
@@ -302,7 +289,7 @@ export default function App() {
   useEffect(()=>{if(user)Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id]);
 
   useEffect(() => {
-    if (!user) return;
+    localStorage.removeItem("finanflow_token");
     api("/api/me").then((data) => {
       localStorage.setItem("finanflow_user", JSON.stringify(data.user));
       setUser(data.user);
@@ -393,9 +380,11 @@ export default function App() {
     setMessage("");
     try {
       const path = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+      setMessage("Conectando ao servidor. O primeiro acesso pode levar um minuto...");
+      await api("/api/ready");
       const data = await api(path, { method: "POST", body: JSON.stringify(authForm) });
       clearUserState();
-      localStorage.setItem("finanflow_token", data.token);
+      localStorage.removeItem("finanflow_token");
       localStorage.setItem("finanflow_user", JSON.stringify(data.user));
       setUser(data.user);
       setMessage("Acesso realizado com sucesso.");
@@ -748,7 +737,8 @@ export default function App() {
     spaceRequestId.current += 1;
   }
 
-  function logout() {
+  async function logout() {
+    try { await api("/api/auth/logout", { method: "POST" }); } catch (error) { setMessage(error.message); return; }
     localStorage.removeItem("finanflow_token");
     localStorage.removeItem("finanflow_user");
     clearUserState();
@@ -832,7 +822,7 @@ export default function App() {
   if(platformConfig?.maintenanceMode&&!user.isAdmin)return <main className="maintenance-page"><ShieldCheck size={48}/><span className="eyebrow">Manutenção programada</span><h1>FinanFlow está em manutenção</h1><p>{platformConfig.maintenanceMessage}</p><button onClick={()=>window.location.reload()}>Verificar novamente</button></main>;
 
   if (window.location.pathname === "/admin") {
-    return <AdminApp api={api} user={user} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} onLogout={logout} />;
+    return <Suspense fallback={<p role="status">Carregando administração...</p>}><AdminApp api={api} user={user} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} onLogout={logout} /></Suspense>;
   }
 
   if (pendingInvite) {
@@ -987,7 +977,7 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
   function continueWithGoogle() {
     if (!isLogin && !authForm.acceptLegal) { setMessage("Aceite os Termos de Uso e a Política de Privacidade para criar sua conta com Google."); return; }
     if (!googleAvailable) { setMessage("O login com Google está sendo configurado. Use e-mail e senha por enquanto."); return; }
-    const baseUrl = API_URL || window.location.origin;
+    const baseUrl = import.meta.env.DEV ? (API_URL || window.location.origin) : "https://finanflow-api.onrender.com";
     window.location.assign(baseUrl + "/api/auth/google?intent=" + (isLogin ? "login" : "register"));
   }
 
@@ -1031,7 +1021,7 @@ function AuthScreen({ pendingInvite, authMode, setAuthMode, authForm, setAuthFor
           <div className="password-field">
             <label htmlFor="auth-password">Senha</label>
             <span className="password-input">
-              <input id="auth-password" aria-label="Senha" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Mínimo 6 caracteres" type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} required minLength={6} maxLength={128} />
+              <input id="auth-password" aria-label="Senha" value={authForm.password} onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })} placeholder="Mínimo 12 caracteres" type={showPassword ? "text" : "password"} autoComplete={isLogin ? "current-password" : "new-password"} required minLength={isLogin ? 1 : 12} maxLength={128} />
               <button className="password-toggle" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} title={showPassword ? "Ocultar senha" : "Mostrar senha"}>
                 {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
               </button>
@@ -1117,7 +1107,7 @@ function ResetPasswordScreen({ token, onComplete }) {
         <p>O link só pode ser usado uma vez.</p>
         <form className="form" onSubmit={submit}>
           <PasswordInput id="reset-password" label="Nova senha" value={form.password} onChange={(value) => setForm({ ...form, password: value })} visible={showPassword} toggle={() => setShowPassword((current) => !current)} autoComplete="new-password" />
-          <label>Confirmar nova senha<input type={showPassword ? "text" : "password"} value={form.confirmation} onChange={(event) => setForm({ ...form, confirmation: event.target.value })} required minLength={6} maxLength={128} autoComplete="new-password" /></label>
+          <label>Confirmar nova senha<input type={showPassword ? "text" : "password"} value={form.confirmation} onChange={(event) => setForm({ ...form, confirmation: event.target.value })} required minLength={12} maxLength={128} autoComplete="new-password" /></label>
           <button disabled={loading}>{loading ? "Salvando..." : "Redefinir senha"}</button>
         </form>
         {message && <div className="status-box" role="status" aria-live="polite">{message}</div>}
@@ -1131,7 +1121,7 @@ function PasswordInput({ id, label, value, onChange, visible, toggle, autoComple
     <div className="password-field">
       <label htmlFor={id}>{label}</label>
       <span className="password-input">
-        <input id={id} aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} type={visible ? "text" : "password"} required minLength={6} maxLength={128} autoComplete={autoComplete} />
+        <input id={id} aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} type={visible ? "text" : "password"} required minLength={autoComplete === "current-password" ? 1 : 12} maxLength={128} autoComplete={autoComplete} />
         <button className="password-toggle" type="button" onClick={toggle} aria-label={visible ? "Ocultar senha" : "Mostrar senha"} title={visible ? "Ocultar senha" : "Mostrar senha"}>{visible ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}</button>
       </span>
     </div>
