@@ -192,29 +192,31 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
       NAV.some((x) => x[0] === initial) ? initial : "dashboard",
     ),
     [page, setPage] = useState(1),
+    [search,setSearch]=useState(""),
     [data, setData] = useState(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [more, setMore] = useState(false),
     [profileOpen, setProfileOpen] = useState(false),
-    refreshingRef = useRef(false);
+    refreshingRef = useRef(0);
   const setTab = (next) => {
     setTabState(next);
+    setPage(1);
     location.hash = next;
     setMore(false);
   };
   async function refresh({ silent = false } = {}) {
-    if (refreshingRef.current) return;
-    refreshingRef.current = true;
+    const requestId=++refreshingRef.current;
     if (!silent) setLoading(true);
     try {
-      setData(await api(`/api/admin/bootstrap?page=${page}`));
+      const next=await api(`/api/admin/bootstrap?page=${page}&section=${encodeURIComponent(tab)}&${tab==="clients"?search:""}`);
+      if(requestId!==refreshingRef.current)return;
+      setData(next);
       setError("");
     } catch (e) {
-      setError(e.message);
+      if(requestId===refreshingRef.current)setError(e.message);
     } finally {
-      refreshingRef.current = false;
-      if (!silent) setLoading(false);
+      if (!silent && requestId===refreshingRef.current) setLoading(false);
     }
   }
   useEffect(() => {
@@ -231,7 +233,8 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", update);
     };
-  }, [page]);
+  }, [page,search,tab]);
+  useEffect(()=>{setPage(1);},[search]);
   if (error && !data)
     return (
       <main className="admin-denied">
@@ -241,6 +244,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
         <button onClick={onExit}>Voltar ao FinanFlow</button>
       </main>
     );
+  const pagination=data?.listPagination || data?.pagination;
   const title = NAV.find((x) => x[0] === tab)?.[1] || "Administração";
   return (
     <main className="admin-shell">
@@ -409,10 +413,10 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
         </footer>
       </aside>
       <section className="admin-workspace">
-      {data?.pagination?.pages > 1 && <section className="admin-card admin-pagination" aria-label="Paginação dos clientes">
+      {pagination?.pages > 1 && <section className="admin-card admin-pagination" aria-label="Paginação dos clientes">
         <button disabled={loading || page === 1} onClick={() => setPage(page - 1)}>Página anterior</button>
-        <span>Clientes: página {page} de {data.pagination.pages}. Pesquise ou exporte os clientes exibidos nesta página.</span>
-        <button disabled={loading || page >= data.pagination.pages} onClick={() => setPage(page + 1)}>Próxima página</button>
+        <span>Registros: página {page} de {pagination.pages}. {pagination.total} registros encontrados.</span>
+        <button disabled={loading || page >= pagination.pages} onClick={() => setPage(page + 1)}>Próxima página</button>
       </section>}
         <header className="admin-top">
           <div>
@@ -444,6 +448,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
             </button>
           </div>
         </header>
+        {error&&<p role="alert">{error}</p>}
         {data && (
           <AdminContent
             tab={tab}
@@ -451,6 +456,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
             api={api}
             refresh={refresh}
             setTab={setTab}
+            search={search} setSearch={setSearch}
           />
         )}
       </section>
@@ -505,10 +511,10 @@ function AdminAvatar({ user, large = false }) {
   );
 }
 
-function AdminContent({ tab, data, api, refresh, setTab }) {
+function AdminContent({ tab, data, api, refresh, setTab, search, setSearch }) {
   if (tab === "dashboard") return <Dashboard data={data} setTab={setTab} />;
   if (tab === "clients")
-    return <Clients data={data} api={api} refresh={refresh} />;
+    return <Clients data={data} api={api} refresh={refresh} search={search} setSearch={setSearch} />;
   if (tab === "trials")
     return <Trials data={data} api={api} refresh={refresh} />;
   if (tab === "subscriptions")
@@ -749,62 +755,29 @@ function MiniUsers({ users }) {
   );
 }
 
-function Clients({ data, api, refresh }) {
+function Clients({ data, api, refresh, search, setSearch }) {
   const [q, setQ] = useState(""),
     [status, setStatus] = useState("all"),
     [plan, setPlan] = useState("all"),
     [role, setRole] = useState("all"),
     [sort, setSort] = useState("recent"),
-    [selected, setSelected] = useState(null);
-  const users = useMemo(
-    () =>
-      data.users
-        .filter((u) =>
-          `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()),
-        )
-        .filter(
-          (u) =>
-            status === "all" ||
-            (status === "trial" && u.trialStatus === "ACTIVE") ||
-            (status === "blocked" && u.accessStatus === "blocked") ||
-            (status === "active" && u.accessStatus !== "blocked"),
-        )
-        .filter((u) => plan === "all" || u.planCode === plan)
-        .filter((u) => role === "all" || u.role === role)
-        .sort((a, b) =>
-          sort === "name"
-            ? a.name.localeCompare(b.name)
-            : sort === "old"
-              ? new Date(a.createdAt) - new Date(b.createdAt)
-              : sort === "access"
-                ? new Date(b.lastLoginAt || 0) - new Date(a.lastLoginAt || 0)
-                : new Date(b.createdAt) - new Date(a.createdAt),
-        ),
-    [data.users, q, status, plan, role, sort],
-  );
-  const exportRows = users.map((u) => ({
-    nome: u.name,
-    email: u.email,
-    status: u.accessStatus,
-    role: u.role,
-    plano: u.planCode,
-    teste: u.trialStatus,
-    espacos: u.spaces || 0,
-    cadastro: u.createdAt,
-    ultimo_acesso: u.lastLoginAt,
-  }));
+    [selected, setSelected] = useState(null),
+    [notice,setNotice]=useState("");
+  useEffect(()=>{setSearch(new URLSearchParams({q,status,plan,role,sort}).toString());},[q,status,plan,role,sort]);
+  const users=data.users;
   async function block(e, u) {
     e.stopPropagation();
-    await api(`/api/admin/users/${u._id}`, {
+    try {await api(`/api/admin/users/${u._id}`, {
       method: "PATCH",
       body: JSON.stringify({
         action: u.accessStatus === "blocked" ? "unblock" : "block",
       }),
     });
-    refresh();
+    await refresh();setNotice("Acesso atualizado.");}catch(error){setNotice(error.message);}
   }
   return (
     <div className="admin-stack clients-page">
+      {notice&&<p role="status">{notice}</p>}
       <div className="admin-stats client-stats">
         <Stat
           name="TOTAL DE CLIENTES"
@@ -845,7 +818,7 @@ function Clients({ data, api, refresh }) {
           setRole={setRole}
           sort={sort}
           setSort={setSort}
-          onExport={() => download("finanflow-clientes", exportRows, "csv")}
+          onExport={async () => {try {const result=await api(`/api/admin/export/users?${search}`);download("finanflow-clientes",result.data,"csv");}catch(error){setNotice(error.message);}}}
         />
         <div className="admin-client-list">
           <div className="client-list-head">
@@ -890,6 +863,7 @@ function Clients({ data, api, refresh }) {
                 </button>
                 <button
                   className={`admin-plain ${u.accessStatus === "blocked" ? "" : "danger"}`}
+                  disabled={u.canManage === false}
                   onClick={(e) => block(e, u)}
                 >
                   {u.accessStatus === "blocked" ? "Desbloquear" : "Bloquear"}
@@ -899,7 +873,7 @@ function Clients({ data, api, refresh }) {
           ))}
         </div>
         <footer className="client-list-footer">
-          Mostrando {users.length} de {data.users.length} clientes
+          Mostrando {users.length} de {data.pagination?.total ?? data.users.length} clientes encontrados
         </footer>
       </section>
       {selected && (
@@ -909,7 +883,6 @@ function Clients({ data, api, refresh }) {
           api={api}
           refresh={async () => {
             await refresh();
-            setSelected(null);
           }}
         />
       )}
@@ -1040,46 +1013,43 @@ function ClientModal({ user, close, api, refresh }) {
   const [full, setFull] = useState(null),
     [busy, setBusy] = useState(false),
     [note, setNote] = useState(""),
-    [confirm, setConfirm] = useState(false);
+    [confirm, setConfirm] = useState(false),
+    [error,setError]=useState(""),[message,setMessage]=useState("");
+  const dialogRef=useRef(null);
+  useEffect(()=>{const previous=document.activeElement;dialogRef.current?.focus();const onKey=(e)=>{if(e.key==="Escape"&&!busy)close();if(e.key==="Tab"){const nodes=[...dialogRef.current.querySelectorAll("button:not(:disabled),input,select,textarea,[tabindex='0']")];if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}};document.addEventListener("keydown",onKey);return()=>{document.removeEventListener("keydown",onKey);previous?.focus();};},[busy]);
   useEffect(() => {
-    api(`/api/admin/users/${user._id}`).then(setFull);
+    api(`/api/admin/users/${user._id}`).then(setFull).catch(e=>setError(e.message));
   }, [user._id]);
   async function action(payload) {
-    setBusy(true);
+    setBusy(true);setError("");setMessage("");
     try {
       await api(`/api/admin/users/${user._id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
+      setFull(await api(`/api/admin/users/${user._id}`));setMessage("Acesso atualizado com sucesso.");
       await refresh();
+    } catch(e){setError(e.message);
     } finally {
       setBusy(false);
     }
   }
   async function addNote() {
-    if (!note.trim()) return;
-    await api(`/api/admin/users/${user._id}/notes`, {
-      method: "POST",
-      body: JSON.stringify({ text: note }),
-    });
-    setNote("");
-    setFull(await api(`/api/admin/users/${user._id}`));
+    if(!note.trim()||busy)return;setBusy(true);setError("");
+    try{await api(`/api/admin/users/${user._id}/notes`,{method:"POST",body:JSON.stringify({text:note})});setNote("");setFull(await api(`/api/admin/users/${user._id}`));setMessage("Nota adicionada.");}catch(e){setError(e.message);}finally{setBusy(false);}
   }
-  async function remove() {
-    setBusy(true);
-    await api(`/api/admin/users/${user._id}`, { method: "DELETE" });
-    await refresh();
-  }
+  async function remove(){setBusy(true);setError("");try{await api(`/api/admin/users/${user._id}`,{method:"DELETE"});await refresh();close();}catch(e){setError(e.message);}finally{setBusy(false);}}
   return (
     <div className="admin-modal-bg">
-      <section className="admin-modal client-detail">
-        <button className="close" onClick={close}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="client-detail-title" aria-busy={busy} className="admin-modal client-detail">
+        {error&&<p role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
+        <button className="close" aria-label="Fechar detalhes do cliente" disabled={busy} onClick={close}>
           <X />
         </button>
         <header>
           <AdminAvatar user={user} large />
           <div>
-            <h2>{user.name}</h2>
+            <h2 id="client-detail-title">{user.name}</h2>
             <p>{user.email}</p>
             <small>ID: {user._id}</small>
           </div>
@@ -1107,33 +1077,29 @@ function ClientModal({ user, close, api, refresh }) {
               <Info
                 title="Plano e teste"
                 rows={[
-                  ["Plano", user.planCode],
-                  ["Status", label[user.trialStatus]],
-                  ["Fim", date(user.trialEndsAt)],
+                  ["Plano", full.user.planCode],
+                  ["Status", (full.user.accessOrigin || user.accessOrigin) === "COURTESY" ? "Cortesia sem vencimento" : label[(full.user || user).trialStatus]],
+                  ["Fim", (full.user.accessOrigin || user.accessOrigin) === "COURTESY" ? "Sem vencimento" : date(full.user.trialEndsAt)],
                 ]}
               />
             </div>
             <h3>Ações de acesso</h3>
-            <div className="action-grid">
+            <fieldset className="action-grid" disabled={busy || user.canManage === false}>
               <button
                 onClick={() =>
                   action({
                     action:
-                      user.accessStatus === "blocked" ? "unblock" : "block",
+                      (full?.user || user).accessStatus === "blocked" ? "unblock" : "block",
                   })
                 }
               >
-                {user.accessStatus === "blocked" ? "Desbloquear" : "Bloquear"}
+                {(full?.user || user).accessStatus === "blocked" ? "Desbloquear" : "Bloquear"}
               </button>
               <button onClick={() => action({ action: "sessions" })}>
                 Encerrar sessões
               </button>
               <button
-                onClick={() =>
-                  api(`/api/admin/users/${user._id}/recovery`, {
-                    method: "POST",
-                  })
-                }
+                onClick={() => api(`/api/admin/users/${user._id}/recovery`, {method:"POST"}).then(()=>setMessage("Recuperação enviada.")).catch(e=>setError(e.message))}
               >
                 Enviar recuperação
               </button>
@@ -1147,9 +1113,9 @@ function ClientModal({ user, close, api, refresh }) {
                 <option>ADMIN</option>
                 <option>SUPER_ADMIN</option>
               </select>
-            </div>
+            </fieldset>
             <h3>Teste grátis</h3>
-            <div className="action-grid">
+            <fieldset className="action-grid" disabled={busy || user.canManage === false}>
               {[3, 7, 15, 30].map((d) => (
                 <button
                   key={d}
@@ -1171,9 +1137,9 @@ function ClientModal({ user, close, api, refresh }) {
               >
                 Encerrar teste
               </button>
-            </div>
-            <h3>Plano manual</h3>
-            <div className="action-grid">
+            </fieldset>
+            <h3>Plano de cortesia — sem vencimento</h3><p>Libera os recursos do plano sem cobrança. O usuário continua sem permissões administrativas.</p>
+            <fieldset className="action-grid" disabled={busy || user.canManage === false}>
               {["FREE", "PLUS", "PREMIUM"].map((p) => (
                 <button
                   key={p}
@@ -1182,7 +1148,7 @@ function ClientModal({ user, close, api, refresh }) {
                   {p}
                 </button>
               ))}
-            </div>
+            </fieldset>
             <h3>Notas internas</h3>
             <div className="note-form">
               <textarea
@@ -1204,7 +1170,7 @@ function ClientModal({ user, close, api, refresh }) {
             </div>
             <h3>Conta</h3>
             <button
-              className="danger account-delete"
+              className="danger account-delete" disabled={busy || user.canManage === false}
               onClick={() => setConfirm(true)}
             >
               Excluir conta e dados vinculados
@@ -1251,7 +1217,7 @@ function Info({ title, rows, size }) {
 }
 
 function Trials({ data, api, refresh }) {
-  const list = data.users.filter((u) => u.trialStatus !== "NOT_STARTED");
+  const list = data.users.filter((u) => !u.isAdmin && u.accessStatus === "trial" && ["ACTIVE","EXPIRED"].includes(u.trialStatus));
   const act = (u, days) =>
     api(`/api/admin/users/${u._id}`, {
       method: "PATCH",

@@ -3,41 +3,64 @@ on:
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mongodb-backup
+  cancel-in-progress: false
 jobs:
   backup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    services:
+      restore-test:
+        image: mongo:8.0
+        ports: ['27018:27017']
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Verificar configuração
-        id: config
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      - name: Exigir configuração de backup
         run: |
-          if [ -n "$MONGODB_URI" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Backup aguardando o secret MONGODB_URI."
-          fi
-      - name: Instalar MongoDB Database Tools
-        if: steps.config.outputs.ready == 'true'
+          set -euo pipefail
+          test -n "$MONGODB_URI" || { echo "::error::Configure MONGODB_URI. Nenhum backup criado."; exit 1; }
+          test -n "$BACKUP_ENCRYPTION_KEY" || { echo "::error::Configure BACKUP_ENCRYPTION_KEY. Nenhum backup criado."; exit 1; }
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.parse
+          uri = os.environ['MONGODB_URI']
+          database = urllib.parse.unquote(urllib.parse.urlsplit(uri).path.lstrip('/'))
+          if not database or '/' in database:
+              raise SystemExit('MONGODB_URI deve especificar o banco do aplicativo.')
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'mongo-backup-config.json'
+          p.write_text(json.dumps({'uri': uri})); p.chmod(0o600)
+          PY
+      - name: Instalar ferramentas oficiais
         run: |
+          set -euo pipefail
           curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
           echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
-          sudo apt-get update && sudo apt-get install -y mongodb-database-tools
-      - name: Criar backup
-        if: steps.config.outputs.ready == 'true'
-        env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-        run: mongodump --uri="$MONGODB_URI" --archive=finanflow.archive.gz --gzip
-      - name: Criar checksum
-        if: steps.config.outputs.ready == 'true'
-        run: sha256sum finanflow.archive.gz > finanflow.archive.gz.sha256
-      - uses: actions/upload-artifact@v4
-        if: steps.config.outputs.ready == 'true'
+          sudo apt-get update -qq && sudo apt-get install -y mongodb-database-tools
+      - name: Criar cópia e testar restauração isolada
+        run: |
+          set -euo pipefail
+          mongodump --config="$RUNNER_TEMP/mongo-backup-config.json" --archive="$RUNNER_TEMP/finanflow.archive.gz" --gzip > "$RUNNER_TEMP/dump.log" 2>&1
+          test -s "$RUNNER_TEMP/finanflow.archive.gz"
+          # Destino fixo e descartável. Nunca restaura no URI de origem.
+          mongorestore --uri=mongodb://127.0.0.1:27018 --archive="$RUNNER_TEMP/finanflow.archive.gz" --gzip --stopOnError > "$RUNNER_TEMP/restore.log" 2>&1
+      - name: Criptografar e verificar integridade
+        run: |
+          set -euo pipefail
+          mkdir -p backup
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -in "$RUNNER_TEMP/finanflow.archive.gz" -out backup/finanflow.archive.gz.enc -pass env:BACKUP_ENCRYPTION_KEY
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in backup/finanflow.archive.gz.enc -out "$RUNNER_TEMP/roundtrip.gz" -pass env:BACKUP_ENCRYPTION_KEY
+          cmp "$RUNNER_TEMP/finanflow.archive.gz" "$RUNNER_TEMP/roundtrip.gz"
+          cd backup && sha256sum finanflow.archive.gz.enc > finanflow.archive.gz.enc.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: finanflow-backup-${{ github.run_id }}
-          path: |
-            finanflow.archive.gz
-            finanflow.archive.gz.sha256
+          path: backup/
+          if-no-files-found: error
           retention-days: 30
+      - name: Remover material temporário
+        if: always()
+        run: rm -f "$RUNNER_TEMP/mongo-backup-config.json" "$RUNNER_TEMP/finanflow.archive.gz" "$RUNNER_TEMP/roundtrip.gz"

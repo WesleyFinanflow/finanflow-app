@@ -29,12 +29,13 @@ export async function redeemCoupon(models, actor, code) {
     if (coupon.benefitType === "EXTRA_TRIAL_DAYS") {
       const base = user.trialEndsAt && user.trialEndsAt > new Date() ? new Date(user.trialEndsAt) : new Date();
       base.setDate(base.getDate() + days);
-      Object.assign(user, { trialEndsAt: base, trialStartedAt: user.trialStartedAt || new Date(), trialStatus: "ACTIVE", accessStatus: "trial" });
+      Object.assign(user, { trialEndsAt: base, trialStartedAt: user.trialStartedAt || new Date(), trialStatus: "ACTIVE", accessStatus: "trial", accessOrigin: "TRIAL" });
       applied = `${days} dias extras de teste`;
     } else if (["PLUS_DAYS", "PREMIUM_DAYS"].includes(coupon.benefitType)) {
       const planCode = coupon.benefitType === "PLUS_DAYS" ? "PLUS" : "PREMIUM";
       await Subscription.create([{ userId: user._id, planCode, startsAt: new Date(), endsAt: new Date(Date.now() + days * 86400000), status: "MANUAL", origin: "ADMIN" }], { session });
       user.planCode = planCode;
+      user.accessOrigin = "SUBSCRIPTION"; user.trialStatus = "CONVERTED"; user.trialEndsAt = undefined;
       user.accessStatus = "active";
       applied = `${planCode} por ${days} dias`;
     } else applied = coupon.benefitType === "PERCENT_DISCOUNT" ? `${coupon.benefitValue}% de desconto registrado` : `${Number(coupon.benefitValue).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} de desconto registrado`;
