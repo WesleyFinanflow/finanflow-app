@@ -44,6 +44,8 @@ test("HttpOnly session, CSRF, reload and logout", async () => {
   assert.equal((await request("/api/support", login.cookie, { subject: "Test", message: "Test" }, "POST", "https://evil.example")).status, 403);
   const logout = await request("/api/auth/logout", login.cookie, {});
   assert.equal(logout.status, 200); assert.match(logout.headers.get("set-cookie"), /Expires=Thu, 01 Jan 1970/i);
+  assert.equal((await request("/api/me", login.cookie)).status, 401);
+  assert.equal((await request("/api/me", alice.cookie)).status, 200);
 });
 test("invalid support category and malformed admin ID return 400; server survives", async () => {
   assert.equal((await request("/api/support", alice.cookie, { subject: "Test", message: "Test", category: "INVALID" })).status, 400);
@@ -113,4 +115,74 @@ test("dashboard paginates users while preserving global counts", async () => {
   assert.equal(first.body.stats.users, 109); assert.equal(second.body.stats.users, 109);
   assert.equal(first.body.users.length, 100); assert.equal(second.body.users.length, 9);
   assert.equal(new Set([...first.body.users, ...second.body.users].map(x => x._id)).size, 109);
+});
+
+test("adding trial days preserves existing time; courtesy clears test metadata", async () => {
+  let r=await request(`/api/admin/users/${alice.id}`,owner.cookie,{action:"trial",days:30},"PATCH");
+  const before=new Date(r.body.user.trialEndsAt);
+  r=await request(`/api/admin/users/${alice.id}`,owner.cookie,{action:"trial",days:3},"PATCH");
+  assert.equal(Math.round((new Date(r.body.user.trialEndsAt)-before)/86400000),3);
+  r=await request(`/api/admin/users/${alice.id}`,owner.cookie,{action:"plan",planCode:"PREMIUM"},"PATCH");
+  assert.equal(r.body.user.accessOrigin,"COURTESY");assert.equal(r.body.user.trialStatus,"CONVERTED");assert.equal(r.body.user.trialEndsAt,null);
+  assert.equal((await request("/api/me",alice.cookie)).body.user.accessStatus,"active");
+  const dashboard=await request("/api/admin/bootstrap?q=alice%40example.test",owner.cookie);
+  assert.equal(dashboard.body.users.find(u=>u._id===alice.id).trialStatus,"CONVERTED");
+});
+
+test("disabled support, coupons and couple creation are denied at the API", async () => {
+  await request("/api/admin/config",owner.cookie,{supportEnabled:false,couponsEnabled:false},"PATCH");
+  assert.equal((await request("/api/support",alice.cookie,{subject:"Test",message:"Test"})).status,403);
+  assert.equal((await request("/api/coupons/redeem",alice.cookie,{code:"ANY"})).status,403);
+  const db=mongoose.connection;
+  await db.collection("featureflags").updateOne({key:"modo_casal"},{$set:{active:false}});
+  assert.equal((await request("/api/spaces/couple",alice.cookie,{partnerName:"Bob"})).status,403);
+  await db.collection("featureflags").updateOne({key:"modo_casal"},{$set:{active:true}});
+  await request("/api/admin/config",owner.cookie,{supportEnabled:true,couponsEnabled:true},"PATCH");
+});
+
+test("expired subscriptions are rejected or downgraded; courtesy stays permanent",async()=>{
+  const past=new Date(Date.now()-86400000);
+  assert.equal((await request("/api/admin/subscriptions",owner.cookie,{userId:bob.id,planCode:"PLUS",status:"MANUAL",startsAt:new Date(+past-86400000),endsAt:past})).status,400);
+  const created=await request("/api/admin/subscriptions",owner.cookie,{userId:bob.id,planCode:"PLUS",status:"MANUAL",startsAt:new Date(),endsAt:new Date(Date.now()+86400000)});
+  assert.equal(created.status,201);
+  assert.equal((await request("/api/me",bob.cookie)).body.user.planCode,"PLUS");
+  await mongoose.connection.collection("subscriptions").updateMany({userId:new mongoose.Types.ObjectId(bob.id)},{$set:{endsAt:past}});
+  assert.equal((await request("/api/me",bob.cookie)).body.user.planCode,"FREE");
+  assert.equal((await request("/api/me",alice.cookie)).body.user.planCode,"PREMIUM");
+});
+
+test("directory search and full export find a client beyond the first page",async()=>{
+  const r=await request("/api/admin/bootstrap?q=page104%40example.test",owner.cookie);
+  assert.equal(r.status,200);assert.equal(r.body.pagination.total,1);assert.equal(r.body.users[0].email,"page104@example.test");assert.equal(r.body.stats.users,109);
+  const exported=await request("/api/admin/export/users?q=page104%40example.test",owner.cookie);
+  assert.equal(exported.body.data.length,1);
+});
+
+test("auxiliary admin collections expose a second page instead of truncating",async()=>{
+  await mongoose.connection.collection("coupons").insertMany(Array.from({length:205},(_,i)=>({code:`PAGE-COUPON-${i}`,createdAt:new Date(),benefitType:"PLUS_DAYS",benefitValue:1,active:true})));
+  const r=await request("/api/admin/bootstrap?section=coupons&page=2",owner.cookie);
+  assert.equal(r.status,200);assert.equal(r.body.listPagination.total>=205,true);assert.equal(r.body.listPagination.page,2);assert.equal(r.body.coupons.length>0,true);
+  assert.equal(r.body.coupons.length,r.body.listPagination.total-200);
+});
+
+test("admin deletion removes private data and sessions while preserving partner shared debt",async()=>{
+  const couple=await request("/api/spaces/couple",alice.cookie,{partnerName:"Bob"});assert.equal(couple.status,201);
+  assert.equal((await request(`/api/invites/${couple.body.invite.code}/accept`,bob.cookie,{})).status,200);
+  const debt=await request(`/api/spaces/${couple.body.space._id}/debts`,alice.cookie,{name:"Shared test",originalBalance:"1000",currentBalance:"1000",minimumPayment:"100",dueDate:"2026-12-01",interestRateMonthly:"0",shared:true,revision:0});assert.equal(debt.status,200,JSON.stringify(debt.body));
+  const spaces=await request("/api/spaces",alice.cookie),spaceId=new mongoose.Types.ObjectId(spaces.body.spaces.find(s=>s.type==="individual")._id),uid=new mongoose.Types.ObjectId(alice.id),db=mongoose.connection;
+  await db.collection("debtplans").insertOne({spaceId,userId:uid,items:[]});
+  await db.collection("backupsnapshots").insertOne({spaceId,createdBy:uid,transactions:[]});
+  await db.collection("merchantcategorymaps").insertOne({userId:uid,normalizedName:"test"});
+  const removed=await request(`/api/admin/users/${alice.id}`,owner.cookie,null,"DELETE");assert.equal(removed.status,200,JSON.stringify(removed.body));
+  for(const [name,filter] of [["debtplans",{spaceId}],["backupsnapshots",{createdBy:uid}],["merchantcategorymaps",{userId:uid}],["sessions",{userId:uid}]])assert.equal(await db.collection(name).countDocuments(filter),0,name);
+  const shared=await db.collection("debtplans").findOne({spaceId:new mongoose.Types.ObjectId(couple.body.space._id)});assert.equal(shared.items.length,1);assert.equal(String(shared.items[0].ownerUserId),bob.id);
+  assert.equal((await request("/api/me",alice.cookie)).status,401);assert.equal((await request("/api/me",bob.cookie)).status,200);
+});
+
+test("self deletion uses the same complete cleanup and principal stays protected",async()=>{
+  const spaces=await request("/api/spaces",bob.cookie),spaceId=new mongoose.Types.ObjectId(spaces.body.spaces.find(s=>s.type==="individual")._id),uid=new mongoose.Types.ObjectId(bob.id),db=mongoose.connection;
+  await db.collection("debtplans").insertOne({spaceId,userId:uid,items:[]});
+  assert.equal((await request("/api/me",bob.cookie,null,"DELETE")).status,200);
+  assert.equal(await db.collection("debtplans").countDocuments({spaceId}),0);assert.equal(await db.collection("sessions").countDocuments({userId:uid}),0);
+  assert.equal((await request("/api/me",owner.cookie,null,"DELETE")).status,403);
 });

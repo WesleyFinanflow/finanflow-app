@@ -1,4 +1,6 @@
 import express from "express";
+import { reconcileSubscription, extendTrial, grantManualPlan } from "./access-management.js";
+import { deleteUserData } from "./user-lifecycle.js";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
@@ -10,9 +12,9 @@ import { OAuth2Client } from "google-auth-library";
 import { emailAddress, InputError, isoDate, moneyValue, oneOf, optionalText, requiredText } from "./validation.js";
 import { addMonthsToIsoDate, repeatInstallmentAmount } from "./recurrence.js";
 import { ensureTransactionRequestIndex, requestIndexKey, requestIndexOptions } from "./transaction-index.js";
-import { AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
+import { FeatureFlag, AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
 import { accessDenied as policyAccessDenied, canManageUser, canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
-import { registerDebtPlanRoutes } from "./debt-plan.js";
+import { DebtPlan, registerDebtPlanRoutes } from "./debt-plan.js";
 
 dotenv.config();
 
@@ -115,6 +117,7 @@ const userSchema = new mongoose.Schema(
     trialStartedAt: { type: Date },
     trialStatus: { type: String, enum: ["NOT_STARTED", "ACTIVE", "EXPIRED", "CONVERTED", "CANCELLED"], default: "NOT_STARTED" },
     planCode: { type: String, default: "FREE", maxlength: 30 },
+    accessOrigin: { type: String, enum: ["TRIAL", "COURTESY", "SUBSCRIPTION", "FREE"] },
   },
   { timestamps: true }
 );
@@ -251,16 +254,20 @@ const Invite = mongoose.model("Invite", inviteSchema);
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 const BackupSnapshot = mongoose.model("BackupSnapshot", backupSnapshotSchema);
 
+const Session = mongoose.model("Session", new mongoose.Schema({ userId: { type: mongoose.Schema.Types.ObjectId, index: true }, tokenHash: { type: String, unique: true }, expiresAt: { type: Date, expires: 0 } }, { timestamps: true }));
+
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 function createToken(user) {
-  return jwt.sign({ userId: user._id.toString(), email: user.email, passwordVersion: Number(user.passwordVersion || 0) }, JWT_SECRET, { expiresIn: effectiveRole(user, ADMIN_EMAILS) === "USER" ? "8h" : "1h", issuer: "finanflow" });
+  return jwt.sign({ userId: user._id.toString(), email: user.email, passwordVersion: Number(user.passwordVersion || 0), jti: crypto.randomUUID() }, JWT_SECRET, { expiresIn: effectiveRole(user, ADMIN_EMAILS) === "USER" ? "8h" : "1h", issuer: "finanflow" });
 }
 
 const SESSION_COOKIE = process.env.NODE_ENV === "production" ? "__Host-finanflow_session" : "finanflow_session";
 const sessionOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" };
-function setSession(res, user) {
-  res.cookie(SESSION_COOKIE, createToken(user), { ...sessionOptions, maxAge: (effectiveRole(user, ADMIN_EMAILS) === "USER" ? 8 : 1) * 3600000 });
+async function setSession(res, user) {
+  const token = createToken(user);
+  await Session.create({ userId: user._id, tokenHash: hashResetToken(token), expiresAt: new Date(jwt.decode(token).exp * 1000) });
+  res.cookie(SESSION_COOKIE, token, { ...sessionOptions, maxAge: (effectiveRole(user, ADMIN_EMAILS) === "USER" ? 8 : 1) * 3600000 });
   res.set("Cache-Control", "no-store");
 }
 
@@ -336,9 +343,11 @@ async function auth(req, res, next) {
     if (!token) return res.status(401).json({ message: "Token não informado." });
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"], issuer: "finanflow" });
     res.set("Cache-Control", "no-store");
+    if (!await Session.exists({ userId: decoded.userId, tokenHash: hashResetToken(token), expiresAt: { $gt: new Date() } })) return res.status(401).json({ message: "Sessão encerrada. Entre novamente." });
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
     const config=await AppConfig.findOne({key:"global"}).select("maintenanceMode maintenanceMessage").lean();
+    await reconcileSubscription(user, Subscription);
     user.role = effectiveRole(user, ADMIN_EMAILS);
     const currentRole = user.role;
     if(config?.maintenanceMode&&currentRole==="USER")return res.status(503).json({message:config.maintenanceMessage||"FinanFlow está em manutenção. Voltaremos em breve."});
@@ -360,7 +369,7 @@ async function userCanAccessSpace(userId, spaceId) {
 
 function publicUser(user) {
   const role = effectiveRole(user,ADMIN_EMAILS);
-  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", emailVerified: Boolean(user.emailVerified), role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE" };
+  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", emailVerified: Boolean(user.emailVerified), role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE",accessOrigin:user.accessOrigin||null };
 }
 
 function accessDenied(user) {
@@ -640,7 +649,7 @@ app.post("/api/auth/register", registerLimiter, async (req, res) => {
     await createIndividualSpaceForUser(user);
     if(trialEnabled)await Subscription.create({userId:user._id,planCode:user.planCode,startsAt:acceptedAt,endsAt:trialEndsAt,status:"TRIAL",origin:"TRIAL"});
     try { await sendVerificationForUser(user); } catch { /* The account remains available; the user can resend from Settings. */ }
-    setSession(res, user);
+    await setSession(res, user);
     res.status(201).json({ user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(400).json({ message: error.message });
@@ -751,7 +760,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     user.loginLockedUntil = undefined;
     user.lastLoginAt = new Date();
     await user.save();
-    setSession(res, user);
+    await setSession(res, user);
     res.json({ user: publicUser(user) });
   } catch (error) {
     if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
@@ -764,10 +773,10 @@ app.post("/api/auth/session", authLimiter, async (req, res) => {
   if (!code || code.length > 100) return res.status(401).json({ message: "Confirmação de login inválida." });
   const user = await User.findOneAndUpdate({ oauthExchangeHash: hashResetToken(code), oauthExchangeExpiresAt: { $gt: new Date() } }, { $unset: { oauthExchangeHash: 1, oauthExchangeExpiresAt: 1 } }, { new: true });
   if (!user || accessDenied(user)) return res.status(401).json({ message: "Confirmação de login expirada." });
-  setSession(res, user);
+  await setSession(res, user);
   res.json({ user: publicUser(user) });
 });
-app.post("/api/auth/logout", (req, res) => { if (!CORS_ORIGINS.includes(req.headers.origin)) return res.status(403).json({message:"Origem inválida."}); res.clearCookie(SESSION_COOKIE, sessionOptions); res.json({ ok: true }); });
+app.post("/api/auth/logout", async (req, res) => { if (!CORS_ORIGINS.includes(req.headers.origin)) return res.status(403).json({message:"Origem inválida."}); const token=readCookie(req,SESSION_COOKIE); if(token)await Session.deleteOne({tokenHash:hashResetToken(token)}); res.clearCookie(SESSION_COOKIE, sessionOptions); res.set("Cache-Control","no-store"); res.json({ ok: true }); });
 
 app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: publicUser(req.user) })));
 
@@ -808,45 +817,12 @@ app.patch("/api/me/password", auth, async (req, res) => {
   }
 });
 
-app.delete("/api/me", auth, async (req, res) => {
-  try {
-    const memberships = await Member.find({ userId: req.user._id }).populate("spaceId");
-    for (const membership of memberships) {
-      if (!membership.spaceId) continue;
-      const space = membership.spaceId;
-      const memberCount = await Member.countDocuments({ spaceId: space._id });
-      if (space.type === "individual" || memberCount <= 1) {
-        await Transaction.deleteMany({ spaceId: space._id });
-        await Account.deleteMany({ spaceId: space._id });
-        await PurchasePlan.deleteMany({ spaceId: space._id });
-        await Invite.deleteMany({ spaceId: space._id });
-        await Member.deleteMany({ spaceId: space._id });
-        await Space.deleteOne({ _id: space._id });
-        continue;
-      }
-
-      await Member.deleteOne({ _id: membership._id });
-      if (String(space.ownerId) === String(req.user._id)) {
-        const nextOwner = await Member.findOne({ spaceId: space._id });
-        if (nextOwner) await Space.updateOne({ _id: space._id }, { ownerId: nextOwner.userId });
-      }
-    }
-    await Promise.all([
-      AuditLog.deleteMany({ userId: req.user._id }),
-      BackupSnapshot.deleteMany({ createdBy: req.user._id }),
-      Invite.deleteMany({ createdBy: req.user._id }),
-      MerchantCategoryMap.deleteMany({ userId: req.user._id }),
-      Subscription.deleteMany({ userId: req.user._id }),
-      CouponUsage.deleteMany({ userId: req.user._id }),
-      SupportTicket.deleteMany({ $or: [{ userId: req.user._id }, { assignedTo: req.user._id }] }),
-      AdminNote.deleteMany({ $or: [{ userId: req.user._id }, { authorId: req.user._id }] }),
-      AdminAudit.deleteMany({ $or: [{ adminId: req.user._id }, { targetUserId: req.user._id }] }),
-      User.deleteOne({ _id: req.user._id }),
-    ]);
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(500).json({ message: "Erro ao apagar conta." });
-  }
+const deleteAccount = userId => deleteUserData({User,Space,Member,Account,Transaction,PurchasePlan,Invite,DebtPlan,AuditLog,BackupSnapshot,MerchantCategoryMap,Subscription,CouponUsage,SupportTicket,AdminNote,AdminAudit,Session},userId);
+app.delete("/api/me", auth, async (req,res) => {
+  if(ADMIN_EMAILS.has(String(req.user.email).toLowerCase()))return res.status(403).json({message:"O administrador principal não pode excluir a própria conta."});
+  await deleteAccount(req.user._id);
+  res.clearCookie(SESSION_COOKIE,sessionOptions);
+  res.json({ok:true});
 });
 
 app.get("/api/spaces", auth, asyncHandler(async (req, res) => {
@@ -877,7 +853,14 @@ app.patch("/api/spaces/:spaceId/settings", auth, async (req, res) => {
   }
 });
 
-app.post("/api/spaces/couple", auth, async (req, res) => {
+const featureAvailable = key => async (req,res,next) => {
+  const flag=await FeatureFlag.findOne({key}).lean();
+  if(flag && (!flag.active || flag.audience === "ADMINS" && req.user.role === "USER" || flag.audience === "PREMIUM" && req.user.planCode !== "PREMIUM" || flag.audience === "TEST_GROUP" && req.user.trialStatus !== "ACTIVE"))return res.status(403).json({message:"Este recurso está desativado ou indisponível para sua conta."});
+  next();
+};
+app.use("/api/spaces/:spaceId/purchase-plans",auth,featureAvailable("planejamento"));
+app.use(["/api/spaces/:spaceId/debt-plan","/api/spaces/:spaceId/debts"],auth,featureAvailable("planejamento"));
+app.post("/api/spaces/couple", auth, featureAvailable("modo_casal"), async (req, res) => {
   try {
     const partnerName = optionalText(req.body?.partnerName, "Parceiro(a)", 80);
     const existingOwnedCouple = await Space.findOne({ ownerId: req.user._id, type: "couple" }).sort({ createdAt: 1 });
@@ -1280,19 +1263,20 @@ app.patch("/api/admin/users/:userId/access", auth, adminOnly, asyncHandler(async
   if (action === "trial") {
     const months = Number(req.body?.months);
     if (![1, 2, 3].includes(months)) throw new InputError("Escolha um teste de 1, 2 ou 3 meses.");
-    const trialEndsAt = new Date();
-    trialEndsAt.setMonth(trialEndsAt.getMonth() + months);
-    target.accessStatus = "trial"; target.trialEndsAt = trialEndsAt; target.blockedAt = undefined;
+    const trialEndsAt = new Date(Math.max(Date.now(), +new Date(target.trialEndsAt || 0)));
+    trialEndsAt.setUTCMonth(trialEndsAt.getUTCMonth() + months);
+    extendTrial(target,{endsAt:trialEndsAt.toISOString().slice(0,10),planCode:target.planCode});
+    target.blockedAt = undefined;
   } else if (action === "block") {
     target.accessStatus = "blocked"; target.blockedAt = new Date(); target.passwordVersion = Number(target.passwordVersion || 0) + 1;
   } else {
-    target.accessStatus = "active"; target.trialEndsAt = undefined; target.blockedAt = undefined;
+    grantManualPlan(target,target.planCode || "FREE");
   }
   await target.save();
   res.json({ message: action === "trial" ? "Período de teste aplicado." : action === "block" ? "Usuário bloqueado e sessões encerradas." : "Acesso liberado." });
 }));
 
-registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,canManageUser:(actor,target)=>canManageUser(actor,target,ADMIN_EMAILS),sendRecovery:sendRecoveryForUser});
+registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,canManageUser:(actor,target)=>canManageUser(actor,target,ADMIN_EMAILS),deleteAccount,sendRecovery:sendRecoveryForUser});
 registerDebtPlanRoutes(app, { auth, Space, Member, Account, Transaction });
 
 app.use((_req, res) => res.status(404).json({ message: "Rota não encontrada." }));
