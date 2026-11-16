@@ -1,6 +1,7 @@
+import { csvRows } from "./csv.js";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
-import { calculateSummary } from "./finance.js";
+import { calculateSummary, calculateReportBalances, isMealTransaction } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
 import { findSimilarTransaction, parseReceiptText, pdfFirstPageToImage, prepareReceiptImage } from "./receipt-ocr.js";
@@ -1418,6 +1419,8 @@ function Planejamento({ openDebtPlan, api, spaceId, summary, hasData, buyForm, s
 }
 
 function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summary, reserve }) {
+  const [debtReportState, setDebtReportState] = useState(null);
+  const pdfReady = debtReportState?.spaceId === String(spaceId) && debtReportState.ready;
   const [periodMonths, setPeriodMonths] = useState(6);
   const periodOptions = [{ value: "1", label: "Mês atual" }, { value: "3", label: "3 meses" }, { value: "6", label: "6 meses" }, { value: "12", label: "1 ano" }];
   const monthNumber = (key) => { const [year, month] = String(key).split("-").map(Number); return (year * 12) + month - 1; };
@@ -1425,9 +1428,9 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   const startMonth = endMonth - periodMonths + 1;
   const previousStart = startMonth - periodMonths;
   const inRange = (item, start, end) => { const value = monthNumber(String(item.date || "").slice(0, 7)); return value >= start && value <= end; };
-  const realized = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && inRange(item, startMonth, endMonth));
-  const previous = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && inRange(item, previousStart, startMonth - 1));
-  const pending = transactions.filter((item) => item.status !== "pago" && item.type !== "meta" && inRange(item, startMonth, endMonth));
+  const realized = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
+  const previous = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, previousStart, startMonth - 1));
+  const pending = transactions.filter((item) => item.status !== "pago" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
   const totals = (items) => items.reduce((result, item) => {
     const amount = Number(item.amount || 0);
     if (item.type === "receita") result.income += amount;
@@ -1437,8 +1440,8 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   }, { income: 0, expenses: 0, debt: 0 });
   const currentTotals = totals(realized);
   const previousTotals = totals(previous);
-  const net = currentTotals.income - currentTotals.expenses - currentTotals.debt;
-  const previousNet = previousTotals.income - previousTotals.expenses - previousTotals.debt;
+  const net = Math.round((currentTotals.income - currentTotals.expenses - currentTotals.debt) * 100) / 100;
+  const previousNet = Math.round((previousTotals.income - previousTotals.expenses - previousTotals.debt) * 100) / 100;
   const change = previousNet === 0 ? null : ((net - previousNet) / Math.abs(previousNet)) * 100;
   const categories = Array.from(realized.reduce((map, item) => {
     if (item.type === "receita") return map;
@@ -1467,9 +1470,8 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   const periodLabel = periodMonths === 1 ? monthLabel(selectedMonthKey) : `${monthLabel(evolution[0].key, "short")} a ${monthLabel(selectedMonthKey, "short")}`;
   const totalOutflow = currentTotals.expenses + currentTotals.debt;
   const pendingTotal = pending.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const finalBalance = Number(summary?.balance || 0);
-  const initialBalance = finalBalance - net;
-  const safeBalance = Number(summary?.free || 0);
+  const firstReportMonth = evolution[0].key;
+  const { initialBalance, finalBalance, safeBalance, mealBalance, savedInPeriod } = calculateReportBalances(summary?.baseBalance || 0, transactions, reserve, firstReportMonth, selectedMonthKey);
   const expenseRatio = currentTotals.income > 0 ? (totalOutflow / currentTotals.income) * 100 : null;
   const topCategory = categories[0] || null;
   const generatedAt = new Date().toLocaleString("pt-BR");
@@ -1483,8 +1485,8 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   }).join(" ");
 
   function exportCsv() {
-    const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth) && item.type !== "meta").map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, Number(item.amount || 0).toFixed(2).replace(".", ",")])];
-    const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(";")).join("\r\n");
+    const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Origem do saldo", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth)).map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, isMealTransaction(item) ? "Vale-refeição" : "Conta principal", Number(item.amount || 0).toFixed(2).replace(".", ",")])];
+    const csv = csvRows(rows);
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
     link.download = `finanflow-relatorio-${selectedMonthKey}-${periodMonths}m.csv`;
@@ -1503,7 +1505,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
         <div className="reports-actions">
           <DashboardSelect compact label="Período do relatório" value={String(periodMonths)} onChange={(value) => setPeriodMonths(Number(value))} options={periodOptions} />
           <button type="button" className="report-action secondary" onClick={exportCsv}><FileDown size={16} />Planilha</button>
-          <button type="button" className="report-action" onClick={() => window.print()}><Printer size={16} />PDF</button>
+          <button type="button" className="report-action" disabled={!pdfReady} onClick={() => window.print()}><Printer size={16} />{pdfReady ? "PDF" : debtReportState?.failed ? "PDF indisponível" : "Preparando PDF..."}</button>
         </div>
       </header>
 
@@ -1512,6 +1514,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
         <div className="report-period"><CalendarDays size={16} /><span>Gerado em</span><strong>{generatedAt}</strong></div>
         <div className="report-period"><UserRound size={16} /><span>Espaço</span><strong>{activeMode === "couple" ? "Casal" : "Individual"}</strong></div>
       </div>
+      <p className="report-funds-note">Fluxo da conta principal. Vale-refeição ao fim do período: <strong>{money(mealBalance)}</strong>. Dinheiro separado em metas no período: <strong>{money(savedInPeriod)}</strong>.</p>
       <div className="report-executive-title"><span><BarChart3 size={18}/></span><div><h2>Resumo executivo</h2><small>Principais números do período</small></div></div>
       <section className="report-summary-grid">
         <article className="report-kpi income"><span>Receitas recebidas</span><strong>{money(currentTotals.income)}</strong><small>{realized.filter((item) => item.type === "receita").length} lançamentos</small></article>
@@ -1543,7 +1546,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
         <article className="panel report-pending-card"><div className="report-section-head"><div><span className="eyebrow">Situação atual</span><h2>Pendências e compromissos</h2></div><small>{pending.length} itens</small></div><div className={pendingTotal > 0 ? "pending-summary alert" : "pending-summary"}><ReceiptText size={28}/><strong>{money(pendingTotal)}</strong><p>{pendingTotal > 0 ? "Valor total que ainda aguarda pagamento ou recebimento." : "Parabéns! Você não possui compromissos pendentes no período."}</p></div></article>
       </section>
       <section className="panel report-insights"><div className="report-section-head"><div><span className="eyebrow">Leitura inteligente</span><h2>Insights do período</h2></div><small>Gerados somente com seus dados</small></div><div className="report-insight-grid"><article className={net < 0 ? "negative" : "positive"}><strong>{net < 0 ? "Período negativo" : "Período positivo"}</strong><p>O resultado financeiro foi de {money(net)} no período.</p></article><article className="orange"><strong>Peso das despesas</strong><p>{expenseRatio === null ? "Não houve receitas recebidas para calcular a proporção." : `As saídas representam ${expenseRatio.toFixed(1).replace(".", ",")}% das receitas.`}</p></article><article className="blue"><strong>Maior categoria</strong><p>{topCategory ? `${topCategory.name} concentrou ${((topCategory.amount / totalOutflow) * 100).toFixed(0)}% dos gastos (${money(topCategory.amount)}).` : "Não houve gastos pagos por categoria."}</p></article><article className={pendingTotal > 0 ? "orange" : "positive"}><strong>Pendências</strong><p>{pendingTotal > 0 ? `${money(pendingTotal)} ainda aguardam pagamento ou recebimento.` : "Não há compromissos pendentes no período."}</p></article></div></section>
-      <DebtPlanReport key={spaceId} api={api} spaceId={spaceId} />
+      <DebtPlanReport key={spaceId} api={api} spaceId={spaceId} onReady={setDebtReportState} />
       <footer className="report-print-footer"><span>https://vitalflow.ia.br</span><strong>FinanFlow · organização financeira com tranquilidade</strong><span>{generatedAt}</span></footer>
     </section>
   );

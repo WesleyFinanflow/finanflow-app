@@ -1,3 +1,4 @@
+import { csvCell } from "./csv.js";
 import "./admin.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -108,10 +109,10 @@ const toCsv = (rows) => {
   if (!rows?.length) return "";
   const keys = Object.keys(rows[0]);
   return [
-    keys.join(","),
+    keys.map(csvCell).join(","),
     ...rows.map((r) =>
       keys
-        .map((k) => `"${String(r[k] ?? "").replaceAll('"', '""')}"`)
+        .map((k) => csvCell(r[k]))
         .join(","),
     ),
   ].join("\n");
