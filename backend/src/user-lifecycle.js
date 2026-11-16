@@ -1,3 +1,4 @@
+import { MfaCredential } from "./mfa.js";
 import mongoose from "mongoose";
 
 export async function deleteUserData(models, userId) {
@@ -31,7 +32,7 @@ export async function deleteUserData(models, userId) {
       [Member, { userId }], [DebtPlan, { userId }], [AuditLog, { userId }], [BackupSnapshot, { createdBy: userId }],
       [Invite, { createdBy: userId }], [MerchantCategoryMap, { userId }], [Subscription, { userId }], [CouponUsage, { userId }],
       [SupportTicket, { userId }], [AdminNote, { $or: [{ userId }, { authorId: userId }] }],
-      [AdminAudit, { $or: [{ adminId: userId }, { targetUserId: userId }] }], [Session, { userId }], [User, { _id: userId }]
+      [AdminAudit, { $or: [{ adminId: userId }, { targetUserId: userId }] }], [MfaCredential, { userId }], [Session, { userId }], [User, { _id: userId }]
     ];
     for (const [Model, filter] of filters) await Model.deleteMany(filter, { session });
   });
