@@ -38,12 +38,16 @@ export function registerMfaRoutes(app, { User, Session, auth, adminOnly, authLim
     const step = verifyTotp(unseal(credential.pendingSecret, JWT_SECRET), req.body?.code);
     if (step === null) return res.status(400).json({ message: "Código inválido. Confira o horário do celular e tente novamente." });
     const codes = recoveryCodes();
+    let nextVersion;
     await mongoose.connection.transaction(async session => {
       const changed = await MfaCredential.updateOne({ _id: credential._id, pendingSecret: credential.pendingSecret, pendingSession: req.authSession.tokenHash, pendingUntil: { $gt: new Date() } }, { $set: { enabled: true, secret: credential.pendingSecret, lastStep: step, recoveryHashes: codes.map(recoveryHash), attempts: 0 }, $unset: { pendingSecret: 1, pendingSession: 1, pendingUntil: 1 } }, { session });
       if (changed.modifiedCount !== 1) throw new Error("Configuração alterada. Tente novamente.");
-      await User.updateOne({ _id: req.user._id }, { $set: { mfaEnabled: true } }, { session });
+      const updated = await User.findOneAndUpdate({ _id: req.user._id, $or: [{ mfaVersion: Number(req.user.mfaVersion || 0) }, { mfaVersion: { $exists: false } }] }, { $set: { mfaEnabled: true }, $inc: { mfaVersion: 1 } }, { session, new: true });
+      if (!updated) throw new Error("A proteção da conta mudou. Entre novamente.");
+      nextVersion = updated.mfaVersion;
       await Session.deleteMany({ userId: req.user._id }, { session });
     });
+    req.user.mfaVersion = nextVersion;
     req.user.mfaEnabled = true;
     await setSession(res, req.user, true);
     res.json({ user: publicUser(req.user, true), recoveryCodes: codes });

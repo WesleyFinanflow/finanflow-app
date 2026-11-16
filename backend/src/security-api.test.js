@@ -219,6 +219,10 @@ test("admin MFA enrollment, session revocation, replay and recovery single-use",
  const newSecret=replacement.body.secret;
  const rotated=await request("/api/auth/mfa/confirm",verified.cookie,{code:totp(newSecret,Math.floor(Date.now()/30000))});assert.equal(rotated.status,200,JSON.stringify(rotated.body));
  assert.equal((await request("/api/me",verified.cookie)).status,401);
+ const sessionToken=verified.cookie.split("=")[1];
+ await mongoose.connection.collection("sessions").insertOne({userId:new mongoose.Types.ObjectId(admin.id),tokenHash:crypto.createHash("sha256").update(sessionToken).digest("hex"),expiresAt:new Date(Date.now()+60000),mfaVerified:true,mfaVersion:1,createdAt:new Date()});
+ assert.equal((await request("/api/admin/bootstrap",verified.cookie)).status,401);
+
  assert.equal((await request("/api/auth/mfa/verify",rotated.cookie,{recoveryCode:enabled.body.recoveryCodes[1]})).status,400);
  // A persisted account lockout applies across new sessions and cannot be reset by setup.
  for(let i=0;i<4;i++) await request("/api/auth/mfa/verify",rotated.cookie,{code:"xxxxxx"});
