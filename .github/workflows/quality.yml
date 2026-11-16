@@ -37,6 +37,7 @@ jobs:
       - run: npx --yes pnpm@12.11.2 --dir backend install --frozen-lockfile --ignore-scripts
       - run: npx --yes pnpm@12.11.2 --dir frontend install --frozen-lockfile --ignore-scripts
       - run: npx --yes pnpm@12.11.2 --dir e2e install --frozen-lockfile --ignore-scripts
+      - run: npx --yes pnpm@12.11.2 --dir e2e audit --audit-level=moderate
       - run: npx --yes pnpm@12.11.2 --dir frontend build
       - run: npx --yes pnpm@12.11.2 --dir e2e exec playwright install --with-deps chromium
       - run: npx --yes pnpm@12.11.2 --dir e2e test

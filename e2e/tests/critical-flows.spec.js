@@ -20,7 +20,7 @@ test.beforeEach(async({context})=>{
   return ["127.0.0.1","localhost","[::1]"].includes(url.hostname)?route.continue():route.abort("blockedbyclient");
  });
 });
-test("usuÃ¡rio comum: permissÃ£o administrativa negada e logout revoga sessÃ£o",async({page},info)=>{
+test("usuário comum: permissão administrativa negada e logout revoga sessão",async({page},info)=>{
  await login(page,email(info.project.name,"user"));
  await expect(page.getByRole("heading",{name:"Acesso administrativo negado",exact:true})).toBeVisible();
  expect((await page.request.get(api+"/api/admin/bootstrap")).status()).toBe(403);
@@ -46,6 +46,7 @@ test("admin libera cortesia Premium sem prazo para cliente com teste expirado",a
  await expect(dialog.getByRole("status")).toHaveText("Acesso atualizado com sucesso.");
  await expect(dialog.getByText("Cortesia sem vencimento",{exact:true})).toBeVisible();
  await expect(dialog.getByText("Sem vencimento",{exact:true})).toBeVisible();
+ await expect(dialog).toHaveAttribute("aria-busy","false");
  await page.keyboard.press("Escape");await expect(dialog).not.toBeVisible();
  // Separate browser session: the user's own login must reflect the admin action.
  const userContext=await browser.newContext({baseURL:"http://127.0.0.1:5392"});
@@ -58,34 +59,34 @@ test("admin libera cortesia Premium sem prazo para cliente com teste expirado",a
   expect((await userPage.request.get(api+"/api/admin/bootstrap")).status()).toBe(403);
  }finally{await userContext.close();}
 });
-test("MFA: configura, impede acesso sem cÃ³digo, rejeita repetiÃ§Ã£o e permite recuperaÃ§Ã£o",async({page},info)=>{
+test("MFA: configura, impede acesso sem código, rejeita repetição e permite recuperação",async({page},info)=>{
  const address=email(info.project.name,"mfa");
  await login(page,address);await expect(page.getByRole("heading",{name:"Painel administrativo",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Proteger minha conta com segundo fator",exact:true}).click();
  await page.getByLabel("Senha atual",{exact:true}).fill(password);
- await page.getByRole("button",{name:"ComeÃ§ar configuraÃ§Ã£o",exact:true}).click();
+ await page.getByRole("button",{name:"Começar configuração",exact:true}).click();
  const secret=await page.locator(".mfa-secret").innerText();expect(secret).toMatch(/^[A-Z2-7]{32}$/);
  const code=totp(secret,Math.floor(Date.now()/30000));
- await page.getByLabel("CÃ³digo de 6 dÃ­gitos",{exact:true}).fill(code);
+ await page.getByLabel("Código de 6 dígitos",{exact:true}).fill(code);
  await page.getByRole("button",{name:"Ativar segundo fator",exact:true}).click();
- await expect(page.getByRole("heading",{name:"Guarde seus cÃ³digos de recuperaÃ§Ã£o",exact:true})).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Guarde seus códigos de recuperação",exact:true})).toBeVisible();
  const codes=await page.locator(".mfa-codes code").allTextContents();expect(codes).toHaveLength(10);
- await page.getByRole("button",{name:"Guardei os cÃ³digos, continuar",exact:true}).click();
- await expect(page.getByRole("button",{name:"SeguranÃ§a: segundo fator ativo",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Guardei os códigos, continuar",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Segurança: segundo fator ativo",exact:true})).toBeVisible();
  await logout(page);
  await login(page,address);
  await expect(page.getByRole("heading",{name:"Confirme seu acesso",exact:true})).toBeVisible();
  const before=await page.request.get(api+"/api/admin/bootstrap");expect(before.status()).toBe(403);expect((await before.json()).code).toBe("MFA_REQUIRED");
  expect((await page.request.get(api+"/api/spaces")).status()).toBe(403);
- await page.getByLabel("CÃ³digo de 6 dÃ­gitos",{exact:true}).fill(code);
+ await page.getByLabel("Código de 6 dígitos",{exact:true}).fill(code);
  await page.getByRole("button",{name:"Confirmar acesso",exact:true}).click();
- await expect(page.getByRole("alert")).toHaveText("CÃ³digo invÃ¡lido ou jÃ¡ utilizado.");
- await page.getByRole("button",{name:"Usar cÃ³digo de recuperaÃ§Ã£o",exact:true}).click();
- await page.getByLabel("CÃ³digo de recuperaÃ§Ã£o",{exact:true}).fill(codes[0]);
+ await expect(page.getByRole("alert")).toHaveText("Código inválido ou já utilizado.");
+ await page.getByRole("button",{name:"Usar código de recuperação",exact:true}).click();
+ await page.getByLabel("Código de recuperação",{exact:true}).fill(codes[0]);
  await page.getByRole("button",{name:"Confirmar acesso",exact:true}).click();
  await expect(page.getByRole("heading",{name:"Painel administrativo",exact:true})).toBeVisible();
  expect((await page.request.get(api+"/api/admin/bootstrap")).status()).toBe(200);
  const reuse=await page.request.post(api+"/api/auth/mfa/verify",{headers:{Origin:"http://127.0.0.1:5392"},data:{recoveryCode:codes[0]}});expect(reuse.status()).toBe(400);
- await page.getByRole("button",{name:"SeguranÃ§a: segundo fator ativo",exact:true}).click();
- await expect(page.getByText("CÃ³digos de recuperaÃ§Ã£o disponÃ­veis: 9.",{exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Segurança: segundo fator ativo",exact:true}).click();
+ await expect(page.getByText("Códigos de recuperação disponíveis: 9.",{exact:true})).toBeVisible();
 });
