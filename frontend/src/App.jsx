@@ -1438,8 +1438,8 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   }, { income: 0, expenses: 0, debt: 0 });
   const currentTotals = totals(realized);
   const previousTotals = totals(previous);
-  const net = currentTotals.income - currentTotals.expenses - currentTotals.debt;
-  const previousNet = previousTotals.income - previousTotals.expenses - previousTotals.debt;
+  const net = Math.round((currentTotals.income - currentTotals.expenses - currentTotals.debt) * 100) / 100;
+  const previousNet = Math.round((previousTotals.income - previousTotals.expenses - previousTotals.debt) * 100) / 100;
   const change = previousNet === 0 ? null : ((net - previousNet) / Math.abs(previousNet)) * 100;
   const categories = Array.from(realized.reduce((map, item) => {
     if (item.type === "receita") return map;
