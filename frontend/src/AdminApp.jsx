@@ -186,7 +186,7 @@ const downloadReportPdf = async (data, period) => {
   pdf.save("finanflow-relatorio-administrativo.pdf");
 };
 
-export default function AdminApp({ api, user, onExit, onLogout }) {
+export default function AdminApp({ api, user, onExit, onLogout, onSecurity }) {
   const initial = location.hash.replace("#", "") || "dashboard";
   const [tab, setTabState] = useState(
       NAV.some((x) => x[0] === initial) ? initial : "dashboard",
@@ -413,6 +413,7 @@ export default function AdminApp({ api, user, onExit, onLogout }) {
         </footer>
       </aside>
       <section className="admin-workspace">
+        <button className="mfa-security-button" onClick={onSecurity}>{user.mfaEnabled ? "Segurança: segundo fator ativo" : "Proteger minha conta com segundo fator"}</button>
       {pagination?.pages > 1 && <section className="admin-card admin-pagination" aria-label="Paginação dos clientes">
         <button disabled={loading || page === 1} onClick={() => setPage(page - 1)}>Página anterior</button>
         <span>Registros: página {page} de {pagination.pages}. {pagination.total} registros encontrados.</span>

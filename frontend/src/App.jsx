@@ -1,3 +1,4 @@
+import MfaPanel from "./MfaPanel.jsx";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
@@ -190,6 +191,7 @@ function retryableError(message) {
 export default function App() {
   const [googleAuthResult] = useState(() => consumeGoogleAuthResult());
   const [user, setUser] = useState(null);
+  const [securityOpen, setSecurityOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "", acceptLegal: false });
   const [activeMenu, setActiveMenu] = useState(() => window.location.pathname === "/planejamento/dividas" ? "Planejamento" : "Início");
@@ -278,7 +280,7 @@ export default function App() {
     if (selected) await loadSpaceData(selected);
   }
 
-  useEffect(() => { if (user) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
+  useEffect(() => { if (user && !user.mfaRequired) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
   useEffect(() => {
     if (!googleAuthResult.token) { if (googleAuthResult.error) setMessage(googleAuthResult.error); return; }
     api("/api/auth/session", { method: "POST", body: JSON.stringify({ code: googleAuthResult.token }) }).then((data) => { clearUserState(); localStorage.setItem("finanflow_user", JSON.stringify(data.user)); setUser(data.user); setMessage("Acesso realizado com Google."); }).catch((error) => { localStorage.removeItem("finanflow_token"); setMessage(error.message); });
@@ -286,7 +288,7 @@ export default function App() {
 
 
   useEffect(()=>{api("/api/platform/config").then(setPlatformConfig).catch(()=>undefined);},[]);
-  useEffect(()=>{if(user)Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id]);
+  useEffect(()=>{if(user && !user.mfaRequired)Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id,user?.mfaRequired]);
 
   useEffect(() => {
     localStorage.removeItem("finanflow_token");
@@ -819,10 +821,12 @@ export default function App() {
     return <AuthScreen pendingInvite={pendingInvite} authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} loading={loading} message={message} setMessage={setMessage} />;
   }
 
+  if (user.mfaRequired || securityOpen) return <MfaPanel api={api} user={user} challenge={user.mfaRequired} onUser={next => { localStorage.setItem("finanflow_user", JSON.stringify(next)); setUser(next); }} onClose={() => setSecurityOpen(false)} onLogout={logout} />;
+
   if(platformConfig?.maintenanceMode&&!user.isAdmin)return <main className="maintenance-page"><ShieldCheck size={48}/><span className="eyebrow">Manutenção programada</span><h1>FinanFlow está em manutenção</h1><p>{platformConfig.maintenanceMessage}</p><button onClick={()=>window.location.reload()}>Verificar novamente</button></main>;
 
   if (window.location.pathname === "/admin") {
-    return <Suspense fallback={<p role="status">Carregando administração...</p>}><AdminApp api={api} user={user} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} onLogout={logout} /></Suspense>;
+    return <Suspense fallback={<p role="status">Carregando administração...</p>}><AdminApp api={api} user={user} onSecurity={() => setSecurityOpen(true)} onExit={() => { window.history.pushState({}, "", "/"); window.location.reload(); }} onLogout={logout} /></Suspense>;
   }
 
   if (pendingInvite) {

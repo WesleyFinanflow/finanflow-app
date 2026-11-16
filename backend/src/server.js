@@ -1,3 +1,4 @@
+import { registerMfaRoutes } from "./mfa.js";
 import express from "express";
 import { reconcileSubscription, extendTrial, grantManualPlan } from "./access-management.js";
 import { deleteUserData } from "./user-lifecycle.js";
@@ -99,6 +100,7 @@ const userSchema = new mongoose.Schema(
     oauthExchangeHash: { type: String, select: false },
     oauthExchangeExpiresAt: { type: Date, select: false },
     passwordVersion: { type: Number, default: 0 },
+    mfaEnabled: { type: Boolean, default: false },
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
     emailVerified: { type: Boolean, default: false },
@@ -254,7 +256,7 @@ const Invite = mongoose.model("Invite", inviteSchema);
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 const BackupSnapshot = mongoose.model("BackupSnapshot", backupSnapshotSchema);
 
-const Session = mongoose.model("Session", new mongoose.Schema({ userId: { type: mongoose.Schema.Types.ObjectId, index: true }, tokenHash: { type: String, unique: true }, expiresAt: { type: Date, expires: 0 } }, { timestamps: true }));
+const Session = mongoose.model("Session", new mongoose.Schema({ userId: { type: mongoose.Schema.Types.ObjectId, index: true }, tokenHash: { type: String, unique: true }, mfaVerified: { type: Boolean, default: false }, expiresAt: { type: Date, expires: 0 } }, { timestamps: true }));
 
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
@@ -264,9 +266,9 @@ function createToken(user) {
 
 const SESSION_COOKIE = process.env.NODE_ENV === "production" ? "__Host-finanflow_session" : "finanflow_session";
 const sessionOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" };
-async function setSession(res, user) {
+async function setSession(res, user, mfaVerified = false) {
   const token = createToken(user);
-  await Session.create({ userId: user._id, tokenHash: hashResetToken(token), expiresAt: new Date(jwt.decode(token).exp * 1000) });
+  await Session.create({ userId: user._id, mfaVerified, tokenHash: hashResetToken(token), expiresAt: new Date(jwt.decode(token).exp * 1000) });
   res.cookie(SESSION_COOKIE, token, { ...sessionOptions, maxAge: (effectiveRole(user, ADMIN_EMAILS) === "USER" ? 8 : 1) * 3600000 });
   res.set("Cache-Control", "no-store");
 }
@@ -343,7 +345,8 @@ async function auth(req, res, next) {
     if (!token) return res.status(401).json({ message: "Token não informado." });
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"], issuer: "finanflow" });
     res.set("Cache-Control", "no-store");
-    if (!await Session.exists({ userId: decoded.userId, tokenHash: hashResetToken(token), expiresAt: { $gt: new Date() } })) return res.status(401).json({ message: "Sessão encerrada. Entre novamente." });
+    const currentSession = await Session.findOne({ userId: decoded.userId, tokenHash: hashResetToken(token), expiresAt: { $gt: new Date() } });
+    if (!currentSession) return res.status(401).json({ message: "Sessão encerrada. Entre novamente." });
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
     const config=await AppConfig.findOne({key:"global"}).select("maintenanceMode maintenanceMessage").lean();
@@ -357,6 +360,8 @@ async function auth(req, res, next) {
       return res.status(401).json({ message: "Sua senha foi alterada. Entre novamente." });
     }
     req.user = user;
+    req.authSession = currentSession;
+    if (user.mfaEnabled && !currentSession.mfaVerified && req.path !== "/api/me" && !req.path.startsWith("/api/auth/mfa/")) return res.status(403).json({ message: "Confirme o segundo fator para continuar.", code: "MFA_REQUIRED" });
     next();
   } catch {
     return res.status(401).json({ message: "Sessão inválida." });
@@ -367,9 +372,9 @@ async function userCanAccessSpace(userId, spaceId) {
   return Boolean(await Member.findOne({ userId, spaceId }));
 }
 
-function publicUser(user) {
+function publicUser(user, mfaVerified = true) {
   const role = effectiveRole(user,ADMIN_EMAILS);
-  return { id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", emailVerified: Boolean(user.emailVerified), role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE",accessOrigin:user.accessOrigin||null };
+  return { mfaEnabled: Boolean(user.mfaEnabled), mfaRequired: Boolean(user.mfaEnabled && !mfaVerified), id: user._id, name: user.name, email: user.email, profilePhoto: user.profilePhoto || "", emailVerified: Boolean(user.emailVerified), role, isAdmin: role !== "USER", accessStatus: user.accessStatus || "active", trialEndsAt: user.trialEndsAt || null, trialStatus:user.trialStatus||"NOT_STARTED",planCode:user.planCode||"FREE",accessOrigin:user.accessOrigin||null };
 }
 
 function accessDenied(user) {
@@ -761,7 +766,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     user.lastLoginAt = new Date();
     await user.save();
     await setSession(res, user);
-    res.json({ user: publicUser(user) });
+    res.json({ user: publicUser(user, false) });
   } catch (error) {
     if (error instanceof InputError) return res.status(401).json({ message: "E-mail ou senha inválidos." });
     res.status(500).json({ message: "Erro ao fazer login." });
@@ -774,11 +779,13 @@ app.post("/api/auth/session", authLimiter, async (req, res) => {
   const user = await User.findOneAndUpdate({ oauthExchangeHash: hashResetToken(code), oauthExchangeExpiresAt: { $gt: new Date() } }, { $unset: { oauthExchangeHash: 1, oauthExchangeExpiresAt: 1 } }, { new: true });
   if (!user || accessDenied(user)) return res.status(401).json({ message: "Confirmação de login expirada." });
   await setSession(res, user);
-  res.json({ user: publicUser(user) });
+  res.json({ user: publicUser(user, false) });
 });
 app.post("/api/auth/logout", async (req, res) => { if (!CORS_ORIGINS.includes(req.headers.origin)) return res.status(403).json({message:"Origem inválida."}); const token=readCookie(req,SESSION_COOKIE); if(token)await Session.deleteOne({tokenHash:hashResetToken(token)}); res.clearCookie(SESSION_COOKIE, sessionOptions); res.set("Cache-Control","no-store"); res.json({ ok: true }); });
 
-app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: publicUser(req.user) })));
+registerMfaRoutes(app, { User, Session, auth, adminOnly, authLimiter, setSession, publicUser, JWT_SECRET });
+
+app.get("/api/me", auth, asyncHandler(async (req, res) => res.json({ user: publicUser(req.user, req.authSession?.mfaVerified) })));
 
 app.patch("/api/me/profile", auth, async (req, res) => {
   try {

@@ -1,3 +1,4 @@
+import { totp } from "./mfa-crypto.js";
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -185,4 +186,42 @@ test("self deletion uses the same complete cleanup and principal stays protected
   assert.equal((await request("/api/me",bob.cookie,null,"DELETE")).status,200);
   assert.equal(await db.collection("debtplans").countDocuments({spaceId}),0);assert.equal(await db.collection("sessions").countDocuments({userId:uid}),0);
   assert.equal((await request("/api/me",owner.cookie,null,"DELETE")).status,403);
+});
+
+
+test("admin MFA enrollment, session revocation, replay and recovery single-use", async () => {
+ assert.equal((await request("/api/auth/mfa/setup", admin.cookie, {password:"wrong"})).status,400);
+ assert.equal((await request("/api/auth/mfa/setup",owner.cookie,{password:"wrong"})).status,400);
+ const setup=await request("/api/auth/mfa/setup",admin.cookie,{password});assert.equal(setup.status,200,JSON.stringify(setup.body));
+ assert.match(setup.body.secret,/^[A-Z2-7]{32}$/);
+ const secret=setup.body.secret, step=Math.floor(Date.now()/30000);
+ assert.equal((await request("/api/auth/mfa/confirm",owner.cookie,{code:totp(secret,step)})).status,400);
+ const enabled=await request("/api/auth/mfa/confirm",admin.cookie,{code:totp(secret,step)});assert.equal(enabled.status,200,JSON.stringify(enabled.body));
+ assert.equal(enabled.body.recoveryCodes.length,10);assert.equal(enabled.body.user.mfaRequired,false);
+ assert.equal((await request("/api/admin/bootstrap",admin.cookie)).status,401);
+ assert.equal((await request("/api/admin/bootstrap",enabled.cookie)).status,200);
+ const dbCred=await mongoose.connection.collection("mfacredentials").findOne({userId:new mongoose.Types.ObjectId(admin.id)});assert.ok(!dbCred.secret.includes(secret));assert.ok(!dbCred.recoveryHashes.includes(enabled.body.recoveryCodes[0]));
+ // OAuth exchange follows the same second-factor restriction as password login.
+ const exchange=crypto.randomBytes(32).toString("base64url");await users.updateOne({_id:new mongoose.Types.ObjectId(admin.id)},{$set:{oauthExchangeHash:crypto.createHash("sha256").update(exchange).digest("hex"),oauthExchangeExpiresAt:new Date(Date.now()+60000)}});
+ const passwordPending=await request("/api/auth/login",null,{email:admin.email,password});assert.equal(passwordPending.status,200,JSON.stringify(passwordPending.body));assert.equal(passwordPending.body.user.mfaRequired,true);assert.equal((await request("/api/admin/bootstrap",passwordPending.cookie)).status,403);
+ const pending=await request("/api/auth/session",null,{code:exchange});assert.equal(pending.body.user.mfaRequired,true);
+ assert.equal((await request("/api/admin/bootstrap",pending.cookie)).status,403);assert.equal((await request("/api/spaces",pending.cookie)).status,403);
+ assert.equal((await request("/api/me",pending.cookie)).body.user.mfaRequired,true);
+ assert.equal((await request("/api/auth/mfa/verify",pending.cookie,{code:totp(secret,step)})).status,400);
+ const attempts=await Promise.all([1,2].map(()=>request("/api/auth/mfa/verify",pending.cookie,{recoveryCode:enabled.body.recoveryCodes[0]})));
+ assert.deepEqual(attempts.map(r=>r.status).sort(),[200,400]);
+ const verified=attempts.find(r=>r.status===200);assert.equal((await request("/api/me",verified.cookie)).body.user.mfaRequired,false);
+ assert.equal((await request("/api/admin/bootstrap",verified.cookie)).status,200);
+ assert.equal((await request("/api/me",pending.cookie)).status,401);
+ assert.equal((await request("/api/auth/mfa/verify",verified.cookie,{recoveryCode:enabled.body.recoveryCodes[0]})).status,400);
+ const replacement=await request("/api/auth/mfa/setup",verified.cookie,{password});assert.equal(replacement.status,200);
+ assert.equal((await mongoose.connection.collection("mfacredentials").findOne({userId:new mongoose.Types.ObjectId(admin.id)})).secret,dbCred.secret);
+ const newSecret=replacement.body.secret;
+ const rotated=await request("/api/auth/mfa/confirm",verified.cookie,{code:totp(newSecret,Math.floor(Date.now()/30000))});assert.equal(rotated.status,200,JSON.stringify(rotated.body));
+ assert.equal((await request("/api/me",verified.cookie)).status,401);
+ assert.equal((await request("/api/auth/mfa/verify",rotated.cookie,{recoveryCode:enabled.body.recoveryCodes[1]})).status,400);
+ // A persisted account lockout applies across new sessions and cannot be reset by setup.
+ for(let i=0;i<4;i++) await request("/api/auth/mfa/verify",rotated.cookie,{code:"xxxxxx"});
+ assert.equal((await request("/api/auth/mfa/verify",rotated.cookie,{recoveryCode:rotated.body.recoveryCodes[0]})).status,429);
+
 });
