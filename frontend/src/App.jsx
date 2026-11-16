@@ -1,3 +1,4 @@
+import { csvRows } from "./csv.js";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
@@ -1484,7 +1485,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
 
   function exportCsv() {
     const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth) && item.type !== "meta").map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, Number(item.amount || 0).toFixed(2).replace(".", ",")])];
-    const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(";")).join("\r\n");
+    const csv = csvRows(rows);
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
     link.download = `finanflow-relatorio-${selectedMonthKey}-${periodMonths}m.csv`;

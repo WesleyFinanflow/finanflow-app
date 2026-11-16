@@ -19,3 +19,12 @@ Portas exclusivas 4392 e 5392 precisam estar livres. Não reutiliza servidor exi
 Relatório HTML e JSON em `e2e/playwright-report` e `e2e/test-results`, ignorados no Git. Na CI são artefatos com retenção de sete dias. Traces e screenshots de falha podem conter chaves e códigos das contas descartáveis, nunca de usuários reais. Isso não valida integrações externas de Google ou e-mail, nem representa toda a aplicação coberta por E2E.
 
 Referências: https://playwright.dev/docs/test-webserver e https://playwright.dev/docs/ci-intro.
+
+
+## Financial regression coverage
+
+Financial scenarios use server-generated disposable fixtures and sessions, without extra login attempts or production credentials. Each project has isolated financial accounts and two partner accounts. Runtime fixture tokens are stored in an ignored file, removed on graceful shutdown, and never included in CI artifacts.
+
+The scenarios exercise transactions, installment series, monthly recurrence, balances, editing, series deletion, CSV and browser-print/PDF generation. Couple scenarios verify intentional ledger aggregation, denial of direct access to another individual space, creator-only editing/deletion and isolation of private debt plans. Marking a planning debt paid is checked to preserve ledger transactions and account balances, matching the current planning behavior.
+
+Browser reports and PDF/screenshot artifacts contain only disposable financial data. PDF generation checks do not replace a complete visual review across browsers or physical devices.

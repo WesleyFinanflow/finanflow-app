@@ -1,8 +1,11 @@
+const cents = value => Math.round(Number(value || 0) * 100);
+const reais = value => value / 100;
+
 export function calculateSummary(accounts = [], transactions = [], reserve = 0, periodKey = "") {
-  const baseBalance = accounts.reduce((total, account) => total + Number(account.balance || 0), 0);
+  const baseBalance = accounts.reduce((total, account) => total + cents(account.balance), 0);
   const totals = transactions.reduce(
     (result, transaction) => {
-      const amount = Number(transaction.amount || 0);
+      const amount = cents(transaction.amount);
       const inPeriod = !periodKey || String(transaction.date || "").slice(0, 7) === periodKey;
       if (transaction.status === "pago") {
         const isMeal = transaction.fundingSource === "meal" || (transaction.type === "receita" && /vale[-\s]?(refei|alimenta)/i.test(String(transaction.description || "")));
@@ -25,12 +28,12 @@ export function calculateSummary(accounts = [], transactions = [], reserve = 0, 
   const commitments = totals.expenses + totals.debt + totals.goals;
   const balance = baseBalance + totals.balanceDelta;
   return {
-    baseBalance,
-    balance,
-    mealBalance: totals.mealDelta,
-    ...totals,
-    commitments,
-    free: balance - commitments - Number(reserve || 0),
+    baseBalance: reais(baseBalance),
+    balance: reais(balance),
+    mealBalance: reais(totals.mealDelta),
+    ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, reais(value)])),
+    commitments: reais(commitments),
+    free: reais(balance - commitments - cents(reserve)),
   };
 }
 
