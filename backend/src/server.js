@@ -101,6 +101,7 @@ const userSchema = new mongoose.Schema(
     oauthExchangeExpiresAt: { type: Date, select: false },
     passwordVersion: { type: Number, default: 0 },
     mfaEnabled: { type: Boolean, default: false },
+    mfaVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
     emailVerified: { type: Boolean, default: false },
@@ -256,7 +257,7 @@ const Invite = mongoose.model("Invite", inviteSchema);
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 const BackupSnapshot = mongoose.model("BackupSnapshot", backupSnapshotSchema);
 
-const Session = mongoose.model("Session", new mongoose.Schema({ userId: { type: mongoose.Schema.Types.ObjectId, index: true }, tokenHash: { type: String, unique: true }, mfaVerified: { type: Boolean, default: false }, expiresAt: { type: Date, expires: 0 } }, { timestamps: true }));
+const Session = mongoose.model("Session", new mongoose.Schema({ userId: { type: mongoose.Schema.Types.ObjectId, index: true }, tokenHash: { type: String, unique: true }, mfaVerified: { type: Boolean, default: false }, mfaVersion: { type: Number, default: 0 }, expiresAt: { type: Date, expires: 0 } }, { timestamps: true }));
 
 const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
@@ -268,7 +269,7 @@ const SESSION_COOKIE = process.env.NODE_ENV === "production" ? "__Host-finanflow
 const sessionOptions = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/" };
 async function setSession(res, user, mfaVerified = false) {
   const token = createToken(user);
-  await Session.create({ userId: user._id, mfaVerified, tokenHash: hashResetToken(token), expiresAt: new Date(jwt.decode(token).exp * 1000) });
+  await Session.create({ userId: user._id, mfaVerified, mfaVersion: Number(user.mfaVersion || 0), tokenHash: hashResetToken(token), expiresAt: new Date(jwt.decode(token).exp * 1000) });
   res.cookie(SESSION_COOKIE, token, { ...sessionOptions, maxAge: (effectiveRole(user, ADMIN_EMAILS) === "USER" ? 8 : 1) * 3600000 });
   res.set("Cache-Control", "no-store");
 }
@@ -349,6 +350,7 @@ async function auth(req, res, next) {
     if (!currentSession) return res.status(401).json({ message: "Sessão encerrada. Entre novamente." });
     const user = await User.findById(decoded.userId).select("-passwordHash");
     if (!user) return res.status(401).json({ message: "Usuário não encontrado." });
+    if (Number(currentSession.mfaVersion || 0) !== Number(user.mfaVersion || 0)) return res.status(401).json({ message: "A proteção da conta mudou. Entre novamente." });
     const config=await AppConfig.findOne({key:"global"}).select("maintenanceMode maintenanceMessage").lean();
     await reconcileSubscription(user, Subscription);
     user.role = effectiveRole(user, ADMIN_EMAILS);
