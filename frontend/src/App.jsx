@@ -1419,6 +1419,8 @@ function Planejamento({ openDebtPlan, api, spaceId, summary, hasData, buyForm, s
 }
 
 function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summary, reserve }) {
+  const [debtReportState, setDebtReportState] = useState(null);
+  const pdfReady = debtReportState?.spaceId === String(spaceId) && debtReportState.ready;
   const [periodMonths, setPeriodMonths] = useState(6);
   const periodOptions = [{ value: "1", label: "Mês atual" }, { value: "3", label: "3 meses" }, { value: "6", label: "6 meses" }, { value: "12", label: "1 ano" }];
   const monthNumber = (key) => { const [year, month] = String(key).split("-").map(Number); return (year * 12) + month - 1; };
@@ -1503,7 +1505,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
         <div className="reports-actions">
           <DashboardSelect compact label="Período do relatório" value={String(periodMonths)} onChange={(value) => setPeriodMonths(Number(value))} options={periodOptions} />
           <button type="button" className="report-action secondary" onClick={exportCsv}><FileDown size={16} />Planilha</button>
-          <button type="button" className="report-action" onClick={() => window.print()}><Printer size={16} />PDF</button>
+          <button type="button" className="report-action" disabled={!pdfReady} onClick={() => window.print()}><Printer size={16} />{pdfReady ? "PDF" : debtReportState?.failed ? "PDF indisponível" : "Preparando PDF..."}</button>
         </div>
       </header>
 
@@ -1544,7 +1546,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
         <article className="panel report-pending-card"><div className="report-section-head"><div><span className="eyebrow">Situação atual</span><h2>Pendências e compromissos</h2></div><small>{pending.length} itens</small></div><div className={pendingTotal > 0 ? "pending-summary alert" : "pending-summary"}><ReceiptText size={28}/><strong>{money(pendingTotal)}</strong><p>{pendingTotal > 0 ? "Valor total que ainda aguarda pagamento ou recebimento." : "Parabéns! Você não possui compromissos pendentes no período."}</p></div></article>
       </section>
       <section className="panel report-insights"><div className="report-section-head"><div><span className="eyebrow">Leitura inteligente</span><h2>Insights do período</h2></div><small>Gerados somente com seus dados</small></div><div className="report-insight-grid"><article className={net < 0 ? "negative" : "positive"}><strong>{net < 0 ? "Período negativo" : "Período positivo"}</strong><p>O resultado financeiro foi de {money(net)} no período.</p></article><article className="orange"><strong>Peso das despesas</strong><p>{expenseRatio === null ? "Não houve receitas recebidas para calcular a proporção." : `As saídas representam ${expenseRatio.toFixed(1).replace(".", ",")}% das receitas.`}</p></article><article className="blue"><strong>Maior categoria</strong><p>{topCategory ? `${topCategory.name} concentrou ${((topCategory.amount / totalOutflow) * 100).toFixed(0)}% dos gastos (${money(topCategory.amount)}).` : "Não houve gastos pagos por categoria."}</p></article><article className={pendingTotal > 0 ? "orange" : "positive"}><strong>Pendências</strong><p>{pendingTotal > 0 ? `${money(pendingTotal)} ainda aguardam pagamento ou recebimento.` : "Não há compromissos pendentes no período."}</p></article></div></section>
-      <DebtPlanReport key={spaceId} api={api} spaceId={spaceId} />
+      <DebtPlanReport key={spaceId} api={api} spaceId={spaceId} onReady={setDebtReportState} />
       <footer className="report-print-footer"><span>https://vitalflow.ia.br</span><strong>FinanFlow · organização financeira com tranquilidade</strong><span>{generatedAt}</span></footer>
     </section>
   );

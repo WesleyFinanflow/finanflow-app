@@ -52,6 +52,8 @@ test("lançamentos, parcelas, recorrência, saldo e exportações conferem com v
  const csv=await readFile(await download.path(),"utf8");expect(csv).toContain('"\t=1+1"');expect(csv).toContain('"60,03"');expect(csv).toContain('"Salary fixture"');expect(csv).not.toContain('"=1+1"');
  // The PDF action uses browser printing; exercise it, then render the print document in Chromium.
  await page.evaluate(()=>{window.__printCalled=false;window.print=()=>window.__printCalled=true;});
+ await expect(page.getByRole("button",{name:"PDF",exact:true})).toBeEnabled();
+ await expect(page.locator(".dp-report [role=status]")).not.toBeVisible();
  await page.getByRole("button",{name:"PDF",exact:true}).click();expect(await page.evaluate(()=>window.__printCalled)).toBe(true);
  await page.emulateMedia({media:"print"});await expect(page.locator(".report-print-header")).toBeVisible();await expect(page.locator(".floating-message")).not.toBeVisible();await expect(page.locator(".due-reminder-fab")).not.toBeVisible();
  const pdf=await page.pdf({path:info.outputPath("financial-report.pdf"),format:"A4",printBackground:true});expect(pdf.subarray(0,4).toString()).toBe("%PDF");expect(pdf.length).toBeGreaterThan(5000);

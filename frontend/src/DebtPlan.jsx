@@ -44,8 +44,9 @@ function PlanSelect({ label, value, onChange, options }) {
   useEffect(() => { if (!open) return undefined; const close = event => { if (!root.current?.contains(event.target)) setOpen(false); }; const escape = event => { if (event.key === "Escape") setOpen(false); }; document.addEventListener("pointerdown", close); document.addEventListener("keydown", escape); return () => { document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); }; }, [open]);
   return <div className={`dp-select ${open ? "is-open" : ""}`} ref={root}><span>{label}</span><button type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(current => !current)}>{selected.label}<ChevronDown size={16} /></button>{open && <div className="dp-select-menu" role="listbox" aria-label={label}>{options.map(option => <button key={option.value} type="button" role="option" aria-selected={option.value === value} className={option.value === value ? "selected" : ""} onClick={() => { onChange(option.value); setOpen(false); }}>{option.label}{option.value === value && <Check size={15} />}</button>)}</div>}</div>;
 }
-export function DebtPlanReport({ api, spaceId }) {
+export function DebtPlanReport({ api, spaceId, onReady }) {
   const { data, error, load } = usePlan(api, spaceId);
+  useEffect(() => { onReady?.({ spaceId: String(spaceId), ready: Boolean(data) && !error, failed: Boolean(error) }); }, [data, error, spaceId, onReady]);
   return <section className="panel debt-plan dp-report"><h2>Plano de quitação de dívidas</h2>
     {error ? <p role="alert">{error} <button onClick={load}>Tentar novamente</button></p> : !data ? <p role="status">Carregando plano…</p> : <>
       <p>Posição atual · {data.spaceType === "couple" ? "Plano compartilhado do casal" : "Espaço individual"} · {strategies[data.strategy]}</p>
