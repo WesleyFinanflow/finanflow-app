@@ -25,3 +25,26 @@ jobs:
       - run: npx --yes pnpm@12.11.2 test
       - run: npx --yes pnpm@12.11.2 build
       - run: npx --yes pnpm@12.11.2 audit --audit-level=moderate
+
+  browser:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: npx --yes pnpm@12.11.2 --dir backend install --frozen-lockfile --ignore-scripts
+      - run: npx --yes pnpm@12.11.2 --dir frontend install --frozen-lockfile --ignore-scripts
+      - run: npx --yes pnpm@12.11.2 --dir e2e install --frozen-lockfile --ignore-scripts
+      - run: npx --yes pnpm@12.11.2 --dir frontend build
+      - run: npx --yes pnpm@12.11.2 --dir e2e exec playwright install --with-deps chromium
+      - run: npx --yes pnpm@12.11.2 --dir e2e test
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: browser-test-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
