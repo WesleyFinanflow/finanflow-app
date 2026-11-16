@@ -1,0 +1,13 @@
+{
+  "name": "finanflow-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1"
+  },
+  "packageManager": "pnpm@12.11.2"
+}

@@ -9,3 +9,6 @@ build/
 coverage/
 *.log
 .vercel/
+
+playwright-report/
+test-results/
