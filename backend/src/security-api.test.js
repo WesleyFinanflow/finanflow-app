@@ -229,3 +229,19 @@ test("admin MFA enrollment, session revocation, replay and recovery single-use",
  assert.equal((await request("/api/auth/mfa/verify",rotated.cookie,{recoveryCode:rotated.body.recoveryCodes[0]})).status,429);
 
 });
+
+
+test("financial series keep cent amounts, clamp month ends, prevent duplicate retries and delete the full series", async()=>{
+ const spaces=await request("/api/spaces",owner.cookie);const space=spaces.body.spaces.find(s=>s.type==="individual");
+ const base=`/api/spaces/${space._id}/transactions`, input={type:"despesa",description:"Month end fixture",amount:33.33,date:"2028-01-31",category:"Moradia",status:"pago",recurrence:"none",installmentCount:3,requestId:"financial-series-retry"};
+ const created=await request(base,owner.cookie,input);assert.equal(created.status,201,JSON.stringify(created.body));
+ assert.deepEqual(created.body.transactions.map(t=>t.date),["2028-01-31","2028-02-29","2028-03-31"]);
+ assert.deepEqual(created.body.transactions.map(t=>t.amount),[33.33,33.33,33.33]);assert.deepEqual(created.body.transactions.map(t=>t.status),["pago","pendente","pendente"]);assert.equal(created.body.transactions[0].totalAmount,99.99);
+ const retry=await request(base,owner.cookie,input);assert.equal(retry.status,200);assert.equal(retry.body.duplicate,true);
+ const id=created.body.transaction._id;
+ assert.equal((await request(base+"/"+id,owner.cookie,null,"DELETE")).status,200);
+ const listed=await request(base,owner.cookie);assert.equal(listed.body.transactions.some(t=>t.seriesId===created.body.transaction.seriesId),false);
+ const monthly=await request(base,owner.cookie,{...input,description:"Monthly end fixture",amount:10,recurrence:"monthly",installmentCount:1,requestId:"financial-monthly-retry"});assert.equal(monthly.status,201,JSON.stringify(monthly.body));assert.equal(monthly.body.transactions.length,24);
+ assert.deepEqual(monthly.body.transactions.slice(0,3).map(t=>t.date),["2028-01-31","2028-02-29","2028-03-31"]);assert.equal(monthly.body.transactions.filter(t=>t.status==="pago").length,1);
+ assert.equal((await request(base+"/"+monthly.body.transaction._id,owner.cookie,null,"DELETE")).status,200);
+});

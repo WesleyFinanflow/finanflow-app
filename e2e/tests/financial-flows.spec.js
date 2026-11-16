@@ -7,14 +7,14 @@ async function manual(page,{type,description,amount,status="pago",count="1"}){
  await dismissReminder(page);await nav(page,"Lançamentos");
  const fresh=page.getByRole("button",{name:"Novo lançamento",exact:true});if(await fresh.isVisible())await fresh.click();
  await page.getByRole("button",{name:/Lançamento manual/}).click();
- const form=page.locator("form.transaction-form").or(page.locator("form").filter({has:page.getByRole("button",{name:"Salvar lançamento",exact:true})}));
- await form.getByLabel("Tipo",{exact:true}).selectOption(type);
+ const form=page.locator("form.transaction-form-panel");
+ await form.getByRole("combobox",{name:"Tipo",exact:true}).selectOption(type);
  await form.getByLabel("Descrição",{exact:true}).fill(description);
- await form.getByLabel("Parcelamento",{exact:true}).selectOption(count);
+ await form.getByRole("combobox",{name:"Parcelamento",exact:true}).selectOption(count);
  await form.getByLabel(count==="1"?"Valor":"Valor de cada parcela",{exact:true}).fill(String(amount));
  await form.getByLabel("Data / vencimento",{exact:true}).fill(month()+"-10");
- await form.getByLabel("Categoria",{exact:true}).selectOption(type==="receita"?"Salário":"Moradia");
- await form.getByLabel("Status",{exact:true}).selectOption(status);
+ await form.getByRole("combobox",{name:"Categoria",exact:true}).selectOption(type==="receita"?"Salário":"Moradia");
+ await form.getByRole("combobox",{name:"Status",exact:true}).selectOption(status);
  const saved=page.waitForResponse(r=>r.request().method()==="POST"&&/\/transactions$/.test(new URL(r.url()).pathname));
  await form.getByRole("button",{name:"Salvar lançamento",exact:true}).click();
  const response=await saved;expect(response.status()).toBe(201);await expect(form).not.toBeVisible();return response.json();
@@ -36,6 +36,7 @@ test("lançamentos, parcelas, recorrência, saldo e exportações conferem com v
  const meal=await call(page.request,`/api/spaces/${fixture.spaceId}/transactions`,transaction({type:"receita",description:"Meal fixture",amount:200,status:"pago",fundingSource:"meal"}));expect(meal.status).toBe(201);
  const pending=await call(page.request,`/api/spaces/${fixture.spaceId}/transactions`,transaction({description:"=1+1",amount:100}));expect(pending.status).toBe(201);
  await page.reload();await balance(page,/1\.450,00/);
+ await expect(page.locator(".balance-value strong")).toHaveText(/1\.256,67/);
  // Persisted base balance must not be changed as paid transactions are accumulated in the UI.
  const accounts=await call(page.request,`/api/spaces/${fixture.spaceId}/accounts`);expect(accounts.body.accounts[0].balance).toBe(1000.01);
  await nav(page,"Lançamentos");await dismissReminder(page);
