@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculatePurchase, calculateSummary } from "./finance.js";
+import { calculatePurchase, calculateSummary, calculateReportBalances } from "./finance.js";
 
 test("calcula o saldo livre sem descontar lançamentos já pagos duas vezes", () => {
   const summary = calculateSummary(
@@ -110,4 +110,10 @@ test("currency arithmetic preserves cents and never displays negative zero", () 
 test("cash, meal benefits, periods and protected amounts remain separate in cents", () => {
  const summary=calculateSummary([{balance:10.1}],[{type:"receita",fundingSource:"meal",status:"pago",amount:0.3,date:"2026-01-01"},{type:"despesa",fundingSource:"meal",status:"pago",amount:0.1,date:"2026-01-02"},{type:"receita",status:"pago",amount:0.2,date:"2025-12-31"},{type:"despesa",status:"pendente",amount:0.1,date:"2026-01-10"},{type:"despesa",status:"pendente",amount:9,date:"2026-02-10"}],0.2,"2026-01");
  assert.equal(summary.balance,10.3);assert.equal(summary.mealBalance,0.2);assert.equal(summary.commitments,0.1);assert.equal(summary.free,10);
+});
+
+test("reports reconcile opening and closing cash balances without meal benefits or future paid records",()=>{
+ const transactions=[{type:"receita",status:"pago",amount:500,date:"2026-01-10"},{type:"despesa",status:"pago",amount:50,date:"2026-01-11"},{type:"meta",status:"pago",amount:20,date:"2026-01-12"},{type:"receita",status:"pago",fundingSource:"meal",amount:200,date:"2026-01-10"},{type:"receita",status:"pago",amount:900,date:"2026-02-01"},{type:"despesa",status:"pendente",amount:100,date:"2026-01-20"}];
+ assert.deepEqual(calculateReportBalances(1000,transactions,50,"2026-01","2026-01"),{initialBalance:1000,finalBalance:1430,safeBalance:1280,mealBalance:200,savedInPeriod:20});
+ assert.deepEqual(calculateReportBalances(1000,transactions,50,"2026-02","2026-02"),{initialBalance:1430,finalBalance:2330,safeBalance:2280,mealBalance:200,savedInPeriod:0});
 });

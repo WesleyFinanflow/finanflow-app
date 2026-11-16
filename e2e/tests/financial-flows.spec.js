@@ -45,12 +45,15 @@ test("lançamentos, parcelas, recorrência, saldo e exportações conferem com v
  const edited=page.waitForResponse(r=>r.request().method()==="PUT"&&r.url().includes("/transactions/"));await page.getByRole("button",{name:"Salvar edição",exact:true}).click();expect((await edited).status()).toBe(200);
  await balance(page,/1\.440,00/);
  await nav(page,"Relatórios");
+ await expect(page.locator(".report-kpi").filter({hasText:"Saldo inicial"}).locator("strong")).toHaveText(/1\.000,01/);
+ await expect(page.locator(".report-kpi").filter({hasText:"Receitas recebidas"}).locator("strong")).toHaveText(/500,02/);
+ await expect(page.locator(".report-kpi").filter({hasText:"Saldo final"}).locator("strong")).toHaveText(/1\.440,00/);
  const downloading=page.waitForEvent("download");await page.getByRole("button",{name:"Planilha",exact:true}).click();const download=await downloading;
  const csv=await readFile(await download.path(),"utf8");expect(csv).toContain('"\t=1+1"');expect(csv).toContain('"60,03"');expect(csv).toContain('"Salary fixture"');expect(csv).not.toContain('"=1+1"');
  // The PDF action uses browser printing; exercise it, then render the print document in Chromium.
  await page.evaluate(()=>{window.__printCalled=false;window.print=()=>window.__printCalled=true;});
  await page.getByRole("button",{name:"PDF",exact:true}).click();expect(await page.evaluate(()=>window.__printCalled)).toBe(true);
- await page.emulateMedia({media:"print"});await expect(page.locator(".report-print-header")).toBeVisible();
+ await page.emulateMedia({media:"print"});await expect(page.locator(".report-print-header")).toBeVisible();await expect(page.locator(".floating-message")).not.toBeVisible();await expect(page.locator(".due-reminder-fab")).not.toBeVisible();
  const pdf=await page.pdf({path:info.outputPath("financial-report.pdf"),format:"A4",printBackground:true});expect(pdf.subarray(0,4).toString()).toBe("%PDF");expect(pdf.length).toBeGreaterThan(5000);
  await page.screenshot({path:info.outputPath("financial-report-print.png"),fullPage:true});await page.emulateMedia({media:"screen"});
  await nav(page,"Lançamentos");await page.locator(".transaction-row").filter({hasText:"Installment fixture"}).getByRole("button",{name:"Excluir",exact:true}).click();

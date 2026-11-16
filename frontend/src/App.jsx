@@ -1,7 +1,7 @@
 import { csvRows } from "./csv.js";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
-import { calculateSummary } from "./finance.js";
+import { calculateSummary, calculateReportBalances, isMealTransaction } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
 import { findSimilarTransaction, parseReceiptText, pdfFirstPageToImage, prepareReceiptImage } from "./receipt-ocr.js";
@@ -1426,9 +1426,9 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   const startMonth = endMonth - periodMonths + 1;
   const previousStart = startMonth - periodMonths;
   const inRange = (item, start, end) => { const value = monthNumber(String(item.date || "").slice(0, 7)); return value >= start && value <= end; };
-  const realized = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && inRange(item, startMonth, endMonth));
-  const previous = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && inRange(item, previousStart, startMonth - 1));
-  const pending = transactions.filter((item) => item.status !== "pago" && item.type !== "meta" && inRange(item, startMonth, endMonth));
+  const realized = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
+  const previous = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, previousStart, startMonth - 1));
+  const pending = transactions.filter((item) => item.status !== "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
   const totals = (items) => items.reduce((result, item) => {
     const amount = Number(item.amount || 0);
     if (item.type === "receita") result.income += amount;
@@ -1468,9 +1468,8 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   const periodLabel = periodMonths === 1 ? monthLabel(selectedMonthKey) : `${monthLabel(evolution[0].key, "short")} a ${monthLabel(selectedMonthKey, "short")}`;
   const totalOutflow = currentTotals.expenses + currentTotals.debt;
   const pendingTotal = pending.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const finalBalance = Number(summary?.balance || 0);
-  const initialBalance = finalBalance - net;
-  const safeBalance = Number(summary?.free || 0);
+  const firstReportMonth = evolution[0].key;
+  const { initialBalance, finalBalance, safeBalance, mealBalance, savedInPeriod } = calculateReportBalances(summary?.baseBalance || 0, transactions, reserve, firstReportMonth, selectedMonthKey);
   const expenseRatio = currentTotals.income > 0 ? (totalOutflow / currentTotals.income) * 100 : null;
   const topCategory = categories[0] || null;
   const generatedAt = new Date().toLocaleString("pt-BR");
@@ -1484,7 +1483,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   }).join(" ");
 
   function exportCsv() {
-    const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth) && item.type !== "meta").map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, Number(item.amount || 0).toFixed(2).replace(".", ",")])];
+    const rows = [["Data", "Tipo", "Descrição", "Categoria", "Responsável", "Status", "Origem do saldo", "Valor"], ...transactions.filter((item) => inRange(item, startMonth, endMonth)).map((item) => [item.date, item.type, item.description, item.category, item.responsibleName || "", item.status, isMealTransaction(item) ? "Vale-refeição" : "Conta principal", Number(item.amount || 0).toFixed(2).replace(".", ",")])];
     const csv = csvRows(rows);
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
@@ -1513,6 +1512,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
         <div className="report-period"><CalendarDays size={16} /><span>Gerado em</span><strong>{generatedAt}</strong></div>
         <div className="report-period"><UserRound size={16} /><span>Espaço</span><strong>{activeMode === "couple" ? "Casal" : "Individual"}</strong></div>
       </div>
+      <p className="report-funds-note">Fluxo da conta principal. Vale-refeição ao fim do período: <strong>{money(mealBalance)}</strong>. Dinheiro separado em metas no período: <strong>{money(savedInPeriod)}</strong>.</p>
       <div className="report-executive-title"><span><BarChart3 size={18}/></span><div><h2>Resumo executivo</h2><small>Principais números do período</small></div></div>
       <section className="report-summary-grid">
         <article className="report-kpi income"><span>Receitas recebidas</span><strong>{money(currentTotals.income)}</strong><small>{realized.filter((item) => item.type === "receita").length} lançamentos</small></article>
