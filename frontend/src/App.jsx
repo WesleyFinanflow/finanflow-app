@@ -1428,7 +1428,7 @@ function Relatorios({ spaceId, transactions, selectedMonthKey, activeMode, summa
   const inRange = (item, start, end) => { const value = monthNumber(String(item.date || "").slice(0, 7)); return value >= start && value <= end; };
   const realized = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
   const previous = transactions.filter((item) => item.status === "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, previousStart, startMonth - 1));
-  const pending = transactions.filter((item) => item.status !== "pago" && item.type !== "meta" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
+  const pending = transactions.filter((item) => item.status !== "pago" && !isMealTransaction(item) && inRange(item, startMonth, endMonth));
   const totals = (items) => items.reduce((result, item) => {
     const amount = Number(item.amount || 0);
     if (item.type === "receita") result.income += amount;
