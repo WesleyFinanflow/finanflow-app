@@ -6,7 +6,13 @@ async function login(page,address,path="/admin"){
  await page.goto(path);
  await page.getByRole("textbox",{name:"E-mail",exact:true}).fill(address);
  await page.getByLabel("Senha",{exact:true}).fill(password);
+ const readyRequests=[];
+ const track=request=>{if(new URL(request.url()).pathname==="/api/ready")readyRequests.push(request);};
+ page.on("request",track);
+ const response=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/auth/login" && response.request().method()==="POST");
  await page.getByRole("button",{name:"Entrar",exact:true}).click();
+ expect((await response).status()).toBe(200);
+ page.off("request",track);expect(readyRequests).toHaveLength(0);
 }
 async function logout(page){
  await page.getByRole("button",{name:"Abrir menu do perfil",exact:true}).click();
@@ -26,6 +32,8 @@ test("usuário comum: permissão administrativa negada e logout revoga sessão",
  expect((await page.request.get(api+"/api/admin/bootstrap")).status()).toBe(403);
  const me=await page.request.get(api+"/api/me");expect(me.status()).toBe(200);expect((await me.json()).user.isAdmin).toBe(false);
  const cookies=await page.context().cookies();
+ await page.goto("/planejamento/dividas");
+ await expect(page.getByRole("heading",{name:"Plano mensal para quitar dívidas",exact:true})).toBeVisible();
  await page.goto("/");
  await expect(page.getByRole("button",{name:"Abrir menu do perfil",exact:true})).toBeVisible();
  await logout(page);

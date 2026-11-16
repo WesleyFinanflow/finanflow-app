@@ -1,4 +1,4 @@
-const CACHE_NAME = "finanflow-pwa-v3";
+const CACHE_NAME = "finanflow-pwa-v4";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -18,8 +18,6 @@ self.addEventListener("activate", (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: "window" }))
-      .then((clients) => Promise.all(clients.map((client) => client.navigate(client.url))))
   );
 });
 
@@ -28,15 +26,22 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
 
-  if (request.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname.endsWith(".js") || url.pathname.endsWith(".css")) {
-    event.respondWith(
-      fetch(request, { cache: "no-store" })
-        .then((response) => {
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone())).catch(() => undefined);
-          return response;
-        })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match("/")))
-    );
+  // Versioned build assets are immutable: avoid a network round trip on each opening.
+  if (/^\/assets\/.+-[A-Za-z0-9_-]{8,}\.(js|css|woff2?|png|webp|svg)$/.test(url.pathname)) {
+    event.respondWith(caches.match(request).then(async cached => {
+      if (cached) return cached;
+      const response = await fetch(request);
+      if (response.ok) await caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone())).catch(() => undefined);
+      return response;
+    }));
+    return;
+  }
+  // Only navigations may fall back to the HTML shell. Never return HTML for missing scripts.
+  if (request.mode === "navigate" || url.pathname.endsWith(".html")) {
+    event.respondWith(fetch(request, { cache: "no-store" }).then(response => {
+      if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone())).catch(() => undefined);
+      return response;
+    }).catch(() => caches.match(request).then(cached => cached || caches.match("/"))));
     return;
   }
 

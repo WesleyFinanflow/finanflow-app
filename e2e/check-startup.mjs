@@ -1,0 +1,13 @@
+import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { gzipSync } from "node:zlib";
+import assert from "node:assert/strict";
+const dist=new URL("../frontend/dist/",import.meta.url);
+const html=await readFile(new URL("index.html",dist),"utf8");
+const paths=[...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(match=>match[1]);
+assert.ok(paths.some(path=>path.endsWith(".js")),"Build entry is missing");
+const assets=await Promise.all(paths.map(async path=>{const contents=await readFile(new URL(path.slice(1),dist));return {path,bytes:contents.length,gzipBytes:gzipSync(contents).length};}));
+const gzipBytes=assets.reduce((total,asset)=>total+asset.gzipBytes,0);
+await mkdir(new URL("./performance-report/",import.meta.url),{recursive:true});
+await writeFile(new URL("./performance-report/startup-bundle.json",import.meta.url),JSON.stringify({assets,gzipBytes,budgetGzipBytes:150000},null,2));
+console.log(`Startup JS/CSS and preloads: ${gzipBytes} gzip bytes (budget 150000)`);
+assert.ok(gzipBytes<=150000,"Startup bundle exceeded the size budget");

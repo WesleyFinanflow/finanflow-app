@@ -1,3 +1,4 @@
+import "./admin.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,

@@ -1,4 +1,3 @@
-import MfaPanel from "./MfaPanel.jsx";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
 import { calculateSummary } from "./finance.js";
@@ -10,7 +9,11 @@ import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
 import commitmentsCalendarIcon from "./assets/financial-icons/commitments-calendar.webp";
 import safeShieldIcon from "./assets/financial-icons/safe-shield.webp";
 const AdminApp = lazy(() => import("./AdminApp.jsx"));
-import DebtPlanPage, { DebtPlanReport } from "./DebtPlan.jsx";
+const LazyDebtPlanPage = lazy(() => import("./DebtPlan.jsx"));
+const LazyDebtPlanReport = lazy(() => import("./DebtPlan.jsx").then(module => ({ default: module.DebtPlanReport })));
+const MfaPanel = lazy(() => import("./MfaPanel.jsx"));
+function DebtPlanPage(props) { return <Suspense fallback={<p role="status">Carregando planejamento...</p>}><LazyDebtPlanPage {...props} /></Suspense>; }
+function DebtPlanReport(props) { return <Suspense fallback={<p role="status">Carregando relatório...</p>}><LazyDebtPlanReport {...props} /></Suspense>; }
 
 function getApiUrl() {
   return import.meta.env.DEV ? (import.meta.env.VITE_API_URL || "") : "";
@@ -147,7 +150,7 @@ async function api(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
   const canRetry = method === "GET" || method === "HEAD";
   try {
-    return await apiAttempt(path, options, 15000);
+    return await apiAttempt(path, options, ["/api/auth/login", "/api/auth/register", "/api/auth/session"].includes(path) ? 75000 : 15000);
   } catch (error) {
     if (!canRetry || !error.retryable) throw error;
     return apiAttempt(path, options, 60000);
@@ -280,7 +283,7 @@ export default function App() {
     if (selected) await loadSpaceData(selected);
   }
 
-  useEffect(() => { if (user && !user.mfaRequired) loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
+  useEffect(() => { if (user && !user.mfaRequired && window.location.pathname !== "/admin") loadSpaces().catch((error) => setMessage(error.message)); }, [user]);
   useEffect(() => {
     if (!googleAuthResult.token) { if (googleAuthResult.error) setMessage(googleAuthResult.error); return; }
     api("/api/auth/session", { method: "POST", body: JSON.stringify({ code: googleAuthResult.token }) }).then((data) => { clearUserState(); localStorage.setItem("finanflow_user", JSON.stringify(data.user)); setUser(data.user); setMessage("Acesso realizado com Google."); }).catch((error) => { localStorage.removeItem("finanflow_token"); setMessage(error.message); });
@@ -288,7 +291,7 @@ export default function App() {
 
 
   useEffect(()=>{api("/api/platform/config").then(setPlatformConfig).catch(()=>undefined);},[]);
-  useEffect(()=>{if(user && !user.mfaRequired)Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id,user?.mfaRequired]);
+  useEffect(()=>{if(user && !user.mfaRequired && window.location.pathname !== "/admin")Promise.all([api("/api/platform/features"),api("/api/announcements/current")]).then(([features,notices])=>{setPlatformFeatures(features.features||{});setAnnouncements(notices.announcements||[]);}).catch(()=>undefined);},[user?.id,user?.mfaRequired]);
 
   useEffect(() => {
     localStorage.removeItem("finanflow_token");
@@ -383,7 +386,6 @@ export default function App() {
     try {
       const path = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
       setMessage("Conectando ao servidor. O primeiro acesso pode levar um minuto...");
-      await api("/api/ready");
       const data = await api(path, { method: "POST", body: JSON.stringify(authForm) });
       clearUserState();
       localStorage.removeItem("finanflow_token");
@@ -821,7 +823,7 @@ export default function App() {
     return <AuthScreen pendingInvite={pendingInvite} authMode={authMode} setAuthMode={setAuthMode} authForm={authForm} setAuthForm={setAuthForm} handleAuth={handleAuth} loading={loading} message={message} setMessage={setMessage} />;
   }
 
-  if (user.mfaRequired || securityOpen) return <MfaPanel api={api} user={user} challenge={user.mfaRequired} onUser={next => { localStorage.setItem("finanflow_user", JSON.stringify(next)); setUser(next); }} onClose={() => setSecurityOpen(false)} onLogout={logout} />;
+  if (user.mfaRequired || securityOpen) return <Suspense fallback={<p role="status">Carregando segurança...</p>}><MfaPanel api={api} user={user} challenge={user.mfaRequired} onUser={next => { localStorage.setItem("finanflow_user", JSON.stringify(next)); setUser(next); }} onClose={() => setSecurityOpen(false)} onLogout={logout} /></Suspense>;
 
   if(platformConfig?.maintenanceMode&&!user.isAdmin)return <main className="maintenance-page"><ShieldCheck size={48}/><span className="eyebrow">Manutenção programada</span><h1>FinanFlow está em manutenção</h1><p>{platformConfig.maintenanceMessage}</p><button onClick={()=>window.location.reload()}>Verificar novamente</button></main>;
 
