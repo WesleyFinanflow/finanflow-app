@@ -245,3 +245,15 @@ test("financial series keep cent amounts, clamp month ends, prevent duplicate re
  assert.deepEqual(monthly.body.transactions.slice(0,3).map(t=>t.date),["2028-01-31","2028-02-29","2028-03-31"]);assert.equal(monthly.body.transactions.filter(t=>t.status==="pago").length,1);
  assert.equal((await request(base+"/"+monthly.body.transaction._id,owner.cookie,null,"DELETE")).status,200);
 });
+
+
+test("editing a series cannot reset other completed payments",async()=>{
+ const spaces=await request("/api/spaces",owner.cookie),space=spaces.body.spaces.find(s=>s.type==="individual"),base=`/api/spaces/${space._id}/transactions`;
+ const input={type:"despesa",description:"Paid history fixture",amount:20,date:"2028-01-31",category:"Moradia",status:"pago",recurrence:"none",installmentCount:3};
+ const created=await request(base,owner.cookie,input);assert.equal(created.status,201);
+ await mongoose.connection.collection("transactions").updateOne({_id:new mongoose.Types.ObjectId(created.body.transactions[1]._id)},{$set:{status:"pago"}});
+ const before=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId);
+ const edit=await request(base+"/"+created.body.transaction._id,owner.cookie,{...input,amount:30},"PUT");assert.equal(edit.status,409);
+ const after=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId);assert.deepEqual(after,before);
+ assert.equal((await request(base+"/"+created.body.transaction._id,owner.cookie,null,"DELETE")).status,200);
+});

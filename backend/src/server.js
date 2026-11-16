@@ -1161,6 +1161,9 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
     const previous = existing.seriesId
       ? await Transaction.find({ spaceId: existing.spaceId, seriesId: existing.seriesId }).sort({ date: 1 })
       : [existing];
+    if (previous.some(item => String(item._id) !== String(existing._id) && item.status === "pago")) {
+      return res.status(409).json({ message: "Esta série possui outros pagamentos concluídos. A edição completa foi bloqueada para preservar o histórico." });
+    }
     const grouped = recurrence === "monthly" || installmentCount > 1;
     const seriesId = grouped ? (existing.seriesId || crypto.randomUUID()) : undefined;
     const documents = [];
