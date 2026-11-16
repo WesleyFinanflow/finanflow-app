@@ -81,7 +81,7 @@ test("casal compartilha o livro financeiro, protege espaços individuais e isola
   expect((await call(page.request,`/api/spaces/${couple}/transactions`)).body.transactions).toEqual(beforeTx);
   expect((await call(partnerContext.request,`/api/spaces/${couple}/debt-plan`)).body.debts.some(d=>d.name==="Private individual plan")).toBe(false);
   await context.addInitScript(()=>localStorage.setItem("finanflow_active_mode","couple"));await page.goto("/");
-  await expect(page.getByText("Controle financeiro compartilhado",{exact:true})).toBeVisible();await balance(page,/1\.850,00/);
+  await expect(page.getByRole("button",{name:"Ir para individual",exact:true})).toBeVisible();await balance(page,/1\.850,00/);
   await nav(page,"Lançamentos");await expect(page.locator(".transaction-row").filter({hasText:"Partner A expense"})).toBeVisible();await expect(page.locator(".transaction-row").filter({hasText:"Partner B expense"})).toBeVisible();
  }finally{await partnerContext.close();}
 });
