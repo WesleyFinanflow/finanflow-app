@@ -33,7 +33,7 @@ try {
  const financialFixtures={};
  for(const project of ["desktop","mobile"]){
   financialFixtures[project]={};
-  for(const kind of ["finance","partnerA","partnerB"]){
+  for(const kind of ["finance","partnerA","partnerB","series"]){
    const userId=new mongoose.Types.ObjectId(),spaceId=new mongoose.Types.ObjectId(),accountId=new mongoose.Types.ObjectId();
    const email=`${project}.${kind}@example.test`,name=`${project} ${kind}`;
    await mongoose.connection.collection("users").insertOne({_id:userId,name,email,passwordHash,role:"USER",emailVerified:true,accessStatus:"active",planCode:"PREMIUM",trialStatus:"NOT_STARTED",createdAt:new Date(),updatedAt:new Date()});

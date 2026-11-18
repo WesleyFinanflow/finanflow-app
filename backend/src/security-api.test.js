@@ -1,3 +1,4 @@
+import { seriesSnapshot } from "./pending-series.js";
 import { totp } from "./mfa-crypto.js";
 import { before, after, test } from "node:test";
 import assert from "node:assert/strict";
@@ -256,4 +257,36 @@ test("editing a series cannot reset other completed payments",async()=>{
  const edit=await request(base+"/"+created.body.transaction._id,owner.cookie,{...input,amount:30},"PUT");assert.equal(edit.status,409);
  const after=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId);assert.deepEqual(after,before);
  assert.equal((await request(base+"/"+created.body.transaction._id,owner.cookie,null,"DELETE")).status,200);
+});
+
+
+test("pending series edits preserve IDs, completed records, earlier pending rows and audit the atomic change",async()=>{
+ const spaces=await request("/api/spaces",owner.cookie),space=spaces.body.spaces.find(s=>s.type==="individual"),base=`/api/spaces/${space._id}/transactions`;
+ const input={type:"despesa",description:"Selective series",amount:10,date:"2028-01-31",category:"Moradia",status:"pendente",recurrence:"none",installmentCount:5};
+ const created=await request(base,owner.cookie,input);assert.equal(created.status,201);
+ await mongoose.connection.collection("transactions").updateOne({_id:new mongoose.Types.ObjectId(created.body.transactions[2]._id)},{$set:{status:"pago"}});
+ const before=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId).sort((a,b)=>a.installmentNumber-b.installmentNumber);
+ const selected=before[1],payload={...input,description:"Updated pending",amount:20,date:"2028-02-20",status:"pago",seriesSnapshot:seriesSnapshot(before)};
+ const changed=await request(base+"/"+selected._id+"/pending-series",owner.cookie,payload,"PATCH");assert.equal(changed.status,200,JSON.stringify(changed.body));assert.equal(changed.body.updatedCount,3);
+ const after=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId).sort((a,b)=>a.installmentNumber-b.installmentNumber);
+ assert.deepEqual(after.map(t=>t._id),before.map(t=>t._id));assert.deepEqual(after[0],before[0]);assert.deepEqual(after[2],before[2]);assert.deepEqual(after.map(t=>t.status),["pendente","pago","pago","pendente","pendente"]);assert.deepEqual(after.map(t=>t.amount),[10,20,10,20,20]);assert.equal(after[1].totalAmount,80);
+ const audits=await mongoose.connection.collection("auditlogs").find({entityId:selected._id,action:"update"}).toArray();assert.equal(audits.length,1);assert.equal(audits[0].before.length,3);assert.equal(audits[0].after.length,3);
+ assert.equal((await request(base+"/"+before[2]._id+"/pending-series",owner.cookie,{...payload,seriesSnapshot:seriesSnapshot(after)},"PATCH")).status,409);
+ assert.equal((await request(base+"/"+after[3]._id+"/pending-series",owner.cookie,payload,"PATCH")).status,409);
+});
+test("concurrent edits using one snapshot have exactly one winner",async()=>{
+ const spaces=await request("/api/spaces",owner.cookie),space=spaces.body.spaces.find(s=>s.type==="individual"),base=`/api/spaces/${space._id}/transactions`;
+ const input={type:"despesa",description:"Race series",amount:10,date:"2028-01-31",category:"Moradia",status:"pendente",recurrence:"monthly",installmentCount:1};const created=await request(base,owner.cookie,input);assert.equal(created.status,201);
+ const payload={...input,amount:15,seriesSnapshot:seriesSnapshot(created.body.transactions)};
+ const outcomes=await Promise.all([1,2].map(()=>request(base+"/"+created.body.transaction._id+"/pending-series",owner.cookie,payload,"PATCH")));assert.deepEqual(outcomes.map(r=>r.status).sort(),[200,409]);
+ const rows=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId);assert.equal(rows.length,24);assert.ok(rows.every(t=>t.amount===15));
+});
+test("audit failure rolls back every pending change",async()=>{
+ const spaces=await request("/api/spaces",owner.cookie),space=spaces.body.spaces.find(s=>s.type==="individual"),base=`/api/spaces/${space._id}/transactions`;
+ const input={type:"despesa",description:"Rollback series",amount:10,date:"2028-01-31",category:"Moradia",status:"pendente",recurrence:"none",installmentCount:3};const created=await request(base,owner.cookie,input);assert.equal(created.status,201);const before=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId);
+ try{
+  await mongoose.connection.db.command({collMod:"auditlogs",validator:{$jsonSchema:{bsonType:"object",properties:{action:{enum:["blocked-test-only"]}}}}});
+  const result=await request(base+"/"+created.body.transaction._id+"/pending-series",owner.cookie,{...input,amount:99,seriesSnapshot:seriesSnapshot(before)},"PATCH");assert.equal(result.status,500);
+ }finally{await mongoose.connection.db.command({collMod:"auditlogs",validator:{}});}
+ const after=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId);assert.deepEqual(after,before);
 });

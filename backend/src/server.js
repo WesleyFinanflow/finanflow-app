@@ -1,3 +1,4 @@
+import { updatePendingSeries } from "./pending-series.js";
 import { registerMfaRoutes } from "./mfa.js";
 import express from "express";
 import { reconcileSubscription, extendTrial, grantManualPlan } from "./access-management.js";
@@ -1144,6 +1145,21 @@ app.patch("/api/spaces/:spaceId/transactions/:transactionId/reminder", auth, asy
   const transaction = await Transaction.findByIdAndUpdate(existing._id, { reminderDate }, { new: true, runValidators: true });
   await recordAudit({ spaceId: existing.spaceId, user: req.user, action: "update", entityType: "transaction", entityId: transaction._id, summary: `Lembrete reagendado: ${transaction.description}`, before: existing, after: transaction });
   res.json({ transaction });
+}));
+
+app.patch("/api/spaces/:spaceId/transactions/:transactionId/pending-series", auth, asyncHandler(async (req,res)=>{
+  if(!await userCanAccessSpace(req.user._id,req.params.spaceId))return res.status(403).json({message:"Sem acesso ao espaço."});
+  const viewIds=await spaceViewIds(req.params.spaceId);
+  const selected=await Transaction.findOne({_id:req.params.transactionId,spaceId:{$in:viewIds}}).lean();
+  if(!selected)return res.status(404).json({message:"Lançamento não encontrado."});
+  if(String(selected.createdBy)!==String(req.user._id))return res.status(403).json({message:"Somente quem criou a série pode editá-la."});
+  const requestedAccount=req.body?.accountId||selected.accountId;
+  const account=requestedAccount ? await Account.findOne({_id:requestedAccount,spaceId:selected.spaceId}).lean() : await Account.findOne({spaceId:selected.spaceId}).sort({createdAt:1}).lean();
+  if(!account)throw new InputError("Conta principal não encontrada. Atualize as contas antes de editar.");
+  const accountId=account._id;
+  const input=transactionInput(req.body,accountId,req.user);
+  const result=await updatePendingSeries({Transaction,AuditLog,selectedId:selected._id,viewIds,user:req.user,input,snapshot:req.body?.seriesSnapshot,structure:{recurrence:req.body?.recurrence||"none",installmentCount:Number(req.body?.installmentCount||1)}});
+  res.json(result);
 }));
 
 app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, res) => {

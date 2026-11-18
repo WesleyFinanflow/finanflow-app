@@ -90,3 +90,21 @@ test("casal compartilha o livro financeiro, protege espaços individuais e isola
   await nav(page,"Lançamentos");await expect(page.locator(".transaction-row").filter({hasText:"Partner A expense"})).toBeVisible();await expect(page.locator(".transaction-row").filter({hasText:"Partner B expense"})).toBeVisible();
  }finally{await partnerContext.close();}
 });
+
+
+test("edição da escolhida e pendentes seguintes preserva pagamentos e identificadores",async({page,context},info)=>{
+ const fixture=await actor(info.project.name,"series");await useActor(context,fixture);
+ const now=new Date(),previousMonth=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,10)).toISOString().slice(0,10),basePath=`/api/spaces/${fixture.spaceId}/transactions`;
+ const created=await call(page.request,basePath,transaction({description:"Series editing fixture",amount:10,date:previousMonth,status:"pago",installmentCount:4}));expect(created.status).toBe(201);
+ expect((await call(page.request,basePath+"/"+created.body.transactions[2]._id+"/status",{status:"pago"},"PATCH")).status).toBe(200);
+ const before=(await call(page.request,basePath)).body.transactions.sort((a,b)=>a.installmentNumber-b.installmentNumber);
+ await page.goto("/");await nav(page,"Lançamentos");await dismissReminder(page);
+ const selected=page.locator(".transaction-row").filter({hasText:"Series editing fixture"});await selected.getByRole("button",{name:"Editar",exact:true}).click();
+ await expect(page.getByRole("note")).toContainText("Esta parcela e as pendentes seguintes");
+ await expect(page.getByRole("combobox",{name:"Frequência",exact:true})).toBeDisabled();await expect(page.getByRole("combobox",{name:"Parcelamento",exact:true})).toBeDisabled();
+ await page.getByLabel("Descrição",{exact:true}).fill("Updated series fixture");await page.getByLabel("Valor por parcela pendente",{exact:true}).fill("20");await page.getByLabel("Data / vencimento",{exact:true}).fill(month()+"-20");await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("pago");
+ const saving=page.waitForResponse(response=>response.request().method()==="PATCH"&&response.url().endsWith("/pending-series"));await page.getByRole("button",{name:"Salvar edição",exact:true}).click();expect((await saving).status()).toBe(200);
+ const after=(await call(page.request,basePath)).body.transactions.sort((a,b)=>a.installmentNumber-b.installmentNumber);
+ expect(after.map(row=>row._id)).toEqual(before.map(row=>row._id));expect(after[0]).toEqual(before[0]);expect(after[2]).toEqual(before[2]);expect(after.map(row=>row.amount)).toEqual([10,20,10,20]);expect(after.map(row=>row.status)).toEqual(["pago","pago","pago","pendente"]);expect(after[3].date).toMatch(/-20$/);
+ await expect(page.locator(".transaction-row").filter({hasText:"Updated series fixture"}).locator(".transaction-value small")).toHaveText(/Total.*60,00/);
+});
