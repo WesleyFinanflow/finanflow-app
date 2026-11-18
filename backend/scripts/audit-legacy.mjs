@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import {writeFile} from 'node:fs/promises';
 import {legacyAudit} from '../src/legacy-audit.js';
 import {encryptAudit} from '../src/audit-envelope.js';
+import {inspectLegacyCandidates} from '../src/legacy-inspection.js';
 const uri=process.env.MONGODB_URI,publicKey=process.env.AUDIT_RECIPIENT_PUBLIC_KEY;
 let client;
 try{
@@ -12,6 +13,7 @@ try{
   client=new mongoose.mongo.MongoClient(uri,{serverSelectionTimeoutMS:20000,appName:'FinanFlow-read-only-audit',retryWrites:false});
   await client.connect();
   const report=await legacyAudit(client.db());
+  report.inspection=await inspectLegacyCandidates(client.db(),report);
   await writeFile('legacy-audit.encrypted.json',JSON.stringify(encryptAudit(report,publicKey)),{mode:0o600});
   console.log('Read-only audit completed; encrypted report written. No application data printed.');
 }catch{
