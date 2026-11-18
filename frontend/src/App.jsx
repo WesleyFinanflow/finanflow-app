@@ -426,7 +426,7 @@ export default function App() {
     if (txForm.description.trim().length > 160) return setMessage("A descrição deve ter até 160 caracteres.");
     const amount = Number(txForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
-    if (Number(txForm.installmentCount || 1) > 1 && amount * Number(txForm.installmentCount) > MAX_MONEY) return setMessage("O valor total do parcelamento ultrapassa o limite permitido.");
+    if (!txForm.editScope && Number(txForm.installmentCount || 1) > 1 && amount * Number(txForm.installmentCount) > MAX_MONEY) return setMessage("O valor total do parcelamento ultrapassa o limite permitido.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
     if (!txForm.category.trim()) return setMessage("Selecione uma categoria.");
     if (!editingTransactionId && txForm.origin === "photo") {

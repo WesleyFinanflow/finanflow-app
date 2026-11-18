@@ -13,4 +13,3 @@ const blocking=remaining.filter(advisory=>['moderate','high','critical'].include
 console.log(`${mitigated.length} verified build-tool advisory mitigated; ${blocking.length} other blocking advisories`);
 for(const advisory of remaining)console.log(`${advisory.severity}: ${advisory.module_name} - ${advisory.url}`);
 if(blocking.length)process.exitCode=1;
-
