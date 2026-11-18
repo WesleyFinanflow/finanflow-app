@@ -1,0 +1,38 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index 29207512c60183b4bb9bf5112be3b9b5f4a9a9fd..3a9f04df46a1d4c999d7e04559ad35451c714b58 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -354,6 +354,9 @@ const analyzeRepeatedExtglob = (body, options) => {
+  */
+ 
+ const parse = (input, options) => {
++  // FinanFlow build mitigation for GHSA-fc5q-39xc-vjpf: extglobs are not used by this project.
++  if (typeof input === 'string' && /[+*?@!]\(/.test(input)) throw new SyntaxError('Extended globs disabled by FinanFlow build policy');
++
+   if (typeof input !== 'string') {
+     throw new TypeError('Expected a string');
+   }
+diff --git a/lib/picomatch.js b/lib/picomatch.js
+index 9c2bfd5ca671a2d7d3461bf0fc380e6d1ace6cc5..351dbd98af0f6b8c927c6b624aaaf9e4396c567a 100644
+--- a/lib/picomatch.js
++++ b/lib/picomatch.js
+@@ -41,6 +41,9 @@ const isObject = val => val && typeof val === 'object' && !Array.isArray(val);
+  */
+ 
+ const picomatch = (glob, options, returnState = false) => {
++  // FinanFlow build mitigation for GHSA-fc5q-39xc-vjpf: extglobs are not used by this project.
++  if (typeof glob === 'string' && /[+*?@!]\(/.test(glob)) throw new SyntaxError('Extended globs disabled by FinanFlow build policy');
++
+   if (Array.isArray(glob)) {
+     const fns = glob.map(input => picomatch(input, options, returnState));
+     const arrayMatcher = str => {
+@@ -303,6 +306,9 @@ picomatch.compileRe = (state, options, returnOutput = false, returnState = false
+  */
+ 
+ picomatch.makeRe = (input, options = {}, returnOutput = false, returnState = false) => {
++  // FinanFlow build mitigation for GHSA-fc5q-39xc-vjpf: extglobs are not used by this project.
++  if (typeof input === 'string' && /[+*?@!]\(/.test(input)) throw new SyntaxError('Extended globs disabled by FinanFlow build policy');
++
+   if (!input || typeof input !== 'string') {
+     throw new TypeError('Expected a non-empty string');
+   }

@@ -1,3 +1,4 @@
+import { buildSeriesTotals, transactionSeriesKey } from "./transaction-series.js";
 import { csvRows } from "./csv.js";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, CalendarClock, CalendarDays, Camera, ChartPie, Check, ChevronDown, CircleDollarSign, CreditCard, Database, Download, Eye, EyeOff, FileDown, FileText, Fuel, HandCoins, Heart, HeartHandshake, History, House, LockKeyhole, LogOut, Megaphone, MonitorSmartphone, Music2, Printer, ReceiptText, RotateCcw, Server, Settings, ShieldCheck, ShoppingCart, Smartphone, Trash2, TrendingUp, UserRound, Utensils, Wallet, X } from "lucide-react";
@@ -425,7 +426,7 @@ export default function App() {
     if (txForm.description.trim().length > 160) return setMessage("A descrição deve ter até 160 caracteres.");
     const amount = Number(txForm.amount);
     if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_MONEY) return setMessage("Informe um valor maior que zero.");
-    if (Number(txForm.installmentCount || 1) > 1 && amount * Number(txForm.installmentCount) > MAX_MONEY) return setMessage("O valor total do parcelamento ultrapassa o limite permitido.");
+    if (!txForm.editScope && Number(txForm.installmentCount || 1) > 1 && amount * Number(txForm.installmentCount) > MAX_MONEY) return setMessage("O valor total do parcelamento ultrapassa o limite permitido.");
     if (!txForm.date) return setMessage("Informe a data do lançamento.");
     if (!txForm.category.trim()) return setMessage("Selecione uma categoria.");
     if (!editingTransactionId && txForm.origin === "photo") {
@@ -435,10 +436,10 @@ export default function App() {
     const requestId = txForm.requestId || crypto.randomUUID();
     if (!editingTransactionId && !txForm.requestId) setTxForm((current) => ({ ...current, requestId }));
     const payload = { ...txForm, requestId: editingTransactionId ? undefined : requestId, description: txForm.description.trim(), category: txForm.category.trim() || "Outro", amount, installmentCount: Number(txForm.installmentCount || 1), accountId: txForm.accountId || null, responsibleName: firstName };
-    const path = editingTransactionId ? `/api/spaces/${activeSpaceId}/transactions/${editingTransactionId}` : `/api/spaces/${activeSpaceId}/transactions`;
+    const path = editingTransactionId ? `/api/spaces/${activeSpaceId}/transactions/${editingTransactionId}${txForm.editScope ? "/pending-series" : ""}` : `/api/spaces/${activeSpaceId}/transactions`;
     setLoading(true);
     try {
-      await api(path, { method: editingTransactionId ? "PUT" : "POST", body: JSON.stringify(payload) });
+      await api(path, { method: editingTransactionId ? (txForm.editScope ? "PATCH" : "PUT") : "POST", body: JSON.stringify(payload) });
       if (!editingTransactionId && txForm.origin === "photo" && txForm.ocrMerchant && txForm.category) {
         api("/api/merchant-category-map", { method: "POST", body: JSON.stringify({ displayName: txForm.ocrMerchant, category: txForm.category }) }).catch(() => {});
       }
@@ -446,7 +447,7 @@ export default function App() {
       setTxForm(createTransactionForm());
       setTransactionFormOpen(false);
       await loadSpaceData(activeSpaceId);
-      setMessage(editingTransactionId ? "Lançamento atualizado." : "Lançamento salvo.");
+      setMessage(txForm.editScope ? "Parcela escolhida e pendentes seguintes atualizadas. Pagamentos concluídos preservados." : editingTransactionId ? "Lançamento atualizado." : "Lançamento salvo.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -455,8 +456,11 @@ export default function App() {
   }
 
   function editTransaction(transaction) {
+    if(transaction.seriesId && transaction.status !== "pendente")return setMessage("Pagamentos concluídos são preservados. Escolha uma parcela pendente da série para editar.");
     setEditingTransactionId(transaction._id);
     setTxForm({
+      editScope: transaction.seriesId ? "pending_following" : undefined,
+      seriesSnapshot: transaction.seriesId ? transactions.filter(item=>item.seriesId===transaction.seriesId && String(item.spaceId)===String(transaction.spaceId)).map(item=>({id:item._id,updatedAt:item.updatedAt||null,revision:Number(item.__v||0)})) : undefined,
       type: transaction.type,
       description: transaction.description,
       amount: String(transaction.amount || ""),
@@ -1254,6 +1258,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
   const pendingTransactions = monthTransactions.filter((item) => item.status !== "pago").sort(byDate);
   const completedTransactions = monthTransactions.filter((item) => item.status === "pago").sort((a, b) => byDate(b, a));
   const categories = Array.from(new Set([...(transactionCategories[txForm.type] || transactionCategories.despesa), ...transactions.filter((item) => item.type === txForm.type).map((item) => item.category).filter(Boolean)]));
+  const seriesTotals = useMemo(()=>buildSeriesTotals(transactions),[transactions]);
   const isInstallment = txForm.recurrence !== "monthly" && Number(txForm.installmentCount || 1) > 1;
 
   return (
@@ -1276,7 +1281,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
         <div className="field-grid">
           <label>Tipo<select value={txForm.type} onChange={(e) => setTxForm({ ...txForm, type: e.target.value, category: e.target.value === "receita" ? "Salário" : "" })}><option value="receita">Receita</option><option value="despesa">Despesa</option><option value="divida">Dívida</option></select></label>
           <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.description==="low"?"ocr-low":""}>Descrição<input value={txForm.description} onChange={(e) => setTxForm({ ...txForm, description: e.target.value })} placeholder="Ex: mercado, salário" required maxLength={160} />{txForm.origin==="photo"&&txForm.ocrConfidence?.description==="low"&&<small>Confira este dado</small>}</label>
-          <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.amount==="low"?"ocr-low":""}>{isInstallment ? "Valor de cada parcela" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" />{txForm.origin==="photo"&&txForm.ocrConfidence?.amount==="low"&&<small>Confira este dado</small>}</label>
+          <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.amount==="low"?"ocr-low":""}>{txForm.editScope ? "Valor por parcela pendente" : isInstallment ? "Valor de cada parcela" : "Valor"}<input type="number" value={txForm.amount} onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })} placeholder="0,00" required min="0.01" max={MAX_MONEY} step="0.01" inputMode="decimal" />{txForm.origin==="photo"&&txForm.ocrConfidence?.amount==="low"&&<small>Confira este dado</small>}</label>
           <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.date==="low"?"ocr-low":""}>Data / vencimento<input type="date" value={txForm.date} onChange={(e) => setTxForm({ ...txForm, date: e.target.value })} required />{txForm.origin==="photo"&&txForm.ocrConfidence?.date==="low"&&<small>Confira este dado</small>}</label>
           <label>Hora<input type="time" value={txForm.time||""} onChange={(e) => setTxForm({ ...txForm, time: e.target.value })} /></label>
           <label className={txForm.origin==="photo"&&txForm.ocrConfidence?.category==="low"?"ocr-low":""}>Categoria<select value={txForm.category} onChange={(e) => setTxForm({ ...txForm, category: e.target.value })} required><option value="" disabled>Selecione uma categoria</option>{categories.map((category) => <option value={category} key={category}>{category}</option>)}</select>{txForm.origin==="photo"&&txForm.ocrConfidence?.category==="low"&&<small>Confira este dado</small>}</label>
@@ -1284,9 +1289,10 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           <label>Forma de pagamento<select value={txForm.paymentMethod||"Não informado"} onChange={(e)=>setTxForm({...txForm,paymentMethod:e.target.value})}><option>Não informado</option><option>Pix</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Dinheiro</option><option>Boleto</option><option>Transferência bancária</option></select></label>
           <label className="field-wide">Observação (opcional)<input value={txForm.notes||""} onChange={(e)=>setTxForm({...txForm,notes:e.target.value})} maxLength={300} placeholder="Ex: compra do mês, medicamentos..." /></label>
           <label>{txForm.type === "receita" ? "Destino do valor" : "Pagar com"}<select value={txForm.fundingSource || "cash"} onChange={(e) => setTxForm({ ...txForm, fundingSource: e.target.value })}><option value="cash">Dinheiro da conta principal</option><option value="meal">Vale-refeição</option></select></label>
-          <label>Frequência<select value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez ou parcelado</option><option value="monthly">Conta fixa todo mês</option></select></label>
-          {txForm.recurrence !== "monthly" && <label>Parcelamento<select value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "Somente uma vez" : `${count} parcelas`}</option>)}</select></label>}
-          {isInstallment && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. Ao salvar, as parcelas serão atualizadas nos próximos meses.</small></span></div>}
+          <label>Frequência<select disabled={Boolean(txForm.editScope)} value={txForm.recurrence} onChange={(e) => setTxForm({ ...txForm, recurrence: e.target.value, installmentCount: e.target.value === "monthly" ? "1" : txForm.installmentCount })}><option value="none">Uma vez ou parcelado</option><option value="monthly">Conta fixa todo mês</option></select></label>
+          {txForm.recurrence !== "monthly" && <label>Parcelamento<select disabled={Boolean(txForm.editScope)} value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "Somente uma vez" : `${count} parcelas`}</option>)}</select></label>}
+          {txForm.editScope && <div className="installment-preview" role="note"><ReceiptText size={18}/><span><strong>Esta parcela e as pendentes seguintes</strong><small>Pagamentos concluídos e parcelas anteriores ficam iguais. A quantidade da série é mantida. O status escolhido vale apenas para esta parcela.</small></span></div>}
+          {isInstallment && !txForm.editScope && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. Ao salvar, as parcelas serão atualizadas nos próximos meses.</small></span></div>}
           <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{txForm.fundingSource === "meal" ? "Saldo do vale-refeição" : accounts[0]?.name || "Conta principal"}</strong><small>{txForm.fundingSource === "meal" ? "Quando concluído, este lançamento movimentará somente o vale-refeição." : "Este lançamento movimentará automaticamente a conta principal quando for concluído."}</small></span></div>
         </div>
         <div className="action-row">
@@ -1313,7 +1319,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
                 <span>{item.category}{item.fundingSource === "meal" ? " · vale-refeição" : ""}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span>
                 <span className="transaction-date">Vence em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span>
               </div>
-              <div className="transaction-value"><b className="transaction-status pending">Pendente</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="transaction-value"><b className="transaction-status pending">Pendente</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(seriesTotals.get(transactionSeriesKey(item)) ?? item.totalAmount)}</small>}</div>
               <div className="row-actions">
                 <button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button>
                 <button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button>
@@ -1324,7 +1330,7 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
             {completedTransactions.map((item) => (
             <article className={`transaction-row ${item.type} completed-item`} key={item._id}>
               <div className="transaction-main"><strong>{item.description}</strong>{activeMode === "couple" && <span className="transaction-owner"><UserRound size={12} aria-hidden="true" />{item.responsibleName || "Casal"}</span>}<span>{item.category}{item.fundingSource === "meal" ? " · vale-refeição" : ""}{item.recurrence === "monthly" ? " · fixa mensal" : ""}{Number(item.installmentCount || 1) > 1 ? ` · parcela ${item.installmentNumber}/${item.installmentCount}` : ""}</span><span className="transaction-date">{item.type === "receita" ? "Recebido" : "Pago"} em {new Intl.DateTimeFormat("pt-BR").format(new Date(`${item.date}T12:00:00`))}</span></div>
-              <div className="transaction-value"><b className={`transaction-status completed ${item.type === "receita" ? "received" : "paid"}`}>{item.type === "receita" ? "Recebido" : "Pago"}</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(item.totalAmount)}</small>}</div>
+              <div className="transaction-value"><b className={`transaction-status completed ${item.type === "receita" ? "received" : "paid"}`}>{item.type === "receita" ? "Recebido" : "Pago"}</b><em>{item.type === "receita" ? "+" : "−"}{money(item.amount)}</em>{Number(item.installmentCount || 1) > 1 && <small>Total {money(seriesTotals.get(transactionSeriesKey(item)) ?? item.totalAmount)}</small>}</div>
               <div className="row-actions"><button type="button" className="ghost-button" disabled={loading} onClick={() => editTransaction(item)}>Editar</button><button type="button" className="danger-button inline-danger" disabled={loading} onClick={() => deleteTransaction(item)}>Excluir</button></div>
             </article>))}
           </> : <Empty title="Nenhum lançamento neste mês" text="Use Novo lançamento para cadastrar receitas, despesas ou dívidas." />}

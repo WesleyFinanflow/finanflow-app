@@ -170,6 +170,9 @@ overrides:
   uuid@<11: ^11.1.1
   minimatch@>=7: ^11.0.8
 
+patchedDependencies:
+  picomatch@4.0.7: 1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca
+
 importers:
 
   .:
@@ -2609,9 +2612,9 @@ snapshots:
       iobuffer: 5.4.0
       pako: 2.2.0
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca)
 
   fflate@0.8.3: {}
 
@@ -3173,7 +3176,7 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca): {}
 
   possible-typed-array-names@1.1.0: {}
 
@@ -3485,8 +3488,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca))
+      picomatch: 4.0.7(patch_hash=1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca)
 
   tmp@0.2.7: {}
 
@@ -3586,7 +3589,7 @@ snapshots:
   vite@8.3.8:
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=1f87f2fb77e5460278716c19ff9fd839be74a65201d0710dd3000f373859f1ca)
       postcss: 8.5.32
       rolldown: 1.2.19
       tinyglobby: 0.2.17

@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "test": "node --test src/*.test.js",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "audit:checked": "node scripts/audit-build-dependencies.cjs"
   },
   "dependencies": {
     "@tesseract.js-data/por": "^1.0.0",
