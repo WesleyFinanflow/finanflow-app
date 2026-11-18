@@ -1,0 +1,36 @@
+name: Diagnostico legado somente leitura
+on:
+  workflow_dispatch:
+    inputs:
+      recipient_public_key:
+        description: RSA public PEM (3072 bits or more); private key stays with the reviewer
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: legacy-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: npx --yes pnpm@12.11.2 install --frozen-lockfile --ignore-scripts
+        working-directory: backend
+      - name: Executar consultas somente leitura e criptografar relatorio
+        run: node scripts/audit-legacy.mjs
+        working-directory: backend
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          AUDIT_RECIPIENT_PUBLIC_KEY: ${{ inputs.recipient_public_key }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: legacy-audit-${{ github.run_id }}
+          path: backend/legacy-audit.encrypted.json
+          if-no-files-found: error
+          retention-days: 7
