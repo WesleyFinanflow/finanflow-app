@@ -28,6 +28,9 @@ jobs:
       - run: npx --yes pnpm@12.11.2 test
       - run: npx --yes pnpm@12.11.2 build
       - run: npx --yes pnpm@12.11.2 audit --audit-level=moderate
+        if: matrix.project == 'backend'
+      - run: npx --yes pnpm@12.11.2 run audit:checked
+        if: matrix.project == 'frontend'
 
   browser:
     runs-on: ubuntu-22.04
