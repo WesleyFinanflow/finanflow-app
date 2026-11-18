@@ -15,6 +15,3 @@ allowBuilds:
   tesseract.js: false
 patchedDependencies:
   picomatch@4.0.7: patches/picomatch@4.0.7.patch
-auditConfig:
-  ignoreGhsas:
-    - GHSA-fc5q-39xc-vjpf

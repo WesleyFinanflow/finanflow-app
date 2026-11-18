@@ -1,0 +1,2 @@
+const id='GHSA-fc5q-39xc-vjpf';
+exports.isMitigatedBuildAdvisory=advisory=>advisory.module_name==='picomatch' && advisory.url===`https://github.com/advisories/${id}` && Array.isArray(advisory.findings) && advisory.findings.length>0 && advisory.findings.every(finding=>finding.version==='4.0.7' && Array.isArray(finding.paths) && finding.paths.length>0 && finding.paths.every(path=>path.split('>').includes('vite')));

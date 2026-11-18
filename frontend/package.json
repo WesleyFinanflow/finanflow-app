@@ -8,7 +8,7 @@
     "build": "vite build",
     "test": "node --test src/*.test.js",
     "lint": "eslint src",
-    "audit:checked": "node scripts/check-build-globs.cjs && pnpm audit --audit-level=moderate --ignore GHSA-fc5q-39xc-vjpf"
+    "audit:checked": "node scripts/audit-build-dependencies.cjs"
   },
   "dependencies": {
     "@tesseract.js-data/por": "^1.0.0",
