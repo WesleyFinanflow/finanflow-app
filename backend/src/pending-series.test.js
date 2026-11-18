@@ -10,7 +10,7 @@ test("selected and later pending installments change while earlier and completed
  assert.deepEqual(changes.map(c=>c.update.status),["pago","pendente"]);assert.equal(changes[0].update.totalAmount,70);assert.equal(JSON.stringify(rows),before);
 });
 test("monthly schedule retains skipped completed slots and clamps the end of the month",()=>{
- const rows=[row(1),row(2),row(3,"pago"),row(4)].map(({installmentNumber,installmentCount,...r})=>({...r,recurrence:"monthly"}));
+ const rows=[row(1),row(2),row(3,"pago"),row(4)].map(({installmentNumber,installmentCount,...r})=>({...r,recurrence:"monthly",installmentNumber:1,installmentCount:1}));
  const changes=planPendingChanges(rows,rows[1]._id,{...input,date:"2028-01-31"});
  assert.deepEqual(changes.map(c=>c.update.date),["2028-01-31","2028-03-31"]);assert.equal(changes[0].update.totalAmount,undefined);
 });

@@ -74,6 +74,7 @@ test("casal compartilha o livro financeiro, protege espaços individuais e isola
   const btx=await call(partnerContext.request,`/api/spaces/${b.spaceId}/transactions`,transaction({description:"Partner B expense",amount:100,status:"pago"}));expect(btx.status).toBe(201);
   expect((await call(partnerContext.request,`/api/spaces/${a.spaceId}/transactions`)).status).toBe(403);
   expect((await call(page.request,`/api/spaces/${couple}/transactions/${btx.body.transaction._id}`,null,"DELETE")).status).toBe(403);
+  expect((await call(page.request,`/api/spaces/${couple}/transactions/${btx.body.transaction._id}/pending-series`,{},"PATCH")).status).toBe(403);
   const privateDebt=await call(page.request,`/api/spaces/${a.spaceId}/debts`,{name:"Private individual plan",originalBalance:"300",currentBalance:"300",minimumPayment:"100",dueDate:month()+"-20",interestRateMonthly:"0",shared:false,revision:0});expect(privateDebt.status).toBe(200);
   expect((await call(partnerContext.request,`/api/spaces/${a.spaceId}/debt-plan`)).status).toBe(403);
   const initial=await call(page.request,`/api/spaces/${couple}/debt-plan`);expect(initial.body.debts).toHaveLength(0);

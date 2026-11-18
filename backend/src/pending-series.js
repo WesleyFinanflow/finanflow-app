@@ -10,7 +10,7 @@ export function assertSnapshot(rows,snapshot){
  if(JSON.stringify(seriesSnapshot(rows))!==JSON.stringify(seriesSnapshot(snapshot)))conflict("A série mudou em outra operação. Recarregue os lançamentos antes de salvar.");
 }
 export function planPendingChanges(rows,selectedId,input){
- const numbered=rows.every(row=>Number.isInteger(row.installmentNumber)&&row.installmentNumber>0);
+ const numbered=rows.every(row=>row.recurrence!=="monthly" && Number(row.installmentCount)>1 && Number.isInteger(row.installmentNumber)&&row.installmentNumber>0) && new Set(rows.map(row=>row.installmentNumber)).size===rows.length;
  const ordered=[...rows].sort((a,b)=>(numbered?a.installmentNumber-b.installmentNumber:0)||String(a.date).localeCompare(String(b.date))||id(a._id).localeCompare(id(b._id)));
  const start=ordered.findIndex(row=>id(row._id)===id(selectedId));
  if(start<0)throw new InputError("Parcela não encontrada.");

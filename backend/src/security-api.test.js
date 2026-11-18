@@ -267,6 +267,9 @@ test("pending series edits preserve IDs, completed records, earlier pending rows
  await mongoose.connection.collection("transactions").updateOne({_id:new mongoose.Types.ObjectId(created.body.transactions[2]._id)},{$set:{status:"pago"}});
  const before=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId).sort((a,b)=>a.installmentNumber-b.installmentNumber);
  const selected=before[1],payload={...input,description:"Updated pending",amount:20,date:"2028-02-20",status:"pago",seriesSnapshot:seriesSnapshot(before)};
+ assert.equal((await request(base+"/"+selected._id+"/pending-series",null,payload,"PATCH")).status,401);
+ assert.equal((await request(`/api/spaces/${new mongoose.Types.ObjectId()}/transactions/${selected._id}/pending-series`,owner.cookie,payload,"PATCH")).status,403);
+ assert.equal((await request(base+"/"+selected._id+"/pending-series",owner.cookie,{...payload,installmentCount:6},"PATCH")).status,400);
  const changed=await request(base+"/"+selected._id+"/pending-series",owner.cookie,payload,"PATCH");assert.equal(changed.status,200,JSON.stringify(changed.body));assert.equal(changed.body.updatedCount,3);
  const after=(await request(base,owner.cookie)).body.transactions.filter(t=>t.seriesId===created.body.transaction.seriesId).sort((a,b)=>a.installmentNumber-b.installmentNumber);
  assert.deepEqual(after.map(t=>t._id),before.map(t=>t._id));assert.deepEqual(after[0],before[0]);assert.deepEqual(after[2],before[2]);assert.deepEqual(after.map(t=>t.status),["pendente","pago","pago","pendente","pendente"]);assert.deepEqual(after.map(t=>t.amount),[10,20,10,20,20]);assert.equal(after[1].totalAmount,80);
