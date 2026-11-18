@@ -5,6 +5,7 @@ import {MongoMemoryServer} from 'mongodb-memory-server';
 import {generateKeyPairSync} from 'node:crypto';
 import {legacyAudit} from './legacy-audit.js';
 import {encryptAudit,decryptAudit} from './audit-envelope.js';
+import {inspectLegacyCandidates} from './legacy-inspection.js';
 
 test('legacy audit detects real missing parents without mutating or exposing private fields',async()=>{
   const mongo=await MongoMemoryServer.create();
@@ -34,6 +35,8 @@ test('legacy audit detects real missing parents without mutating or exposing pri
     const before=await snapshot(),commands=[];
     client.on('commandStarted',event=>commands.push(event.commandName));
     const report=await legacyAudit(db,new Date('2026-11-18T12:00:00Z'));
+    const inspection=await inspectLegacyCandidates(db,report);
+    assert.equal(inspection.users.length,1);assert.equal(inspection.users[0].user.passwordHash,undefined);assert.equal(inspection.users[0].user.email,undefined);
     assert.ok(commands.every(name=>['aggregate','find','getMore','killCursors'].includes(name)),commands.join(','));
     assert.deepEqual(await snapshot(),before);
     const count=(collection,kind)=>report.references.find(row=>row.collection===collection&&row.kind===kind).count;
