@@ -93,3 +93,28 @@ test("equivalência: o total sempre bate com calculateSummary em 500 cenários a
     assert.equal(parts, cents(result.total), `soma das partes, rodada ${round}`);
   }
 });
+
+import { defaultAccountId, accountOptions } from "./account-balances.js";
+
+const acct = (id, name, extra = {}) => ({ _id: id, name, balance: 0, archived: false, ...extra });
+
+test("a conta padrão é a principal ativa; sem ela, a primeira ativa (mesma regra do backend)", () => {
+  assert.equal(defaultAccountId([acct("2", "Nubank"), acct("1", "Conta principal")]), "1");
+  assert.equal(defaultAccountId([acct("2", "Nubank"), acct("3", "Conta conjunta")]), "3");
+  assert.equal(defaultAccountId([acct("2", "Nubank"), acct("3", "Santander")]), "2");
+  assert.equal(defaultAccountId([acct("1", "Conta principal", { archived: true }), acct("2", "Nubank")]), "2");
+});
+
+test("sem contas ativas não há conta padrão", () => {
+  assert.equal(defaultAccountId([]), "");
+  assert.equal(defaultAccountId(undefined), "");
+  assert.equal(defaultAccountId([acct("1", "Velha", { archived: true })]), "");
+});
+
+test("as opções do lançamento são as contas ativas; a conta atual arquivada continua aparecendo", () => {
+  const list = [acct("1", "Conta principal"), acct("2", "Nubank"), acct("3", "Velha", { archived: true })];
+  assert.deepEqual(accountOptions(list).map((item) => item.id), ["1", "2"]);
+  assert.deepEqual(accountOptions(list, "3").map((item) => [item.id, item.archived]), [["1", false], ["2", false], ["3", true]]);
+  assert.deepEqual(accountOptions(list, "2").map((item) => item.id), ["1", "2"]);
+  assert.deepEqual(accountOptions(undefined), []);
+});

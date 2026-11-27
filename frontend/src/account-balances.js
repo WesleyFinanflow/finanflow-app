@@ -37,3 +37,20 @@ export function calculateAccountBalances(accounts = [], transactions = []) {
   const totalCents = [...byId.values()].reduce((sum, item) => sum + item.cents, 0) + unassigned;
   return { accounts: accountsOut, unassigned: reais(unassigned), total: reais(totalCents), mealBalance: reais(meal) };
 }
+
+const DEFAULT_ACCOUNT_NAMES = ["Conta principal", "Conta conjunta"];
+
+// Mesma regra do backend (chooseAccountForTransaction): a principal ativa; sem ela, a primeira ativa.
+export function defaultAccountId(accounts = []) {
+  const active = (Array.isArray(accounts) ? accounts : []).filter((account) => !account.archived);
+  const chosen = active.find((account) => DEFAULT_ACCOUNT_NAMES.includes(account.name)) ?? active[0];
+  return chosen ? String(chosen._id) : "";
+}
+
+// Opções do seletor de conta no lançamento: as ativas, mais a conta atual do lançamento se estiver arquivada.
+export function accountOptions(accounts = [], currentAccountId) {
+  const list = Array.isArray(accounts) ? accounts : [];
+  return list
+    .filter((account) => !account.archived || (currentAccountId != null && String(currentAccountId) === String(account._id)))
+    .map((account) => ({ id: String(account._id), name: account.name, archived: Boolean(account.archived) }));
+}
