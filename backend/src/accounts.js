@@ -116,3 +116,49 @@ export function accountDeleteAudit({ account, transactions }) {
   const summary = `Conta excluída: ${account.name} (${count} lançamento${count === 1 ? "" : "s"})`.slice(0, 180);
   return { summary, before: { account, transactions: transactions || [] } };
 }
+
+function restoredName(name, accounts) {
+  const taken = new Set(activeOf(accounts).map((account) => normalizeName(account.name)));
+  for (let attempt = 1; attempt <= 50; attempt += 1) {
+    const suffix = attempt === 1 ? " (restaurada)" : ` (restaurada ${attempt})`;
+    const candidate = `${String(name).slice(0, 80 - suffix.length).trimEnd()}${suffix}`;
+    if (!taken.has(normalizeName(candidate))) return candidate;
+  }
+  throw new ConflictError("Não foi possível escolher um nome para a conta restaurada. Renomeie uma conta e tente de novo.");
+}
+
+// Plano para restaurar uma conta excluída a partir da cópia da auditoria (sem tocar no banco).
+// Mantém o id original (os lançamentos continuam apontando para ela), respeita o limite de contas
+// ativas, evita nome repetido e é seguro refazer: se a conta já foi recriada numa tentativa
+// interrompida, só completa os lançamentos que faltam.
+export function planAccountRestore({ snapshot, accounts, writeSpaceId, existingTransactionIds = new Set() }) {
+  const saved = snapshot?.account;
+  if (!saved || typeof saved !== "object" || saved._id == null || typeof saved.name !== "string" || !saved.name.trim()) {
+    throw new InputError("Esta exclusão não tem dados para restaurar.");
+  }
+  const list = Array.isArray(accounts) ? accounts : [];
+  const rows = Array.isArray(snapshot.transactions) ? snapshot.transactions : [];
+  const existing = existingTransactionIds instanceof Set ? existingTransactionIds : new Set(existingTransactionIds || []);
+  const transactionDocs = rows
+    .filter((row) => row && row._id != null && !existing.has(String(row._id)))
+    .map((row) => {
+      const copy = { ...row, spaceId: writeSpaceId, accountId: saved._id };
+      delete copy.__v;
+      return copy;
+    });
+
+  if (list.some((account) => sameId(account._id, saved._id))) return { resume: true, renamed: false, accountDoc: null, transactionDocs };
+
+  const archived = Boolean(saved.archived);
+  if (!archived && activeOf(list).length >= MAX_ACCOUNTS_PER_PERSON) throw limitError();
+  let name = saved.name.trim().slice(0, 80);
+  let renamed = false;
+  if (!archived && activeOf(list).some((account) => normalizeName(account.name) === normalizeName(name))) {
+    name = restoredName(name, list);
+    renamed = true;
+  }
+  const balance = Number.isFinite(Number(saved.balance)) ? Number(saved.balance) : 0;
+  const ownerName = typeof saved.ownerName === "string" && saved.ownerName.trim() ? saved.ownerName.trim().slice(0, 80) : "Individual";
+  const accountDoc = { _id: saved._id, spaceId: writeSpaceId, name, ownerName, balance, archived, userCreated: true, ...(saved.createdAt ? { createdAt: saved.createdAt } : {}) };
+  return { resume: false, renamed, accountDoc, transactionDocs };
+}

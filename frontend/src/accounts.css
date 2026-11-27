@@ -26,8 +26,8 @@
 .multi-account-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .multi-account-delete p { margin: 0; line-height: 1.45; }
 .multi-account-note { margin: 0; color: var(--muted, #64746b); font-size: 0.85rem; }
-.multi-account-archived summary { cursor: pointer; padding: 8px 2px; font-weight: 600; }
-.multi-account-archived .multi-account-list { margin-top: 8px; }
+.multi-account-archived summary, .multi-account-deleted summary { cursor: pointer; padding: 8px 2px; font-weight: 600; }
+.multi-account-archived .multi-account-list, .multi-account-deleted .multi-account-list { margin-top: 8px; }
 
 .account-select-note { display: grid; gap: 4px; }
 .account-select-note small { color: var(--muted, #64746b); }

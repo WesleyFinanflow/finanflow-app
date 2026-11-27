@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { InputError } from "./validation.js";
 import {
   MAX_ACCOUNTS_PER_PERSON, MULTI_ACCOUNT_FLAG, ConflictError, featureEnabledForUser, parseAccountInput,
-  assertCanCreate, assertCanUpdate, assertCanDelete, chooseAccountForTransaction, accountDeleteAudit
+  assertCanCreate, assertCanUpdate, assertCanDelete, chooseAccountForTransaction, accountDeleteAudit, planAccountRestore
 } from "./accounts.js";
 
 const acc = (id, name, extra = {}) => ({ _id: id, name, balance: 0, archived: false, ...extra });
@@ -159,4 +159,71 @@ test("a cópia de auditoria da exclusão guarda a conta e todos os lançamentos"
   assert.ok(audit.summary.length <= 180);
   assert.equal(accountDeleteAudit({ account: acc("3", "X".repeat(80)), transactions: [] }).summary.length <= 180, true);
   assert.equal(accountDeleteAudit({ account, transactions: [transactions[0]] }).summary, "Conta excluída: Nubank (1 lançamento)");
+});
+
+const created = new Date("2026-01-05T10:00:00Z");
+const snap = (extra = {}, txs) => ({
+  account: { _id: "9", spaceId: "antigo", name: "Nubank", ownerName: "Wesley", balance: 100, archived: false, userCreated: true, createdAt: created, __v: 0, ...extra },
+  transactions: txs ?? [{ _id: "t1", spaceId: "antigo", accountId: "9", amount: 10, __v: 0 }, { _id: "t2", spaceId: "antigo", accountId: "outra", amount: 20 }]
+});
+
+test("restaurar: recria a conta com o mesmo id e os lançamentos dela no espaço atual", () => {
+  const plan = planAccountRestore({ snapshot: snap(), accounts: [acc("1", "Conta principal")], writeSpaceId: "espaco" });
+  assert.equal(plan.resume, false);
+  assert.equal(plan.renamed, false);
+  assert.deepEqual(plan.accountDoc, { _id: "9", spaceId: "espaco", name: "Nubank", ownerName: "Wesley", balance: 100, archived: false, userCreated: true, createdAt: created });
+  assert.deepEqual(plan.transactionDocs.map((item) => [item._id, item.spaceId, item.accountId]), [["t1", "espaco", "9"], ["t2", "espaco", "9"]]);
+  assert.equal("__v" in plan.transactionDocs[0], false);
+});
+
+test("restaurar: lançamentos que já existem não são recriados", () => {
+  const plan = planAccountRestore({ snapshot: snap(), accounts: [acc("1", "Conta principal")], writeSpaceId: "espaco", existingTransactionIds: new Set(["t1"]) });
+  assert.deepEqual(plan.transactionDocs.map((item) => item._id), ["t2"]);
+});
+
+test("restaurar: respeita o limite de 6 contas ativas, mas uma conta que estava arquivada volta arquivada", () => {
+  const six = Array.from({ length: 6 }, (_, i) => acc(String(i), `Conta ${i}`));
+  assert.throws(() => planAccountRestore({ snapshot: snap(), accounts: six, writeSpaceId: "e" }), ConflictError);
+  const plan = planAccountRestore({ snapshot: snap({ archived: true }), accounts: six, writeSpaceId: "e" });
+  assert.equal(plan.accountDoc.archived, true);
+});
+
+test("restaurar: nome já usado por conta ativa vira 'Nome (restaurada)'", () => {
+  const taken = [acc("1", "Conta principal"), acc("2", "nubank")];
+  const plan = planAccountRestore({ snapshot: snap(), accounts: taken, writeSpaceId: "e" });
+  assert.equal(plan.renamed, true);
+  assert.equal(plan.accountDoc.name, "Nubank (restaurada)");
+  const twice = planAccountRestore({ snapshot: snap(), accounts: [...taken, acc("3", "Nubank (restaurada)")], writeSpaceId: "e" });
+  assert.equal(twice.accountDoc.name, "Nubank (restaurada 2)");
+});
+
+test("restaurar: nome igual ao de uma conta arquivada não conta como conflito", () => {
+  const plan = planAccountRestore({ snapshot: snap(), accounts: [acc("1", "Conta principal"), acc("2", "Nubank", { archived: true })], writeSpaceId: "e" });
+  assert.equal(plan.renamed, false);
+  assert.equal(plan.accountDoc.name, "Nubank");
+});
+
+test("restaurar: nome muito longo continua dentro de 80 caracteres ao renomear", () => {
+  const longName = "N".repeat(80);
+  const plan = planAccountRestore({ snapshot: snap({ name: longName }), accounts: [acc("2", longName)], writeSpaceId: "e" });
+  assert.ok(plan.accountDoc.name.length <= 80);
+  assert.match(plan.accountDoc.name, /\(restaurada\)$/);
+});
+
+test("restaurar: se a conta já foi recriada (tentativa interrompida), só completa os lançamentos que faltam", () => {
+  const plan = planAccountRestore({ snapshot: snap(), accounts: [acc("1", "Conta principal"), acc("9", "Nubank", { userCreated: true })], writeSpaceId: "e", existingTransactionIds: new Set(["t1"]) });
+  assert.equal(plan.resume, true);
+  assert.equal(plan.accountDoc, null);
+  assert.deepEqual(plan.transactionDocs.map((item) => item._id), ["t2"]);
+});
+
+test("restaurar: cópias inválidas são recusadas", () => {
+  for (const snapshot of [null, undefined, {}, { account: null }, { account: { name: "X" } }, { account: { _id: "1" } }, { account: { _id: "1", name: { $ne: 1 } } }]) {
+    assert.throws(() => planAccountRestore({ snapshot, accounts: [], writeSpaceId: "e" }), InputError, JSON.stringify(snapshot));
+  }
+});
+
+test("restaurar: cópia sem lista de lançamentos restaura só a conta", () => {
+  const plan = planAccountRestore({ snapshot: { account: snap().account }, accounts: [], writeSpaceId: "e" });
+  assert.deepEqual(plan.transactionDocs, []);
 });

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Landmark, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Archive, ArchiveRestore, History, Landmark, Pencil, Plus, Trash2 } from "lucide-react";
 import { calculateAccountBalances } from "./account-balances.js";
 
 // Tela de Contas do recurso Multiconta (só aparece com a chave ligada, no modo individual).
@@ -13,6 +13,7 @@ export default function MultiAccounts({ accounts, transactions, api, spaceId, re
   const [form, setForm] = useState({ name: "", balance: "" });
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [deletedAccounts, setDeletedAccounts] = useState([]);
 
   const balances = useMemo(() => calculateAccountBalances(accounts, transactions), [accounts, transactions]);
   const balanceById = useMemo(() => new Map(balances.accounts.map((item) => [String(item.id), item.balance])), [balances]);
@@ -21,11 +22,22 @@ export default function MultiAccounts({ accounts, transactions, api, spaceId, re
   const atLimit = active.length >= MAX_ACCOUNTS;
   const base = `/api/spaces/${spaceId}/accounts`;
 
+  async function loadDeleted() {
+    try {
+      const data = await api(`${base}/deleted`);
+      setDeletedAccounts(data.deleted || []);
+    } catch {
+      setDeletedAccounts([]);
+    }
+  }
+  useEffect(() => { if (spaceId) loadDeleted(); }, [spaceId]);
+
   async function run(action, success) {
     setBusy(true);
     try {
       await action();
       await reload();
+      await loadDeleted();
       setMessage(success);
     } catch (error) {
       setMessage(error.message);
@@ -66,6 +78,21 @@ export default function MultiAccounts({ accounts, transactions, api, spaceId, re
       await api(`${base}/${account._id}`, { method: "DELETE", body: JSON.stringify({ confirmName: deleting.confirm }) });
       setDeleting(null);
     }, `Conta ${account.name} excluída.`);
+  }
+
+  async function restoreAccount(entry) {
+    setBusy(true);
+    try {
+      const data = await api(`${base}/restore/${entry._id}`, { method: "POST", body: JSON.stringify({}) });
+      await reload();
+      await loadDeleted();
+      const count = data.restoredTransactions || 0;
+      setMessage(`Conta ${data.account.name} restaurada (${count} lançamento${count === 1 ? "" : "s"}).${data.renamed ? " O nome mudou porque já existe uma conta com esse nome." : ""}`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const startEdit = (account) => { setDeleting(null); setEditing({ id: account._id, name: account.name, balance: String(account.balance ?? 0) }); };
@@ -158,6 +185,31 @@ export default function MultiAccounts({ accounts, transactions, api, spaceId, re
         <details className="multi-account-archived">
           <summary>Contas arquivadas ({archived.length})</summary>
           <ul className="multi-account-list" aria-label="Contas arquivadas">{archived.map(renderCard)}</ul>
+        </details>
+      )}
+
+      {deletedAccounts.length > 0 && (
+        <details className="multi-account-deleted">
+          <summary><History size={16} aria-hidden="true" /> Contas excluídas recentemente ({deletedAccounts.length})</summary>
+          <ul className="multi-account-list" aria-label="Contas excluídas recentemente">
+            {deletedAccounts.map((entry) => {
+              const blocked = !entry.archived && atLimit;
+              return (
+                <li key={entry._id} className="multi-account-card is-archived">
+                  <div className="multi-account-main">
+                    <span className="multi-account-icon" aria-hidden="true"><Landmark size={20} /></span>
+                    <div className="multi-account-title">
+                      <strong>{entry.name}</strong>
+                      <small>{entry.transactionCount} lançamento{entry.transactionCount === 1 ? "" : "s"} · excluída em {new Date(entry.createdAt).toLocaleDateString("pt-BR")}</small>
+                    </div>
+                  </div>
+                  <div className="multi-account-actions">
+                    <button type="button" className="ghost-button" disabled={busy || blocked} title={blocked ? `Limite de ${MAX_ACCOUNTS} contas ativas: arquive ou exclua uma antes` : undefined} onClick={() => restoreAccount(entry)} aria-label={`Restaurar ${entry.name}`}><ArchiveRestore size={16} aria-hidden="true" /> Restaurar</button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </details>
       )}
     </section>
