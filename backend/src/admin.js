@@ -41,8 +41,8 @@ export async function seedAdminDefaults(){
     {code:"PREMIUM",name:"Premium",description:"Experiência completa do FinanFlow.",referencePrice:59.9,features:["Lançamentos","Contas","Planejamento","Modo casal","Relatórios","Exportação","Histórico completo"]},
   ];
   for(const plan of plans) await Plan.updateOne({code:plan.code},{$setOnInsert:plan},{upsert:true});
-  const flags=["Modo casal","Planejamento","Relatórios","Exportação","Nova tela em teste"];
-  for(const name of flags){const key=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g,"_");await FeatureFlag.updateOne({key},{$setOnInsert:{key,name,description:`Controle do recurso ${name}`,active:name!=="Nova tela em teste",audience:"ALL"}},{upsert:true});}
+  const flags=["Modo casal","Planejamento","Relatórios","Exportação","Nova tela em teste","Multiconta"];
+  for(const name of flags){const key=name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g,"_");await FeatureFlag.updateOne({key},{$setOnInsert:{key,name,description:`Controle do recurso ${name}`,active:!["Nova tela em teste","Multiconta"].includes(name),audience:"ALL"}},{upsert:true});}
 }
 
 export function registerAdminRoutes(app,{auth,adminOnly,superAdminOnly,User,Space,Member,Account,Transaction,PurchasePlan,Invite,publicUser,canManageUser,deleteAccount,sendRecovery}){
