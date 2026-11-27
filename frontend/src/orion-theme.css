@@ -1,0 +1,47 @@
+/* ORION - primeira camada de identidade. Só vale com <html data-brand="orion">.
+   Sem a flag, nada aqui se aplica e o FinanFlow continua idêntico.
+   Valores espelham src/orion-tokens.js (verificado por orion-tokens.test.js). */
+:root {
+  --orion-navy-900: #0B1F3A;
+  --orion-navy-800: #12294A;
+  --orion-silver-300: #C7D0DC;
+  --orion-sky-300: #6CB2FF;
+  --orion-blue-700: #1F5FB0;
+  --orion-slate-600: #51607A;
+  --orion-mist-50: #F4F7FB;
+  --orion-white: #FFFFFF;
+}
+
+html[data-brand="orion"] .sidebar {
+  background: linear-gradient(180deg, var(--orion-navy-800) 0%, var(--orion-navy-900) 100%) !important;
+  border-right-color: rgba(199, 208, 220, 0.22) !important;
+}
+
+html[data-brand="orion"] .brand {
+  border-bottom-color: rgba(199, 208, 220, 0.18) !important;
+}
+
+html[data-brand="orion"] .orion-mark {
+  width: auto;
+  height: 40px;
+  flex: none;
+}
+
+html[data-brand="orion"] .orion-wordmark img {
+  display: block;
+  width: auto;
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+html[data-brand="orion"] .orion-wordmark span {
+  display: block !important;
+  color: var(--orion-silver-300) !important;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+html[data-brand="orion"] .sidebar-nav button:focus-visible {
+  outline: 2px solid var(--orion-sky-300);
+  outline-offset: 2px;
+}

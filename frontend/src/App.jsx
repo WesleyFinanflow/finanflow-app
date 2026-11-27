@@ -5,6 +5,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Calen
 import { calculateSummary, calculateReportBalances, isMealTransaction } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
+import OrionBrand from "./OrionBrand.jsx";
 import { findSimilarTransaction, parseReceiptText, pdfFirstPageToImage, prepareReceiptImage } from "./receipt-ocr.js";
 import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
@@ -844,6 +845,7 @@ export default function App() {
     <main className={`finanflow-app ${hideValues ? "values-hidden" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
+          {document.documentElement.dataset.brand === "orion" ? <OrionBrand /> : (<>
           <div className="brand-icon" aria-hidden="true">
             <svg viewBox="0 0 64 44" role="presentation"><path d="M3 14c12 7 20 7 31 0S51 7 61 10" /><path d="M3 24c12 7 20 7 31 0s17-7 27-4" /><path d="M3 34c12 7 20 7 31 0s17-7 27-4" /></svg>
           </div>
@@ -851,6 +853,7 @@ export default function App() {
             <strong>FinanFlow</strong>
             <span>Sua vida financeira em fluxo.</span>
           </div>
+          </>)}
         </div>
 
         <nav className="sidebar-nav">
