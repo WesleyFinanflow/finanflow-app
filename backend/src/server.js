@@ -17,7 +17,7 @@ import { ensureTransactionRequestIndex, requestIndexKey, requestIndexOptions } f
 import { FeatureFlag, AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
 import { accessDenied as policyAccessDenied, canManageUser, canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
 import { DebtPlan, registerDebtPlanRoutes } from "./debt-plan.js";
-import { MULTI_ACCOUNT_FLAG, featureEnabledForUser, parseAccountInput, assertCanCreate, assertCanUpdate, assertCanDelete, chooseAccountForTransaction, accountDeleteAudit } from "./accounts.js";
+import { MULTI_ACCOUNT_FLAG, featureEnabledForUser, parseAccountInput, assertCanCreate, assertCanUpdate, assertCanDelete, chooseAccountForTransaction, accountDeleteAudit, planAccountRestore } from "./accounts.js";
 
 dotenv.config();
 
@@ -1090,6 +1090,40 @@ app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async 
   const account = await ensurePrimaryAccount(req.params.spaceId, req.user.name);
   if (String(account._id) !== String(req.params.accountId)) return res.status(404).json({ message: "Conta não encontrada." });
   res.status(409).json({ message: "A conta principal automática não pode ser excluída." });
+}));
+
+// Multiconta: contas excluídas recentemente (cópias da auditoria que ainda não foram restauradas).
+app.get("/api/spaces/:spaceId/accounts/deleted", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  if (!(await multiAccountOn(req.user))) return res.json({ deleted: [] });
+  const writeSpaceId = await userWriteSpaceId(req.params.spaceId, req.user._id);
+  const deleted = await AuditLog.aggregate([
+    { $match: { spaceId: new mongoose.Types.ObjectId(String(writeSpaceId)), userId: new mongoose.Types.ObjectId(String(req.user._id)), action: "delete", entityType: "account", restoredAt: { $exists: false } } },
+    { $sort: { createdAt: -1 } },
+    { $limit: 10 },
+    { $project: { _id: 1, createdAt: 1, name: "$before.account.name", balance: "$before.account.balance", archived: "$before.account.archived", transactionCount: { $size: { $ifNull: ["$before.transactions", []] } } } },
+  ]);
+  res.json({ deleted });
+}));
+
+// Multiconta: restaura uma conta excluída (e os lançamentos dela) a partir da cópia da auditoria.
+app.post("/api/spaces/:spaceId/accounts/restore/:auditId", auth, asyncHandler(async (req, res) => {
+  if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  if (!(await multiAccountOn(req.user))) return res.status(409).json({ message: "O recurso de várias contas está desativado." });
+  const writeSpaceId = await userWriteSpaceId(req.params.spaceId, req.user._id);
+  const audit = await AuditLog.findOne({ _id: req.params.auditId, spaceId: writeSpaceId, userId: req.user._id, action: "delete", entityType: "account", restoredAt: { $exists: false } }).lean();
+  if (!audit) return res.status(404).json({ message: "Esta conta não está mais disponível para restauração." });
+  const accounts = await ensureBaseAccounts(writeSpaceId, req.user.name);
+  const snapshot = audit.before;
+  const ids = (Array.isArray(snapshot?.transactions) ? snapshot.transactions : []).map((item) => item?._id).filter(Boolean);
+  const existingTransactionIds = new Set((await Transaction.find({ _id: { $in: ids } }).select("_id").lean()).map((item) => String(item._id)));
+  const plan = planAccountRestore({ snapshot, accounts, writeSpaceId, existingTransactionIds });
+  const account = plan.resume ? accounts.find((item) => String(item._id) === String(snapshot.account._id)) : await Account.create(plan.accountDoc);
+  if (plan.transactionDocs.length) await Transaction.insertMany(plan.transactionDocs);
+  await AuditLog.updateOne({ _id: audit._id }, { $set: { restoredAt: new Date() } });
+  const count = plan.transactionDocs.length;
+  await recordAudit({ spaceId: writeSpaceId, user: req.user, action: "restore", entityType: "account", entityId: account._id, summary: `Conta restaurada: ${account.name} (${count} lançamento${count === 1 ? "" : "s"})`, after: account });
+  res.json({ account, restoredTransactions: count, renamed: plan.renamed });
 }));
 
 app.get("/api/spaces/:spaceId/transactions", auth, asyncHandler(async (req, res) => {

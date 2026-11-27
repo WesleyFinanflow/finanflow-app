@@ -7,7 +7,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import mongoose from "mongoose";
 
 // Multiconta (etapa 2): testa as rotas reais de contas com a chave desligada e ligada.
-let mongo, server, base, db, alice, bob, aliceSpace, bobSpace, logs = "";
+let mongo, server, base, db, alice, bob, aliceSpace, bobSpace, deletedNubankId, logs = "";
 const origin = "http://localhost:5173", password = "Test-only-secret-947!";
 const today = new Date().toISOString().slice(0, 10);
 
@@ -130,6 +130,7 @@ test("conta arquivada não recebe lançamentos novos e sempre sobra uma ativa", 
 test("excluir exige o nome da conta, copia tudo para a auditoria antes e apaga os lançamentos dela", async () => {
   const accounts = await accountsOf(alice, aliceSpace);
   const nubank = accounts.find((account) => account.name === "Nubank");
+  deletedNubankId = nubank._id;
   const path = `/api/spaces/${aliceSpace}/accounts/${nubank._id}`;
   await request(path, alice.cookie, { archived: false }, "PUT");
   await request(`/api/spaces/${aliceSpace}/transactions`, alice.cookie, tx({ accountId: nubank._id, description: "Vai sumir", requestId: "mc-delete" }));
@@ -149,6 +150,71 @@ test("excluir exige o nome da conta, copia tudo para a auditoria antes e apaga o
   assert.ok(audit.before.transactions.some((item) => item.description === "Vai sumir"));
 });
 
+const deletedPath = () => `/api/spaces/${aliceSpace}/accounts/deleted`;
+const restorePath = (space, auditId) => `/api/spaces/${space}/accounts/restore/${auditId}`;
+const findAccount = async (name) => (await accountsOf(alice, aliceSpace)).find((account) => account.name === name);
+const deletedEntry = async (name) => (await request(deletedPath(), alice.cookie)).body.deleted.find((item) => item.name === name);
+const removeAccount = (account) => request(`/api/spaces/${aliceSpace}/accounts/${account._id}`, alice.cookie, { confirmName: account.name }, "DELETE");
+const setArchived = (account, archived) => request(`/api/spaces/${aliceSpace}/accounts/${account._id}`, alice.cookie, { archived }, "PUT");
+
+test("conta excluída aparece na lista e volta com o mesmo id e os lançamentos dela", async () => {
+  const listed = await request(deletedPath(), alice.cookie);
+  assert.equal(listed.status, 200, JSON.stringify(listed.body));
+  const entry = listed.body.deleted.find((item) => item.name === "Nubank");
+  assert.ok(entry, "Nubank deveria estar na lista de excluídas");
+  assert.ok(entry.transactionCount >= 1);
+  const restored = await request(restorePath(aliceSpace, entry._id), alice.cookie, {});
+  assert.equal(restored.status, 200, JSON.stringify(restored.body));
+  assert.equal(restored.body.account.name, "Nubank");
+  assert.equal(String(restored.body.account._id), String(deletedNubankId), "o id original precisa ser mantido");
+  assert.ok(restored.body.restoredTransactions >= 1);
+  const account = await findAccount("Nubank");
+  assert.equal(String(account._id), String(deletedNubankId));
+  assert.equal(account.userCreated, true);
+  const transactions = (await request(`/api/spaces/${aliceSpace}/transactions`, alice.cookie)).body.transactions;
+  const back = transactions.find((item) => item.description === "Vai sumir");
+  assert.ok(back, "o lançamento da conta precisa voltar");
+  assert.equal(String(back.accountId), String(deletedNubankId));
+  assert.equal((await request(restorePath(aliceSpace, entry._id), alice.cookie, {})).status, 404, "restaurar duas vezes não pode");
+  assert.equal(await deletedEntry("Nubank"), undefined, "sai da lista depois de restaurada");
+  const audit = await db.collection("auditlogs").findOne({ entityType: "account", action: "restore", entityId: String(deletedNubankId) });
+  assert.ok(audit, "a restauração também fica na auditoria");
+});
+
+test("restaurar respeita o limite de 6 e renomeia quando o nome já está em uso", async () => {
+  for (const name of ["Inter", "Mercado Pago", "C6"]) assert.equal((await setArchived(await findAccount(name), false)).status, 200, name);
+  assert.equal((await accountsOf(alice, aliceSpace)).filter((account) => !account.archived).length, 6);
+  assert.equal((await removeAccount(await findAccount("C6"))).status, 200);
+  assert.equal((await createAccount(alice, aliceSpace, { name: "Extra" })).status, 201);
+  const c6 = await deletedEntry("C6");
+  const blocked = await request(restorePath(aliceSpace, c6._id), alice.cookie, {});
+  assert.equal(blocked.status, 409, "com 6 contas ativas não restaura");
+  assert.match(blocked.body.message, /6/);
+  assert.equal(await findAccount("C6"), undefined, "nada pode ser criado quando a restauração é recusada");
+
+  assert.equal((await setArchived(await findAccount("Inter"), true)).status, 200);
+  assert.equal((await setArchived(await findAccount("Mercado Pago"), true)).status, 200);
+  assert.equal((await removeAccount(await findAccount("Extra"))).status, 200);
+  assert.equal((await createAccount(alice, aliceSpace, { name: "Extra" })).status, 201);
+  const extra = await deletedEntry("Extra");
+  const renamed = await request(restorePath(aliceSpace, extra._id), alice.cookie, {});
+  assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
+  assert.equal(renamed.body.renamed, true);
+  assert.equal(renamed.body.account.name, "Extra (restaurada)");
+  assert.equal((await request(restorePath(aliceSpace, c6._id), alice.cookie, {})).status, 200, "com vaga, a conta volta");
+  assert.ok(await findAccount("C6"));
+});
+
+test("ninguém restaura a exclusão de outra pessoa", async () => {
+  assert.equal((await removeAccount(await findAccount("Extra (restaurada)"))).status, 200);
+  const entry = await deletedEntry("Extra (restaurada)");
+  assert.ok(entry);
+  assert.equal((await request(restorePath(bobSpace, entry._id), bob.cookie, {})).status, 404);
+  assert.equal((await request(restorePath(aliceSpace, entry._id), bob.cookie, {})).status, 403);
+  assert.equal((await request(`/api/spaces/${bobSpace}/accounts/deleted`, bob.cookie)).body.deleted.length, 0, "a lista de outra pessoa não mostra as minhas");
+  assert.equal((await request(restorePath(aliceSpace, entry._id), alice.cookie, {})).status, 200, "a dona consegue restaurar");
+});
+
 test("uma pessoa nunca mexe nas contas de outra", async () => {
   const accounts = await accountsOf(alice, aliceSpace);
   const target = accounts[0];
@@ -162,6 +228,8 @@ test("desligar a chave depois de usar não apaga nenhuma conta criada", async ()
   const before = await db.collection("accounts").countDocuments({ spaceId: new mongoose.Types.ObjectId(aliceSpace), userCreated: true });
   assert.ok(before >= 1);
   await setFlag(false);
+  assert.deepEqual((await request(deletedPath(), alice.cookie)).body.deleted, [], "sem a chave não lista excluídas");
+  assert.equal((await request(restorePath(aliceSpace, new mongoose.Types.ObjectId().toString()), alice.cookie, {})).status, 409, "sem a chave não restaura");
   const legacy = await accountsOf(alice, aliceSpace);
   assert.equal(legacy.length, 1, "no modo antigo só a conta principal aparece");
   assert.equal(await db.collection("accounts").countDocuments({ spaceId: new mongoose.Types.ObjectId(aliceSpace), userCreated: true }), before, "o modo antigo não pode apagar contas do recurso");
