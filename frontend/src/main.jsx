@@ -6,6 +6,7 @@ import "./layout-fix.css";
 import "./product-fix.css";
 import "./green-wallet-theme.css";
 import "./premium-redesign.css";
+import "./accounts.css";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

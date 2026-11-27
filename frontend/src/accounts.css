@@ -1,0 +1,41 @@
+/* Tela de Contas do recurso Multiconta. Só existe quando a chave está ligada. */
+.multi-accounts { display: grid; gap: 16px; }
+/* O estilo global dos cabeçalhos pinta os ícones; no botão principal o ícone deve acompanhar o texto. */
+.multi-accounts-head .panel-head > button svg { color: currentColor; }
+.multi-accounts-total { display: grid; gap: 4px; margin-top: 6px; }
+.multi-accounts-total span { color: var(--muted, #64746b); font-size: 0.85rem; }
+.multi-accounts-total strong { font-size: 1.9rem; letter-spacing: -0.03em; }
+.multi-accounts-total small { color: var(--muted, #64746b); }
+
+.multi-account-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.multi-account-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line, #cfe5d8); border-radius: 18px; background: var(--panel, #fff); }
+.multi-account-card.is-archived { opacity: 0.8; }
+.multi-account-main { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
+.multi-account-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--panel-soft, #f0fdf4); color: var(--green, #059669); }
+.multi-account-title { display: grid; min-width: 0; }
+.multi-account-title strong { overflow-wrap: anywhere; }
+.multi-account-title small, .multi-account-balance small, .multi-account-balance span { color: var(--muted, #64746b); font-size: 0.8rem; }
+.multi-account-balance { display: grid; justify-items: end; text-align: right; }
+.multi-account-balance strong { font-size: 1.15rem; }
+
+.multi-account-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.multi-account-actions button { display: inline-flex; align-items: center; gap: 6px; }
+
+.multi-account-form, .multi-account-delete { display: grid; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--line, #cfe5d8); }
+.multi-account-form label, .multi-account-delete label { display: grid; gap: 4px; font-size: 0.85rem; }
+.multi-account-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.multi-account-delete p { margin: 0; line-height: 1.45; }
+.multi-account-note { margin: 0; color: var(--muted, #64746b); font-size: 0.85rem; }
+.multi-account-archived summary { cursor: pointer; padding: 8px 2px; font-weight: 600; }
+.multi-account-archived .multi-account-list { margin-top: 8px; }
+
+.account-select-note { display: grid; gap: 4px; }
+.account-select-note small { color: var(--muted, #64746b); }
+
+/* Ocultar valores (olhinho do app) */
+.values-hidden .multi-accounts [data-money] { color: transparent !important; text-shadow: 0 0 8px #285143 !important; user-select: none; }
+
+@media (max-width: 520px) {
+  .multi-account-main { grid-template-columns: auto 1fr; }
+  .multi-account-balance { grid-column: 1 / -1; justify-items: start; text-align: left; }
+}

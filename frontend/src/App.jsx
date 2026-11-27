@@ -5,6 +5,8 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, BarChart3, Calen
 import { calculateSummary, calculateReportBalances, isMealTransaction } from "./finance.js";
 import { createTransactionForm } from "./form-state.js";
 import { getCoupleMenuState } from "./space-menu.js";
+import MultiAccounts from "./MultiAccounts.jsx";
+import { accountOptions, defaultAccountId } from "./account-balances.js";
 import { findSimilarTransaction, parseReceiptText, pdfFirstPageToImage, prepareReceiptImage } from "./receipt-ocr.js";
 import balanceWalletIcon from "./assets/financial-icons/balance-wallet.webp";
 import incomeWalletIcon from "./assets/financial-icons/income-wallet.webp";
@@ -250,6 +252,8 @@ export default function App() {
     .filter((item) => activeMode === "couple" || String(item.createdBy || "") === String(user?.id || user?._id || ""))
     .sort((left, right) => String(left.reminderDate || left.date).localeCompare(String(right.reminderDate || right.date))), [transactions, user, activeMode]);
 
+  // Multiconta: chave do painel admin (padrão desligada); no modo casal a tela antiga continua valendo.
+  const multiAccount = platformFeatures.multiconta === true && activeMode !== "couple";
   const hasData = accounts.length > 0 || transactions.length > 0;
 
   function toggleValuePrivacy() {
@@ -910,8 +914,10 @@ export default function App() {
         {announcements.slice(0,2).map(notice=><div className="platform-notice" key={notice._id}><Megaphone size={17}/><span><strong>{notice.title}</strong> — {notice.message}</span></div>)}
         <Hero firstName={firstName} user={user} coupleSpace={activeCoupleSpace} summary={summary} hasData={hasData} activeMenu={activeMenu} hideValues={hideValues} toggleValuePrivacy={toggleValuePrivacy} />
         {activeMenu === "Início" && <Inicio summary={summary} hasData={hasData} setActiveMenu={setActiveMenu} reserve={reserve} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} />}
-        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} />}
-        {activeMenu === "Contas" && <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />}
+        {activeMenu === "Lançamentos" && <Lancamentos txForm={txForm} setTxForm={setTxForm} addTransaction={addTransaction} transactions={transactions} accounts={accounts} editingTransactionId={editingTransactionId} setEditingTransactionId={setEditingTransactionId} editTransaction={editTransaction} deleteTransaction={deleteTransaction} loading={loading} formOpen={transactionFormOpen} setFormOpen={setTransactionFormOpen} selectedMonthKey={selectedMonthKey} setSelectedMonthKey={setSelectedMonthKey} activeMode={activeMode} multiAccount={multiAccount} />}
+        {activeMenu === "Contas" && (multiAccount
+          ? <MultiAccounts accounts={accounts} transactions={transactions} api={api} spaceId={activeSpaceId} reload={() => loadSpaceData(activeSpaceId)} setMessage={setMessage} />
+          : <Contas accounts={accounts} setAccounts={setAccounts} updateAccount={updateAccount} summary={summary} activeMode={activeMode} loading={loading} />)}
         {activeMenu === "Planejamento" && debtPlanOpen && <DebtPlanPage key={activeSpaceId} api={api} spaceId={activeSpaceId} currentUserId={user?.id || user?._id} back={() => openDebtPlan(false)} monthlyOnly />}
         {activeMenu === "Planejamento" && !debtPlanOpen && <Planejamento openDebtPlan={() => openDebtPlan(true)} api={api} spaceId={activeSpaceId} summary={summary} hasData={hasData} buyForm={buyForm} setBuyForm={setBuyForm} purchasePlans={purchasePlans} savePurchasePlan={savePurchasePlan} deletePurchasePlan={deletePurchasePlan} transactions={transactions} goalForm={goalForm} setGoalForm={setGoalForm} saveGoal={saveGoal} editGoal={editGoal} deleteGoal={deleteGoal} editingGoalId={editingGoalId} cancelGoalEdit={() => { setEditingGoalId(""); setGoalForm({ description: "", amount: "" }); }} loading={loading} activeMode={activeMode} currentUserId={user?.id || user?._id} reserve={reserve} />}
         {activeMenu === "Relatórios" && <Relatorios spaceId={activeSpaceId} transactions={transactions} selectedMonthKey={selectedMonthKey} activeMode={activeMode} summary={summary} reserve={reserve} />}
@@ -1241,7 +1247,7 @@ function ReceiptPhotoFlow({ onReady, onBack }) {
   return <section className="panel receipt-source"><div className="panel-head receipt-source-head"><h2>Enviar comprovante</h2><button type="button" className="icon-close" aria-label="Fechar envio de comprovante" onClick={onBack}><X size={20}/></button></div><div className="receipt-source-grid"><button type="button" onClick={()=>cameraRef.current?.click()}><Camera size={27}/><span><strong>Tirar foto</strong><small>Abra a câmera do celular</small></span></button><button type="button" onClick={()=>galleryRef.current?.click()}><FileText size={27}/><span><strong>Escolher imagem</strong><small>Abra a galeria do celular</small></span></button><button type="button" onClick={()=>pdfRef.current?.click()}><FileDown size={27}/><span><strong>Escolher PDF</strong><small>Abra os arquivos do celular</small></span></button></div>{error&&<div className="status-box">{error}</div>}<input ref={cameraRef} hidden type="file" accept="image/*" capture="environment" onChange={e=>readFile(e.target.files?.[0])}/><input ref={galleryRef} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>readFile(e.target.files?.[0])}/><input ref={pdfRef} hidden type="file" accept="application/pdf,.pdf" onChange={e=>readFile(e.target.files?.[0])}/></section>;
 }
 
-function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, setSelectedMonthKey, activeMode }) {
+function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts, editingTransactionId, setEditingTransactionId, editTransaction, deleteTransaction, loading, formOpen, setFormOpen, selectedMonthKey, setSelectedMonthKey, activeMode, multiAccount = false }) {
   const [entryMode, setEntryMode] = useState("choice");
   const [receiptPreview, setReceiptPreview] = useState("");
   const [receiptNotice, setReceiptNotice] = useState("");
@@ -1293,7 +1299,18 @@ function Lancamentos({ txForm, setTxForm, addTransaction, transactions, accounts
           {txForm.recurrence !== "monthly" && <label>Parcelamento<select disabled={Boolean(txForm.editScope)} value={txForm.installmentCount} onChange={(e) => setTxForm({ ...txForm, installmentCount: e.target.value })}>{Array.from({ length: 24 }, (_, index) => index + 1).map((count) => <option value={count} key={count}>{count === 1 ? "Somente uma vez" : `${count} parcelas`}</option>)}</select></label>}
           {txForm.editScope && <div className="installment-preview" role="note"><ReceiptText size={18}/><span><strong>Esta parcela e as pendentes seguintes</strong><small>Pagamentos concluídos e parcelas anteriores ficam iguais. A quantidade da série é mantida. O status escolhido vale apenas para esta parcela.</small></span></div>}
           {isInstallment && !txForm.editScope && <div className="installment-preview"><ReceiptText size={18} /><span><strong>{txForm.installmentCount}x de {money(Number(txForm.amount || 0))}</strong><small>Total: {money(Number(txForm.amount || 0) * Number(txForm.installmentCount || 1))}. Ao salvar, as parcelas serão atualizadas nos próximos meses.</small></span></div>}
+          {multiAccount && txForm.fundingSource !== "meal" ? (
+            <div className="account-select-note">
+              <label>Conta
+                <select value={txForm.accountId || defaultAccountId(accounts)} onChange={(e) => setTxForm({ ...txForm, accountId: e.target.value })}>
+                  {accountOptions(accounts, txForm.accountId).map((option) => <option key={option.id} value={option.id}>{option.name}{option.archived ? " (arquivada)" : ""}</option>)}
+                </select>
+              </label>
+              <small>Este lançamento movimentará esta conta quando for concluído.</small>
+            </div>
+          ) : (
           <div className="automatic-account-note"><Wallet size={18} aria-hidden="true" /><span><strong>{txForm.fundingSource === "meal" ? "Saldo do vale-refeição" : accounts[0]?.name || "Conta principal"}</strong><small>{txForm.fundingSource === "meal" ? "Quando concluído, este lançamento movimentará somente o vale-refeição." : "Este lançamento movimentará automaticamente a conta principal quando for concluído."}</small></span></div>
+          )}
         </div>
         <div className="action-row">
           <button disabled={loading}>{loading ? "Salvando..." : editingTransactionId ? "Salvar edição" : txForm.origin === "photo" ? "Confirmar lançamento" : "Salvar lançamento"}</button>
