@@ -17,6 +17,7 @@ import { ensureTransactionRequestIndex, requestIndexKey, requestIndexOptions } f
 import { FeatureFlag, AdminAudit, AdminNote, AppConfig, CouponUsage, Subscription, SupportTicket, registerAdminRoutes, seedAdminDefaults } from "./admin.js";
 import { accessDenied as policyAccessDenied, canManageUser, canAccessAdmin, canAccessSuperAdmin, effectiveRole } from "./admin-policy.js";
 import { DebtPlan, registerDebtPlanRoutes } from "./debt-plan.js";
+import { MULTI_ACCOUNT_FLAG, featureEnabledForUser, parseAccountInput, assertCanCreate, assertCanUpdate, assertCanDelete, chooseAccountForTransaction, accountDeleteAudit } from "./accounts.js";
 
 dotenv.config();
 
@@ -153,6 +154,9 @@ const accountSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     ownerName: { type: String, default: "Individual", maxlength: 80 },
     balance: { type: Number, default: 0 },
+    archived: { type: Boolean, default: false },
+    // Contas criadas pelo recurso Multiconta: o modo antigo nunca as junta nem as apaga.
+    userCreated: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -496,7 +500,9 @@ async function ensurePrimaryAccount(spaceId, ownerName = "Individual") {
     error.status = 404;
     throw error;
   }
-  const accounts = await Account.find({ spaceId }).sort({ createdAt: 1 });
+  // Contas do recurso Multiconta (userCreated) ficam fora da junção automática do modo antigo.
+  // Sem o recurso, nenhuma conta tem esse campo e o comportamento é exatamente o de sempre.
+  const accounts = (await Account.find({ spaceId }).sort({ createdAt: 1 })).filter((account) => !account.userCreated);
   const preferredName = space.type === "couple" ? "Conta conjunta" : "Conta principal";
   let primary = accounts.find((account) => account.name === preferredName) || accounts[0];
   if (!primary) {
@@ -515,7 +521,35 @@ async function ensurePrimaryAccount(spaceId, ownerName = "Individual") {
   return primary;
 }
 
-async function normalizeAccountIdForSpace(accountId, spaceId, ownerName) {
+// Multiconta: ligada só se a chave existir e estiver ativa para este usuário (padrão: desligada).
+async function multiAccountOn(user) {
+  const flag = await FeatureFlag.findOne({ key: MULTI_ACCOUNT_FLAG }).lean();
+  return featureEnabledForUser(flag, user, effectiveRole(user, ADMIN_EMAILS));
+}
+
+// Com a Multiconta ligada: garante ao menos uma conta, completa lançamentos sem conta e NUNCA junta nem apaga contas.
+async function ensureBaseAccounts(spaceId, ownerName = "Individual") {
+  const space = await Space.findById(spaceId);
+  if (!space) {
+    const error = new Error("Espaço não encontrado.");
+    error.status = 404;
+    throw error;
+  }
+  let accounts = await Account.find({ spaceId }).sort({ createdAt: 1 });
+  if (!accounts.length) {
+    accounts = [await Account.create({ spaceId, name: space.type === "couple" ? "Conta conjunta" : "Conta principal", ownerName: space.type === "couple" ? "Casal" : ownerName, balance: 0 })];
+  }
+  let target;
+  try { target = chooseAccountForTransaction({ accounts }); } catch { target = accounts[0]; }
+  await Transaction.updateMany({ spaceId, accountId: null }, { $set: { accountId: target._id } });
+  return accounts;
+}
+
+async function normalizeAccountIdForSpace(accountId, spaceId, ownerName, { multi = false, currentAccountId } = {}) {
+  if (multi) {
+    const accounts = await ensureBaseAccounts(spaceId, ownerName);
+    return chooseAccountForTransaction({ requestedId: accountId, currentAccountId, accounts })._id;
+  }
   const primary = await ensurePrimaryAccount(spaceId, ownerName);
   return primary._id;
 }
@@ -978,7 +1012,10 @@ app.delete("/api/spaces/:spaceId/members/me", auth, asyncHandler(async (req, res
 app.get("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const viewIds = await spaceViewIds(req.params.spaceId);
-  if (viewIds.length === 1 && String(viewIds[0]) === String(req.params.spaceId)) return res.json({ accounts: [await ensurePrimaryAccount(req.params.spaceId, req.user.name)] });
+  if (viewIds.length === 1 && String(viewIds[0]) === String(req.params.spaceId)) {
+    if (await multiAccountOn(req.user)) return res.json({ accounts: await ensureBaseAccounts(req.params.spaceId, req.user.name) });
+    return res.json({ accounts: [await ensurePrimaryAccount(req.params.spaceId, req.user.name)] });
+  }
   const individualSpaces = await Space.find({ _id: { $in: viewIds } }).select("_id ownerId").lean();
   const accounts = await Account.find({ spaceId: { $in: viewIds } }).lean();
   const ownerBySpace = new Map(individualSpaces.map((space) => [String(space._id), String(space.ownerId)]));
@@ -988,6 +1025,15 @@ app.get("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => 
 
 app.post("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  if (await multiAccountOn(req.user)) {
+    const writeSpaceId = await userWriteSpaceId(req.params.spaceId, req.user._id);
+    const accounts = await ensureBaseAccounts(writeSpaceId, req.user.name);
+    const input = parseAccountInput(req.body, req.user);
+    assertCanCreate(accounts, input.name);
+    const created = await Account.create({ ...input, spaceId: writeSpaceId, userCreated: true });
+    await recordAudit({ spaceId: writeSpaceId, user: req.user, action: "create", entityType: "account", entityId: created._id, summary: `Conta criada: ${created.name}`, after: created });
+    return res.status(201).json({ account: created });
+  }
   const account = await ensurePrimaryAccount(req.params.spaceId, req.user.name);
   res.status(409).json({ message: "Este espaço já possui uma conta principal automática.", account });
 }));
@@ -995,6 +1041,19 @@ app.post("/api/spaces/:spaceId/accounts", auth, asyncHandler(async (req, res) =>
 app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
   const writeSpaceId = await userWriteSpaceId(req.params.spaceId, req.user._id);
+  if (await multiAccountOn(req.user)) {
+    const accounts = await ensureBaseAccounts(writeSpaceId, req.user.name);
+    const current = accounts.find((item) => String(item._id) === String(req.params.accountId));
+    if (!current) return res.status(404).json({ message: "Conta não encontrada." });
+    const patch = parseAccountInput(req.body, req.user, { partial: true });
+    assertCanUpdate({ account: current, patch, accounts });
+    const before = current.toObject();
+    const updated = await Account.findOneAndUpdate({ _id: current._id, spaceId: writeSpaceId }, { $set: patch }, { new: true, runValidators: true });
+    if (!updated) return res.status(404).json({ message: "Conta não encontrada." });
+    const verb = patch.archived === true ? "arquivada" : patch.archived === false ? "reativada" : "atualizada";
+    await recordAudit({ spaceId: writeSpaceId, user: req.user, action: "update", entityType: "account", entityId: updated._id, summary: `Conta ${verb}: ${updated.name}`, before, after: updated });
+    return res.json({ account: updated });
+  }
   const primary = await ensurePrimaryAccount(writeSpaceId, req.user.name);
   if (String(primary._id) !== String(req.params.accountId)) return res.status(404).json({ message: "Conta principal não encontrada." });
   const space = await Space.findById(writeSpaceId);
@@ -1014,6 +1073,20 @@ app.put("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (re
 
 app.delete("/api/spaces/:spaceId/accounts/:accountId", auth, asyncHandler(async (req, res) => {
   if (!(await userCanAccessSpace(req.user._id, req.params.spaceId))) return res.status(403).json({ message: "Sem acesso ao espaço." });
+  if (await multiAccountOn(req.user)) {
+    const writeSpaceId = await userWriteSpaceId(req.params.spaceId, req.user._id);
+    const accounts = await ensureBaseAccounts(writeSpaceId, req.user.name);
+    const target = accounts.find((item) => String(item._id) === String(req.params.accountId));
+    if (!target) return res.status(404).json({ message: "Conta não encontrada." });
+    assertCanDelete({ account: target, accounts, confirmName: req.body?.confirmName });
+    const transactions = await Transaction.find({ spaceId: writeSpaceId, accountId: target._id }).lean();
+    const { summary, before } = accountDeleteAudit({ account: target.toObject(), transactions });
+    // A cópia vai para a auditoria ANTES de apagar qualquer coisa.
+    await recordAudit({ spaceId: writeSpaceId, user: req.user, action: "delete", entityType: "account", entityId: target._id, summary, before });
+    await Transaction.deleteMany({ spaceId: writeSpaceId, accountId: target._id });
+    await Account.deleteOne({ _id: target._id, spaceId: writeSpaceId });
+    return res.json({ ok: true, removedTransactions: transactions.length });
+  }
   const account = await ensurePrimaryAccount(req.params.spaceId, req.user.name);
   if (String(account._id) !== String(req.params.accountId)) return res.status(404).json({ message: "Conta não encontrada." });
   res.status(409).json({ message: "A conta principal automática não pode ser excluída." });
@@ -1086,7 +1159,7 @@ app.post("/api/spaces/:spaceId/transactions", auth, async (req, res) => {
       const duplicate = await Transaction.findOne({ spaceId: writeSpaceId, requestId });
       if (duplicate) return res.json({ transaction: duplicate, transactions: [duplicate], duplicate: true });
     }
-    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, writeSpaceId, req.user.name);
+    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, writeSpaceId, req.user.name, { multi: await multiAccountOn(req.user) });
     const input = transactionInput(req.body, accountId, req.user);
     const recurrence = req.body?.recurrence === "monthly" ? "monthly" : "none";
     const installmentCount = Math.max(1, Math.min(120, Math.trunc(Number(req.body?.installmentCount || 1))));
@@ -1169,7 +1242,7 @@ app.put("/api/spaces/:spaceId/transactions/:transactionId", auth, async (req, re
     const existing = await Transaction.findOne({ _id: req.params.transactionId, spaceId: { $in: viewIds } });
     if (!existing) return res.status(404).json({ message: "Lançamento não encontrado." });
     if (String(existing.createdBy) !== String(req.user._id)) return res.status(403).json({ message: "Somente quem criou o lançamento pode editá-lo." });
-    const accountId = await normalizeAccountIdForSpace(req.body?.accountId, existing.spaceId, req.user.name);
+    const accountId = await normalizeAccountIdForSpace(req.body?.accountId ?? existing.accountId, existing.spaceId, req.user.name, { multi: await multiAccountOn(req.user), currentAccountId: existing.accountId });
     const input = transactionInput(req.body, accountId, req.user);
     const recurrence = req.body?.recurrence === "monthly" ? "monthly" : "none";
     const installmentCount = Math.max(1, Math.min(120, Math.trunc(Number(req.body?.installmentCount || 1))));
