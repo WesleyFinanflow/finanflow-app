@@ -1,10 +1,15 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { actor, useActor, call, transaction, month, base } from "../financial-fixtures.js";
-async function nav(page,name){await dismissReminder(page);await page.getByRole("button",{name,exact:true}).click();}
-async function dismissReminder(page){const button=page.getByRole("button",{name:"Fechar lembrete",exact:true});if(await button.isVisible())await button.click();}
+async function nav(page,name){await page.getByRole("button",{name,exact:true}).click();}
+// O lembrete de vencimentos abre sozinho depois que os lançamentos carregam (a fixture de série tem parcela atrasada) e, no celular,
+// cobre botões do extrato. Um isVisible() pontual corre contra esse carregamento; o handler fecha o aviso sempre que ele aparecer
+// e bloquear uma ação, independente de quando renderizar.
+test.beforeEach(async({page})=>{
+ await page.addLocatorHandler(page.getByRole("button",{name:"Fechar lembrete",exact:true}),async button=>{await button.click();});
+});
 async function manual(page,{type,description,amount,status="pago",count="1"}){
- await dismissReminder(page);await nav(page,"Lançamentos");
+ await nav(page,"Lançamentos");
  const fresh=page.getByRole("button",{name:"Novo lançamento",exact:true});if(await fresh.isVisible())await fresh.click();
  await page.getByRole("button",{name:/Lançamento manual/}).click();
  const form=page.locator("form.transaction-form-panel");
@@ -19,7 +24,7 @@ async function manual(page,{type,description,amount,status="pago",count="1"}){
  await form.getByRole("button",{name:"Salvar lançamento",exact:true}).click();
  const response=await saved;expect(response.status()).toBe(201);await expect(form).not.toBeVisible();return response.json();
 }
-async function balance(page,value){await dismissReminder(page);await nav(page,"Contas");await expect(page.locator(".primary-balance strong")).toHaveText(value);}
+async function balance(page,value){await nav(page,"Contas");await expect(page.locator(".primary-balance strong")).toHaveText(value);}
 test("lançamentos, parcelas, recorrência, saldo e exportações conferem com valores conhecidos",async({page,context},info)=>{
  test.setTimeout(90000);
  const fixture=await actor(info.project.name,"finance");await useActor(context,fixture);await page.goto("/");
@@ -39,8 +44,7 @@ test("lançamentos, parcelas, recorrência, saldo e exportações conferem com v
  await expect(page.locator(".balance-value strong")).toHaveText(/1\.256,67/);
  // Persisted base balance must not be changed as paid transactions are accumulated in the UI.
  const accounts=await call(page.request,`/api/spaces/${fixture.spaceId}/accounts`);expect(accounts.body.accounts[0].balance).toBe(1000.01);
- await nav(page,"Lançamentos");await dismissReminder(page);
- const row=page.locator(".transaction-row").filter({hasText:"Market fixture"});await row.getByRole("button",{name:"Editar",exact:true}).click();
+ await nav(page,"Lançamentos");const row=page.locator(".transaction-row").filter({hasText:"Market fixture"});await row.getByRole("button",{name:"Editar",exact:true}).click();
  await page.getByLabel("Valor",{exact:true}).fill("60.03");
  const edited=page.waitForResponse(r=>r.request().method()==="PUT"&&r.url().includes("/transactions/"));await page.getByRole("button",{name:"Salvar edição",exact:true}).click();expect((await edited).status()).toBe(200);
  await balance(page,/1\.440,00/);
@@ -99,8 +103,7 @@ test("edição da escolhida e pendentes seguintes preserva pagamentos e identifi
  const created=await call(page.request,basePath,transaction({description:"Series editing fixture",amount:10,date:previousMonth,status:"pago",installmentCount:4}));expect(created.status).toBe(201);
  expect((await call(page.request,basePath+"/"+created.body.transactions[2]._id+"/status",{status:"pago"},"PATCH")).status).toBe(200);
  const before=(await call(page.request,basePath)).body.transactions.sort((a,b)=>a.installmentNumber-b.installmentNumber);
- await page.goto("/");await nav(page,"Lançamentos");await dismissReminder(page);
- const selected=page.locator(".transaction-row").filter({hasText:"Series editing fixture"});await selected.getByRole("button",{name:"Editar",exact:true}).click();
+ await page.goto("/");await nav(page,"Lançamentos");const selected=page.locator(".transaction-row").filter({hasText:"Series editing fixture"});await selected.getByRole("button",{name:"Editar",exact:true}).click();
  await expect(page.getByRole("note")).toContainText("Esta parcela e as pendentes seguintes");
  await expect(page.getByRole("combobox",{name:"Frequência",exact:true})).toBeDisabled();await expect(page.getByRole("combobox",{name:"Parcelamento",exact:true})).toBeDisabled();
  await page.getByLabel("Descrição",{exact:true}).fill("Updated series fixture");await page.getByLabel("Valor por parcela pendente",{exact:true}).fill("20");await page.getByLabel("Data / vencimento",{exact:true}).fill(month()+"-20");await page.getByRole("combobox",{name:"Status",exact:true}).selectOption("pago");
