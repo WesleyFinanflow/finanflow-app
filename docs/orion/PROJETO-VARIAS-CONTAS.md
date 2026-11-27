@@ -18,7 +18,11 @@ O usuário quer cadastrar várias contas e ver o saldo de cada uma. Isso também
 ## Proposta
 **Saldo de uma conta** = saldo inicial + lançamentos pagos dela (receita soma; despesa, dívida e meta subtraem), sem contar o vale-refeição. **Saldo total** = soma das contas. Para quem tem uma conta só, o total fica idêntico ao de hoje.
 
-**Contas:** nome livre (ex.: Nubank), saldo inicial, e "arquivada" (em vez de excluir quando já há lançamentos). Limite sugerido: 20 por espaço.
+**Contas:** nome livre (ex.: Nubank) e saldo inicial. Limite de **6 contas por pessoa** (decidido; fácil de aumentar depois). Sempre deve existir pelo menos uma conta.
+
+**Arquivar e excluir (as duas opções, decidido):**
+- *Arquivar:* a conta some das telas e das listas de escolha, mas o histórico e o saldo dela continuam valendo; pode ser reativada.
+- *Excluir:* apaga a conta **e todos os lançamentos dela**. Por ser destrutivo, exige confirmação forte (digitar o nome da conta) e deve ficar registrado na auditoria com cópia dos dados, para poder ser restaurado como já acontece com a exclusão de lançamentos. A restauração de uma conta inteira ainda não existe e entra no escopo da etapa 2.
 
 **Transferência:** novo tipo de lançamento `transferencia` com conta de origem e de destino. Não conta como receita nem despesa nem compromisso; só move saldo entre contas (total inalterado). Alternativa descartada: dois lançamentos ligados (despesa + receita), porque poluiria relatórios e exigiria exclusões especiais em edição/exclusão de série.
 
@@ -30,7 +34,7 @@ O usuário quer cadastrar várias contas e ver o saldo de cada uma. Isso também
 Tudo atrás de um recurso desligável (`multiAccount`), usando o mecanismo de `platformFeatures` que já existe. Desligado, o app se comporta como hoje.
 
 1. **Cálculo por conta (sem mudança visível).** Funções puras `calculateAccountBalances` + testes. Teste de equivalência: o total é idêntico ao `calculateSummary` atual nos cenários existentes.
-2. **Backend.** `ensurePrimaryAccount` passa a garantir só que exista ao menos uma conta (não junta nem apaga quando o recurso está ligado). `POST/PUT/DELETE` de contas liberados (arquivar). `normalizeAccountIdForSpace` respeita a conta escolhida, validando que pertence ao espaço. A API de contas devolve o saldo calculado.
+2. **Backend.** `ensurePrimaryAccount` passa a garantir só que exista ao menos uma conta (não junta nem apaga quando o recurso está ligado). `POST/PUT/DELETE` de contas liberados, com limite de 6, arquivar e excluir (com auditoria e possibilidade de restaurar). `normalizeAccountIdForSpace` respeita a conta escolhida, validando que pertence ao espaço. O saldo por conta é calculado no frontend junto com o resumo atual (`calculateSummary`), para os dois nunca divergirem; a ação do ORION que precisar do saldo por conta no backend (etapa 5) exigirá o mesmo cálculo lá, e isso deve ser resolvido sem duplicar a regra.
 3. **Tela.** `Contas` lista as contas com saldo; "Nova conta"; seletor de conta no lançamento (padrão: a principal); total na tela inicial.
 4. **Transferência.** Tipo `transferencia` no modelo, na validação e fora dos totais; formulário na tela.
 5. **ORION.** Contratos de ação ganham `accountId` resolvido por nome ("no Nubank") e a ação de transferência (`ai-actions.js`).
@@ -46,12 +50,14 @@ Tudo atrás de um recurso desligável (`multiAccount`), usando o mecanismo de `p
 | Relatórios, exportação e plano de dívida usam saldo consolidado | Conferir cada um na etapa 3 (checklist de regressão da Fase 0) |
 | Testes atuais assumem conta única (`debt-api`, `finance`, `form-state`, `e2e/financial-flows`) | Continuam passando com o recurso desligado; novos testes para o ligado |
 | Transferência apagada ou editada deixa saldo inconsistente | Operação única (origem e destino juntos), coberta por teste |
+| Excluir uma conta apaga lançamentos e muda o saldo total sem volta | Confirmação digitando o nome, auditoria com cópia, restauração, e arquivar como alternativa segura |
+| Excluir a última conta deixaria o espaço sem conta | Regra: sempre resta pelo menos uma; teste que tenta excluir a última |
 
 ## Fora do escopo
 Cartão de crédito e fatura; conexão automática com bancos (Open Finance); conversão de moeda; extrato importado.
 
-## Decisões que preciso do dono do produto
-1. **Excluir conta:** só arquivar quando houver lançamentos (proposta) ou permitir excluir tudo junto?
-2. **Limite de contas** por espaço: 20 serve?
-3. **Casal:** manter como hoje (cada pessoa cria as próprias contas e o casal vê a soma dos dois) ou criar contas realmente compartilhadas, que seriam um conceito novo? Proposta: manter como hoje.
-4. **Ordem de entrega:** esperar o backup verificado antes de ligar em produção (proposta) ou ligar só para o seu usuário em teste primeiro?
+## Decisões do dono do produto (27/11/2026)
+1. **Excluir conta:** oferecer as duas opções, **arquivar e excluir** (excluir apaga a conta e os lançamentos dela, com confirmação forte e auditoria).
+2. **Limite:** **6 contas por pessoa** por enquanto.
+3. **Casal:** **como hoje** (cada pessoa cria as próprias contas e o casal vê a soma dos dois).
+4. **Entrega:** ligar em produção **só depois de confirmar** que o backup do banco funciona e que a restauração foi testada.
