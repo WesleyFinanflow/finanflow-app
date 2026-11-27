@@ -22,18 +22,16 @@ html[data-brand="orion"] .brand {
 }
 
 html[data-brand="orion"] .orion-mark {
-  width: 44px;
-  height: 44px;
+  width: auto;
+  height: 40px;
   flex: none;
-  color: var(--orion-sky-300);
 }
 
-html[data-brand="orion"] .orion-wordmark strong {
+html[data-brand="orion"] .orion-wordmark img {
   display: block;
-  color: var(--orion-white) !important;
-  font-size: 1.35rem;
-  letter-spacing: 0.22em;
-  font-weight: 700;
+  width: auto;
+  height: 24px;
+  margin-bottom: 4px;
 }
 
 html[data-brand="orion"] .orion-wordmark span {

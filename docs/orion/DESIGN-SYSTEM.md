@@ -1,6 +1,12 @@
 # ORION – Design system (OR-004), primeira camada
 
-Status: provisório. Os arquivos aprovados de marca (símbolo, tipografia metálica) não estavam no repositório, então a paleta e o símbolo abaixo são uma proposta a validar.
+Status: o símbolo e o logotipo metálico são os arquivos aprovados (recebidos em 27/11/2026). A paleta de interface abaixo continua sendo uma proposta a validar.
+
+## Arquivos da marca
+- `frontend/src/assets/orion/orion-symbol.webp` (símbolo orbital) e `orion-wordmark.webp` (logotipo "ORION"), com fundo transparente.
+- Origem: três imagens raster entregues com fundo escuro embutido. O fundo foi removido usando a luminância como transparência (o brilho azul vira translúcido) e as imagens foram recortadas e reduzidas. Servem para fundos escuros; sobre fundo claro não funcionam.
+- A assinatura "Seu Assistente Pessoal" fica como texto real (legível e acessível), não como imagem.
+- Os originais não foram versionados no repositório.
 
 ## Como ver
 - Padrão: o app continua FinanFlow, sem nenhuma mudança visual.
@@ -22,7 +28,7 @@ Status: provisório. Os arquivos aprovados de marca (símbolo, tipografia metál
 Acessibilidade: todos os pares texto/fundo usados atingem WCAG AA (mínimo 4,5:1; o menor medido é 5,9:1). `orion-tokens.test.js` falha se algum par ou valor divergir.
 
 ## O que esta camada muda (com a flag ligada)
-- Barra lateral/cabeçalho em azul-marinho, marca ORION com a assinatura "Seu Assistente Pessoal" e símbolo orbital provisório.
+- Barra lateral/cabeçalho em azul-marinho, com o símbolo e o logotipo metálico oficiais e a assinatura "Seu Assistente Pessoal" (no celular; no desktop a barra só mostra o símbolo).
 - Título da página e `theme-color` do navegador.
 
 ## O que ainda NÃO muda
@@ -31,7 +37,7 @@ Acessibilidade: todos os pares texto/fundo usados atingem WCAG AA (mínimo 4,5:1
 - `manifest.webmanifest`, ícones do PWA e textos do app continuam FinanFlow. Trocar isso afeta quem já instalou o app e depende da decisão de lançamento.
 
 ## Próximos incrementos sugeridos
-1. Trocar o símbolo e a tipografia pelos arquivos aprovados.
+1. Obter a marca em vetor (SVG) ou em alta resolução com fundo transparente, e gerar os ícones do PWA (192, 512, maskable e 180) a partir do símbolo. As imagens atuais são raster e a extração do fundo é uma aproximação.
 2. Reaplicar os tokens nos componentes (cartões, botões, formulários) e consolidar os 5 CSS de remendo.
 3. Definir a barra lateral expandida no desktop com o nome.
 4. Só então: manifest, ícones e textos.

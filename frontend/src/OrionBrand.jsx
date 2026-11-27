@@ -1,14 +1,14 @@
-// Símbolo orbital PROVISÓRIO (inspirado na letra O). Trocar pelo arquivo aprovado quando for entregue.
+import symbol from "./assets/orion/orion-symbol.webp";
+import wordmark from "./assets/orion/orion-wordmark.webp";
+
+// Marca oficial do ORION (arquivos aprovados, com fundo removido para uso sobre azul-marinho).
+// A assinatura "Seu Assistente Pessoal" continua como texto para ficar legível e acessível.
 export default function OrionBrand() {
   return (
     <>
-      <svg className="orion-mark" viewBox="0 0 48 48" role="img" aria-label="Símbolo do ORION" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-        <circle cx="24" cy="24" r="14" />
-        <ellipse cx="24" cy="24" rx="21" ry="8" transform="rotate(-28 24 24)" opacity="0.75" />
-        <circle cx="38.5" cy="15.5" r="2.6" fill="currentColor" stroke="none" />
-      </svg>
+      <img className="orion-mark" src={symbol} alt="" aria-hidden="true" width="42" height="40" />
       <div className="orion-wordmark">
-        <strong>ORION</strong>
+        <img src={wordmark} alt="ORION" width="130" height="24" />
         <span>Seu Assistente Pessoal</span>
       </div>
     </>
